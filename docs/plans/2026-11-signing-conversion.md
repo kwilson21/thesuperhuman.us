@@ -769,15 +769,15 @@ sentence after objects were deleted, the owner re-runs it.
 steps ignore or log only named failures, so a bug there becomes a defect and the route's fixed 500. No golden case
 reaches one: each recorded failure there is a store, R2, mail or renderer failure, and each is named.
 
-**Retention's catches.** Retention has three more, each kept by name in `agreement-retention.ts`. A cursor marker
-whose body cannot be read or parsed, or parses to `null`, is `MarkerUnreadable`, ignored, so the scan restarts as today
+**Retention's catches.** Retention has three more, each kept by name in `agreement-retention.ts`. A cursor marker whose
+body cannot be read or parsed, or parses to `null`, is `MarkerUnreadable`, ignored, so the scan restarts as today
 (retention.ts:174-188 in the preview, 576-585 in the apply; golden "an unreadable marker restarts the scan"). A `null`
 is caught today because `saved.version` throws inside the same `try` (180); any other value that is not an object is
-read as no cursor without throwing, and stays so. The marker's other checks (version, length, type) stay the rule's. A failed bucket list with a saved cursor, outside a reviewed scan, is retried
-once from the first page by catching `BucketListFailed` only (192-209), and a second failure is the route's 500
-("a saved cursor and a failing bucket list retries and fails again"). A failed object delete puts the attachment row
-back with today's `INSERT OR IGNORE` and then fails with the same `BucketDeleteFailed` (513-534), the route's 500 with
-its sentence.
+read as no cursor without throwing, and stays so. The marker's other checks (version, length, type) stay the rule's. A
+failed bucket list with a saved cursor, outside a reviewed scan, is retried once from the first page by catching
+`BucketListFailed` only (192-209), and a second failure is the route's 500 ("a saved cursor and a failing bucket list
+retries and fails again"). A failed object delete puts the attachment row back with today's `INSERT OR IGNORE` and then
+fails with the same `BucketDeleteFailed` (513-534), the route's 500 with its sentence.
 
 ## 6. What depends on what
 
