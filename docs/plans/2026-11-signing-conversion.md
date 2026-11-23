@@ -988,14 +988,15 @@ access conversion did.
    3. **Client flows and routes.** The link, redeem, draft, review and sign flows; the four client routes and both
       verify pages on `bindingsOrUnavailable` and `runRoute`; `issueAgreementLink`, `completeAgreementLink`,
       `saveAgreementDraft`, `reviewAgreements`, `signAgreements`, `sessionGuard`, `liveSigningGuard` and
-      `reserveStudioAllowance` deleted, their tests moved to the flows; the client corpora's statement patterns
-      re-pointed (`offer-link`, `offer-verify-page`, `offer-review`, `offer-sign`, section 9) and their fixtures
-      re-recorded, each route PR in a commit of its own, with its `golden:neutral` output; a release record for
-      landing 2.
+      `reserveStudioAllowance` deleted, their tests moved to the flows. In each route PR, the client corpora's
+      statement patterns (`offer-link`, `offer-verify-page`, `offer-review`, `offer-sign`, section 9) are re-pointed in
+      a commit before the re-record, and their fixtures re-recorded in a commit of its own, with its `golden:neutral`
+      output; a release record for landing 2.
    4. **Owner flows and routes.** The countersign, abandon, record, packet, messages, templates, retention, upload and
-      download flows; the four owner routes; the rest of the deletions listed in "Files in scope"; the owner corpora's
-      statement patterns re-pointed and their fixtures re-recorded in a commit of their own; the `golden:neutral`
-      output; a release record `docs/prelaunch-qa-<date>-signing-area.md`.
+      download flows; the four owner routes; the rest of the deletions listed in "Files in scope". In each route PR,
+      the owner corpora's statement patterns are re-pointed in a commit before the re-record, and their fixtures
+      re-recorded in a commit of its own, with its `golden:neutral` output; a release record
+      `docs/prelaunch-qa-<date>-signing-area.md`.
 
    Part 1 is twelve PRs: the machines and `openForSigning`; the readers; the link, redeem and draft; the review; the
    sign; countersign and abandon; end, hold and record a copy; the packet and the emails; the upload and the owner's
@@ -1044,9 +1045,9 @@ today's function beside the rule on the same database. What it found, for the st
   they decide on; part 2 checks each new read against the golden hook patterns, which count statements by `nth`.
 - **Hook patterns parts 3 and 4 re-point** (part 3 the client corpora: `offer-link`, `offer-verify-page`,
   `offer-review`, `offer-sign`; part 4 the owner corpora): the store keeps today's text wherever a golden hook picks a
-  statement; where a read had to change, the pattern below no longer picks it, and the route PR re-points it, in a commit
-  before its re-record, to the converted statement (the same operation, table and access, so its `trigger-hit` marker is unchanged). Each store test lists its
-  own and checks them against the corpora.
+  statement; where a read had to change, the pattern below no longer picks it, and the route PR re-points it, in a
+  commit before its re-record, to the converted statement (the same operation, table and access, so its `trigger-hit`
+  marker is unchanged). Each store test lists its own and checks them against the corpora.
   - `offer-link`, "the used_at update after a sent email fails": `/UPDATE software_agreement_links SET used_at=\? WHERE
     purpose/`. A6 consumes the older links through `consumeLinks` (`WHERE id IN (...)`), as `agreements-link` does.
   - `offer-verify-page`, "outage: the GET's live check: the expired page": `/SELECT CASE WHEN EXISTS\(SELECT 1 FROM
