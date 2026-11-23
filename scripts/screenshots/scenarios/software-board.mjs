@@ -54,6 +54,10 @@ const LANES = Object.keys(HEADINGS);
 
 /** What the website path's by-hand screens say: each lane's hint and example answer, as the design gives them. */
 const BY_HAND = {
+	parts: {
+		hint: "List the pages you have in mind. A rough list is fine.",
+		placeholder: "Shows",
+	},
 	audience: {
 		hint: "List the people you want the site to reach. It keeps the design aimed at them.",
 		placeholder: "Fans who want show dates",
@@ -385,28 +389,41 @@ export default {
 				if (!label || label.width > 1 || label.height > 1)
 					throw new Error("The by-hand field shows a label above it");
 
-				// Add is the outlined button on the field's row, to its right (or below at full width on a narrow row).
+				// Add is a text button at the right inner edge of the one bordered control the field sits in.
 				const add = screen.locator("[data-lane-save]");
+				const editor = await screen.locator("[data-lane-editor]").boundingBox();
 				const field = await screen.locator("[data-lane-input]").boundingBox();
 				const button = await add.boundingBox();
 
-				if (
-					!(await add.evaluate((node) =>
-						node.classList.contains("site-button-outline"),
-					))
-				)
-					throw new Error("Add is not the outlined button");
+				const style = await add.evaluate((node) => ({
+					outlined: node.classList.contains("site-button-outline"),
+					underline: getComputedStyle(node).textDecorationLine,
+				}));
 
-				if (!field || !button || button.height < 44)
+				if (style.outlined) throw new Error("Add is still the outlined button");
+
+				if (style.underline !== "underline")
+					throw new Error("Add is not an underlined text button");
+
+				if (!editor || !field || !button || button.height < 44)
 					throw new Error("Add is missing or under 44px");
 
-				const beside =
-					Math.abs(
-						button.y + button.height / 2 - (field.y + field.height / 2),
-					) < field.height;
+				if (
+					button.x < field.x + field.width - 1 ||
+					button.x + button.width > editor.x + editor.width + 1
+				)
+					throw new Error("Add is not at the right inner edge of the field");
 
-				if (!beside && button.y < field.y + field.height)
-					throw new Error("Add is neither beside the field nor below it");
+				const wrapper = await screen
+					.locator("[data-lane-editor]")
+					.evaluate((node) => getComputedStyle(node).borderTopWidth);
+
+				const inner = await screen
+					.locator("[data-lane-input]")
+					.evaluate((node) => getComputedStyle(node).borderTopWidth);
+
+				if (wrapper !== "1px" || inner !== "0px")
+					throw new Error("The field and Add do not share one border");
 
 				if (
 					await screen
@@ -440,12 +457,18 @@ export default {
 					const screen = await byHand(page, "audience");
 					const input = screen.locator("[data-lane-input]");
 
-					for (const note of [
-						"Fans who want show dates",
-						"Venues that book us",
+					// The example moves on after each note: the written answer is about a band, so its examples lead.
+					for (const [note, nextExample] of [
+						["Fans who want show dates", "Venues that book us"],
+						["Venues that book us", "New customers"],
 					]) {
 						await input.fill(note);
 						await input.press("Enter");
+
+						if ((await input.getAttribute("placeholder")) !== nextExample)
+							throw new Error(
+								`After "${note}" the example is not "${nextExample}"`,
+							);
 
 						if ((await input.inputValue()) !== "")
 							throw new Error("The field was not cleared after Add");
@@ -499,6 +522,31 @@ export default {
 
 					if (!(await screen.locator("[data-board-undo]").isVisible()))
 						throw new Error("Undo is not shown after a note");
+					await page.mouse.move(0, 0);
+				},
+			);
+
+			// The parts lane with two pages added: the example has moved on to the next that fits the answers.
+			await shot(
+				"byhand-parts-notes",
+				"The parts screen by hand after two pages: the next example, Add",
+				async (page) => {
+					const screen = await byHand(page, "parts");
+					const input = screen.locator("[data-lane-input]");
+
+					for (const [note, nextExample] of [
+						["Shows", "Music"],
+						["Music", "Mailing list"],
+					]) {
+						await input.fill(note);
+						await screen.locator("[data-lane-save]").click();
+
+						if ((await input.getAttribute("placeholder")) !== nextExample)
+							throw new Error(
+								`After "${note}" the example is not "${nextExample}"`,
+							);
+					}
+
 					await page.mouse.move(0, 0);
 				},
 			);

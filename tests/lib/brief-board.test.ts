@@ -10,10 +10,11 @@ import {
 	BOARD_STORAGE_KEY,
 	addLabels,
 	byHandHints,
-	byHandPlaceholders,
+	byHandExamples,
 	hasAiCard,
 	laneLabels,
 	laneScreen,
+	nextExample,
 	noteOnLeaving,
 	outlineText,
 	REPLY_MAX,
@@ -2763,7 +2764,7 @@ describe("the outline's three screens", () => {
 });
 
 describe("by hand", () => {
-	it("carries the owner's hints and example placeholders", () => {
+	it("carries the owner's hints", () => {
 		expect(byHandHints).toEqual({
 			website: {
 				audience:
@@ -2785,23 +2786,6 @@ describe("by hand", () => {
 					"List anything you haven\u2019t settled yet. It\u2019s fine to leave this empty.",
 			},
 		});
-		expect(byHandPlaceholders).toEqual({
-			website: {
-				audience: "Fans who want show dates",
-				parts: "Shows",
-				questions: "Do we sell tickets on the site?",
-			},
-			webapp: {
-				audience: "Front-desk staff",
-				parts: "Book an appointment",
-				questions: "Do people need to sign in?",
-			},
-			workflow: {
-				audience: "Office manager",
-				parts: "Copy new orders into the spreadsheet",
-				questions: "Who approves a refund?",
-			},
-		});
 	});
 
 	const screen = (
@@ -2810,6 +2794,18 @@ describe("by hand", () => {
 		undoLabel: string | null = null,
 	) =>
 		laneScreen({ path: "website", lane: "audience", board, byHand, undoLabel });
+
+	it("opens each by-hand field with the first example for a visitor who wrote nothing", () => {
+		expect(
+			laneScreen({
+				path: "website",
+				lane: "audience",
+				board: emptyBoard(),
+				byHand: true,
+				undoLabel: null,
+			}).placeholder,
+		).toBe("New customers");
+	});
 
 	it("shows the AI-on screen as it was", () => {
 		const empty = screen(emptyBoard(), false);
@@ -2836,7 +2832,7 @@ describe("by hand", () => {
 
 		expect(hand.heading).toBe(laneQuestions.website.audience);
 		expect(hand.hint).toBe(byHandHints.website.audience);
-		expect(hand.placeholder).toBe("Fans who want show dates");
+		expect(hand.placeholder).toBe("New customers");
 		expect(hand.fieldOpen).toBe(true);
 		expect(hand.skipLink).toBe(false);
 	});
@@ -2869,6 +2865,107 @@ describe("by hand", () => {
 		);
 
 		expect(hasAiCard(aside, "audience")).toBe(false);
+	});
+});
+
+describe("nextExample", () => {
+	const band = "A home for my band. Fans should hear new music.";
+
+	it("leads with the examples whose keywords occur in the written answers, in list order", () => {
+		expect(nextExample("website", "audience", band, [])).toBe(
+			"Fans who want show dates",
+		);
+		expect(
+			nextExample("website", "audience", band, ["Fans who want show dates"]),
+		).toBe("Venues that book us");
+		expect(nextExample("website", "parts", band, [])).toBe("Music");
+		expect(nextExample("website", "parts", band, ["Music"])).toBe("Home");
+	});
+
+	it("puts the keyword examples first even when they are later in the list", () => {
+		expect(
+			nextExample("website", "parts", "We sell merch and a newsletter", []),
+		).toBe("Shop");
+		expect(
+			nextExample("website", "parts", "We sell merch and a newsletter", [
+				"Shop",
+			]),
+		).toBe("Mailing list");
+	});
+
+	it("matches whole words only, ignoring case, and tolerates a plural", () => {
+		expect(nextExample("website", "parts", "TOURS and Gigs", [])).toBe("Shows");
+		expect(nextExample("website", "parts", "a stourbridge show", [])).toBe(
+			"Shows",
+		);
+		expect(nextExample("website", "parts", "unmusical shopping", [])).toBe(
+			"Home",
+		);
+		expect(nextExample("website", "parts", "We have a boo", [])).toBe("Home");
+	});
+
+	it("starts with the plain examples for answers that match nothing", () => {
+		expect(
+			nextExample("website", "audience", "A site for my plumbing firm", []),
+		).toBe("New customers");
+		expect(nextExample("workflow", "audience", "", [])).toBe("Office manager");
+	});
+
+	it("skips an example already in the lane, in any letter case, set-aside cards included", () => {
+		expect(
+			nextExample("website", "audience", band, ["  FANS WHO WANT SHOW DATES "]),
+		).toBe("Venues that book us");
+
+		const aside = setAside(
+			started(
+				said(
+					"audience",
+					"Fans who want show dates",
+					"Fans should hear new music",
+				),
+			),
+			started(
+				said(
+					"audience",
+					"Fans who want show dates",
+					"Fans should hear new music",
+				),
+			).cards[0].id,
+		);
+
+		expect(
+			laneScreen({
+				path: "website",
+				lane: "audience",
+				board: aside,
+				byHand: true,
+				undoLabel: null,
+				answers: band,
+			}).placeholder,
+		).toBe("Venues that book us");
+	});
+
+	it("says the lane's closing prompt once every example is in the lane", () => {
+		for (const path of ["website", "webapp", "workflow"] as const)
+			for (const lane of ["audience", "parts", "questions"] as const) {
+				const { examples, closing } = byHandExamples[path][lane];
+
+				expect(
+					nextExample(
+						path,
+						lane,
+						"",
+						examples.map(([text]) => text.toUpperCase()),
+					),
+				).toBe(closing);
+			}
+	});
+
+	it("keeps em-dashes out of every example and closing prompt", () => {
+		for (const lists of Object.values(byHandExamples))
+			for (const { examples, closing } of Object.values(lists))
+				for (const text of [closing, ...examples.map(([example]) => example)])
+					expect(text).not.toMatch(/[\u2014\u2013]|--/);
 	});
 });
 

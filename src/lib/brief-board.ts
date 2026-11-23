@@ -131,23 +131,165 @@ export const byHandHints: Record<SoftwarePath, Record<Lane, string>> = {
 	},
 };
 
-export const byHandPlaceholders: Record<SoftwarePath, Record<Lane, string>> = {
+/** An example answer for a by-hand field; with keywords it leads once one of them appears in the visitor's written answers. */
+type Example = readonly [text: string, ...keywords: string[]];
+
+const ex = (text: string, keywords = ""): Example => [
+	text,
+	...(keywords ? keywords.split(",").map((word) => word.trim()) : []),
+];
+
+/** A lane's ordered examples and the prompt shown once every one of them is already in the lane. */
+type ExampleList = {
+	readonly examples: readonly Example[];
+	readonly closing: string;
+};
+
+export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 	website: {
-		audience: "Fans who want show dates",
-		parts: "Shows",
-		questions: "Do we sell tickets on the site?",
+		audience: {
+			examples: [
+				ex(
+					"Fans who want show dates",
+					"band, music, fan, show, gig, tour, concert",
+				),
+				ex("Venues that book us", "band, venue, gig, booking"),
+				ex("New customers"),
+				ex("Returning customers"),
+				ex("Press and bloggers"),
+				ex("Partners and suppliers"),
+			],
+			closing: "Another person or group",
+		},
+		parts: {
+			examples: [
+				ex("Shows", "show, gig, tour, concert"),
+				ex("Music", "music, band, song, album"),
+				ex("Shop", "shop, sell, merch, store, product"),
+				ex("Mailing list", "mailing, newsletter, subscriber"),
+				ex("Booking", "book, booking, appointment, reserve, reservation"),
+				ex("Photos", "photo, gallery, portfolio"),
+				ex("Menu", "menu, restaurant, cafe, bakery, food"),
+				ex("Home"),
+				ex("About"),
+				ex("Services"),
+				ex("Contact"),
+				ex("Prices"),
+				ex("Questions and answers"),
+			],
+			closing: "Another page",
+		},
+		questions: {
+			examples: [
+				ex("Do we sell tickets on the site?", "ticket, show, gig, concert"),
+				ex("Who will add new show dates?", "show, gig, tour"),
+				ex("Who will write the text?"),
+				ex("Do we have photos to use?"),
+				ex("Do we need a mailing list sign-up?"),
+				ex("Should people be able to pay on the site?"),
+			],
+			closing: "Another open question",
+		},
 	},
 	webapp: {
-		audience: "Front-desk staff",
-		parts: "Book an appointment",
-		questions: "Do people need to sign in?",
+		audience: {
+			examples: [
+				ex("Front-desk staff", "desk, reception, clinic, salon, appointment"),
+				ex("Customers"),
+				ex("Staff"),
+				ex("Managers"),
+				ex("Admins"),
+			],
+			closing: "Another kind of user",
+		},
+		parts: {
+			examples: [
+				ex("Book an appointment", "book, booking, appointment, schedule"),
+				ex("Search past orders", "order, purchase"),
+				ex("Sign in"),
+				ex("Add a new record"),
+				ex("Search and filter"),
+				ex("Get a reminder"),
+				ex("Export a report"),
+			],
+			closing: "Another thing people can do",
+		},
+		questions: {
+			examples: [
+				ex("Do people need to sign in?"),
+				ex("Who can see what?"),
+				ex("Does it need to work on a phone?"),
+				ex("Where does the data live today?"),
+			],
+			closing: "Another open question",
+		},
 	},
 	workflow: {
-		audience: "Office manager",
-		parts: "Copy new orders into the spreadsheet",
-		questions: "Who approves a refund?",
+		audience: {
+			examples: [
+				ex("Office manager"),
+				ex("Sales team"),
+				ex("Bookkeeper"),
+				ex("The owner"),
+			],
+			closing: "Another person or role",
+		},
+		parts: {
+			examples: [
+				ex("Copy new orders into the spreadsheet", "order, spreadsheet"),
+				ex("Check the inbox for new requests"),
+				ex("Enter the details into the system"),
+				ex("Send a confirmation email"),
+				ex("Tell the team it\u2019s done"),
+			],
+			closing: "Another step",
+		},
+		questions: {
+			examples: [
+				ex("Who approves a refund?", "refund, payment, invoice"),
+				ex("What happens when something is missing?"),
+				ex("Which tools have to stay?"),
+				ex("How often does this happen?"),
+			],
+			closing: "Another open question",
+		},
 	},
 };
+
+const keywordIn = (answers: string, word: string) =>
+	new RegExp(
+		`(?<![\\p{L}\\p{N}])${word}(?:s|es)?(?![\\p{L}\\p{N}])`,
+		"iu",
+	).test(answers);
+
+/**
+ * The example a by-hand field shows: the first example not yet in the lane, those that fit the visitor's written answers
+ * first (an example with keywords fits when one occurs there as a whole word, a plain plural allowed), then the plain
+ * ones, each in list order. When every example is in the lane (any letter case, set-aside cards included) it is the
+ * lane's closing prompt.
+ */
+export function nextExample(
+	path: SoftwarePath,
+	lane: Lane,
+	writtenAnswers: string,
+	laneCards: readonly string[],
+): string {
+	const { examples, closing } = byHandExamples[path][lane];
+	const have = new Set(laneCards.map((text) => text.trim().toLowerCase()));
+
+	const fits = examples.filter(
+		([, ...words]) =>
+			words.length > 0 && words.some((word) => keywordIn(writtenAnswers, word)),
+	);
+
+	const plain = examples.filter(([, ...words]) => words.length === 0);
+
+	const first = [...fits, ...plain].find(
+		([text]) => !have.has(text.trim().toLowerCase()),
+	);
+
+	return first ? first[0] : closing;
+}
 
 /** The most cards a lane holds, set-aside cards not counted. */
 export const laneLimits: Record<StoredLane, number> = {
@@ -350,8 +492,10 @@ export function laneScreen(input: {
 	readonly byHand: boolean;
 	/** What Undo would undo, or null when there is nothing to undo. */
 	readonly undoLabel: string | null;
+	/** The visitor's written answers joined, which pick the example the field shows. */
+	readonly answers?: string;
 }): LaneScreen {
-	const { path, lane, board, byHand, undoLabel } = input;
+	const { path, lane, board, byHand, undoLabel, answers = "" } = input;
 	const heading = laneQuestions[path][lane];
 
 	if (!byHand)
@@ -368,7 +512,12 @@ export function laneScreen(input: {
 	return {
 		heading,
 		hint: byHandHints[path][lane],
-		placeholder: byHandPlaceholders[path][lane],
+		placeholder: nextExample(
+			path,
+			lane,
+			answers,
+			board.cards.filter((card) => card.lane === lane).map((card) => card.text),
+		),
 		fieldOpen: true,
 		skipLink: false,
 		undoShown: undoLabel !== null,

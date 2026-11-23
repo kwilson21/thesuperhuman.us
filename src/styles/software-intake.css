@@ -83,12 +83,16 @@
   .software-intake .board-card.is-new{animation:board-card-in 180ms var(--ease-site)}
   @keyframes board-card-in{from{opacity:0;transform:translateY(4px)}}
 }
-/* By hand: the field and Add share a row; Add is the site's outlined button and drops below at full width when the row is too narrow. */
-.software-intake .board-editor-inline{display:flex;flex-wrap:wrap;align-items:flex-end;gap:.5rem}
-.software-intake .board-editor-inline .intake-field{flex:1 1 12rem;margin-top:0;min-width:0}
-.software-intake .board-editor-inline .board-editor-actions{flex:0 0 auto}
-.software-intake .board-editor-inline .board-editor-actions button{text-decoration:none;text-align:center;font-size:1rem;min-width:5rem}
-@media (max-width:21rem){.software-intake .board-editor-inline .board-editor-actions{flex:1 1 100%}.software-intake .board-editor-inline .board-editor-actions button{width:100%}}
+/* By hand: the field and Add are one bordered control. The wrapper carries the field's border, radius and background and the
+   site's focus ring (while the input has focus); Add is a text button at the right inner edge, like Edit and Remove. */
+.software-intake .board-editor-inline{display:flex;align-items:center;border:1px solid var(--field-border);border-radius:3px;background:var(--paper)}
+.software-intake .board-editor-inline:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:4px}
+.software-intake .board-editor-inline .intake-field{flex:1 1 auto;margin-top:0;min-width:0}
+.software-intake .board-editor-inline input{border:0;border-radius:0;background:transparent}
+.software-intake .board-editor-inline input:focus-visible{outline-color:transparent}
+.software-intake .board-editor-inline .board-editor-actions{flex:0 0 auto;padding-inline:.25rem .5rem}
+.software-intake .board-editor-inline .board-editor-actions button{min-width:44px;text-align:center;padding-inline:.5rem}
+.software-intake .board-editor-inline .board-editor-actions button:focus-visible{outline-offset:-4px}
 /* A lane of the visitor's own notes: compact rows with the text left and its actions right, a hairline between rows, no box.
    A newly added note shows the accent on its left edge for a moment. */
 .software-intake .board-cards-rows{gap:0}
@@ -100,6 +104,5 @@
 .software-intake .board-cards-rows .board-editor{flex:1 1 100%;order:3;padding-bottom:.5rem}
 .software-intake .board-cards-rows .board-card.is-new{box-shadow:-2px 0 0 var(--accent);border-color:var(--rule)}
 @media (prefers-reduced-motion:no-preference){.software-intake .board-cards-rows .board-card{transition:box-shadow 600ms var(--ease-site)}}
-@media (hover:hover) and (pointer:fine){.software-intake .board-editor-inline .board-editor-actions button.site-button:not(:disabled):hover{color:var(--paper)}}
 @media (hover:hover) and (pointer:fine){.software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:not(:disabled):hover,.software-intake .board-add:not(:disabled):hover{color:var(--accent)}}
 @media print{.software-intake .board-links{display:none!important}}

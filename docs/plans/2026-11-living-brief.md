@@ -101,10 +101,14 @@ not by hand while the visitor has skipped the outline, because the screens are t
 
 - The heading is the lane's question as above.
 - The hint is the lane's own by-hand hint (below) in place of "From your answers…" and "Add your own, or go on."
-- The answer field is open on the screen with an example placeholder; it is not behind the lane's "Add" link. "Add" is
-  the site's outlined button on the same row, to the field's right (below it at full width when the row is too narrow),
-  and the field's label is read by screen readers but not shown, since the heading and hint say what to type. Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds
-  nothing and Next is never blocked.
+- The answer field is open on the screen with an example placeholder; it is not behind the lane's "Add" link. The field and
+  "Add" are one bordered control: a wrapper carries the field's border, radius and background, the field is borderless
+  inside it, and "Add" sits at its right inner edge as an underlined text button in the style of Edit and Remove, with a
+  44px target and never over typed text. The wrapper shows the site's focus ring while the field has focus, and Add shows
+  its own focus. The field's label is read by screen readers but not shown, since the heading and hint say what to type.
+  Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds nothing and
+  Next is never blocked. The AI-on editor is unchanged.
+- The example changes as notes are added (no AI is involved): see the examples below.
 - The field cannot be closed, so Escape keeps its words. A switch to by hand while the visitor is typing keeps the words
   and the focus. Enter that confirms a word in an input method adds nothing.
 - There is no "Skip these, no AI outline" link. Undo shows only when there is something to undo.
@@ -117,11 +121,27 @@ not by hand while the visitor has skipped the outline, because the screens are t
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|
 | `audience` hint | List the people you want the site to reach. It keeps the design aimed at them. | List the kinds of people who will use it. | List the people or roles who do this today. |
-| `audience` placeholder | Fans who want show dates | Front-desk staff | Office manager |
 | `parts` hint | List the pages you have in mind. A rough list is fine. | List the main things people should be able to do. | List the steps in the order they happen. |
-| `parts` placeholder | Shows | Book an appointment | Copy new orders into the spreadsheet |
 | `questions` hint | List anything you haven’t settled yet. It’s fine to leave this empty. | (same) | (same) |
-| `questions` placeholder | Do we sell tickets on the site? | Do people need to sign in? | Who approves a refund? |
+
+**The example in the field.** Each lane and path has an ordered list of examples, and an example may carry keywords.
+The candidates are the examples with no keywords plus those with a keyword that occurs as a whole word in the visitor's
+written answers (case-insensitive, a plain plural allowed). Keyword-matched examples come first, in list order, then the
+plain ones in list order. The placeholder is the first candidate not already in the lane (compared trimmed and
+case-insensitively with every card in that lane, set-aside ones included); when none is left it is the lane's closing
+prompt. It is recomputed after every add, edit, remove and undo, and when the screen is shown. Examples are `text | keywords`.
+
+| Path / lane | Examples, in order | Closing prompt |
+|---|---|---|
+| Website / `audience` | Fans who want show dates \| band, music, fan, show, gig, tour, concert; Venues that book us \| band, venue, gig, booking; New customers; Returning customers; Press and bloggers; Partners and suppliers | Another person or group |
+| Website / `parts` | Shows \| show, gig, tour, concert; Music \| music, band, song, album; Shop \| shop, sell, merch, store, product; Mailing list \| mailing, newsletter, subscriber; Booking \| book, booking, appointment, reserve, reservation; Photos \| photo, gallery, portfolio; Menu \| menu, restaurant, cafe, bakery, food; Home; About; Services; Contact; Prices; Questions and answers | Another page |
+| Website / `questions` | Do we sell tickets on the site? \| ticket, show, gig, concert; Who will add new show dates? \| show, gig, tour; Who will write the text?; Do we have photos to use?; Do we need a mailing list sign-up?; Should people be able to pay on the site? | Another open question |
+| Web app / `audience` | Front-desk staff \| desk, reception, clinic, salon, appointment; Customers; Staff; Managers; Admins | Another kind of user |
+| Web app / `parts` | Book an appointment \| book, booking, appointment, schedule; Search past orders \| order, purchase; Sign in; Add a new record; Search and filter; Get a reminder; Export a report | Another thing people can do |
+| Web app / `questions` | Do people need to sign in?; Who can see what?; Does it need to work on a phone?; Where does the data live today? | Another open question |
+| Workflow / `audience` | Office manager; Sales team; Bookkeeper; The owner | Another person or role |
+| Workflow / `parts` | Copy new orders into the spreadsheet \| order, spreadsheet; Check the inbox for new requests; Enter the details into the system; Send a confirmation email; Tell the team it’s done | Another step |
+| Workflow / `questions` | Who approves a refund? \| refund, payment, invoice; What happens when something is missing?; Which tools have to stay?; How often does this happen? | Another open question |
 
 The status line while the outline is retrying after a failed update says "The outline couldn’t update just now. Trying
 again shortly." only while a retry is in fact coming; a request in flight says "Reading your answers…".

@@ -279,6 +279,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				board: current,
 				byHand,
 				undoLabel,
+				answers: currentAnswers(),
 			});
 
 			parts.title.textContent = screen.heading;
@@ -304,12 +305,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			parts.cancel.hidden = screen.fieldOpen;
 
-			// By hand the field and its Add button share a row, and the field's label is read but not shown: the heading and
+			// By hand the field and its Add button are one bordered control, and the field's label is read but not shown: the heading and
 			// hint already say what to type. A lane of the visitor's own notes lists them as compact rows.
 			parts.editor.classList.toggle("board-editor-inline", screen.fieldOpen);
 			parts.editorLabel.classList.toggle("sr-only", screen.fieldOpen);
-			parts.save.classList.toggle("site-button", screen.fieldOpen);
-			parts.save.classList.toggle("site-button-outline", screen.fieldOpen);
 			parts.list.classList.toggle("board-cards-rows", !screen.ownLabel);
 
 			// Says why a note cannot be added, once the visitor has tried.
