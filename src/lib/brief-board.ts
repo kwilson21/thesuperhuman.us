@@ -14,15 +14,30 @@ import {
 } from "./fields";
 import type { SoftwarePath } from "./software-inquiry";
 
-export const LANES = ["purpose", "audience", "parts", "questions"] as const;
+/**
+ * The outline's lanes, one screen each. The purpose has no lane: the visitor's written answer is the statement of purpose
+ * (docs/plans/2026-11-living-brief.md, "No purpose screen").
+ */
+export const LANES = ["audience", "parts", "questions"] as const;
 
 export type Lane = (typeof LANES)[number];
 
-/** The data-steps of the lane screens in the brief's form (src/components/BriefBoard.astro), in lane order. */
-export const LANE_STEPS = [9, 10, 11, 12] as const;
+/**
+ * The lanes an outline item may name when it is read back: the purpose too, which briefs sent before the purpose lane was
+ * dropped still hold. The server and the owner's page read them as before; the visitor's page never makes one.
+ */
+export const STORED_LANES = ["purpose", ...LANES] as const;
 
-/** Each lane's heading, by path. */
-export const laneLabels: Record<SoftwarePath, Record<Lane, string>> = {
+export type StoredLane = (typeof STORED_LANES)[number];
+
+/**
+ * The data-steps of the lane screens in the brief's form (src/components/BriefBoard.astro), in lane order. Step 9 was the
+ * purpose screen; a draft saved on it opens the first written question.
+ */
+export const LANE_STEPS = [10, 11, 12] as const;
+
+/** Each lane's heading, by path. The purpose's is for the owner's reading of a stored outline. */
+export const laneLabels: Record<SoftwarePath, Record<StoredLane, string>> = {
 	website: {
 		purpose: "What it’s for",
 		audience: "Who it’s for",
@@ -46,19 +61,16 @@ export const laneLabels: Record<SoftwarePath, Record<Lane, string>> = {
 /** What "Add" asks for in each lane, by path: the label of the visitor's own note. */
 export const addLabels: Record<SoftwarePath, Record<Lane, string>> = {
 	website: {
-		purpose: "Add what it’s for",
 		audience: "Add who it’s for",
 		parts: "Add a page",
 		questions: "Add a question",
 	},
 	webapp: {
-		purpose: "Add what it’s for",
 		audience: "Add who uses it",
 		parts: "Add something people can do",
 		questions: "Add a question",
 	},
 	workflow: {
-		purpose: "Add what should change",
 		audience: "Add who does the work",
 		parts: "Add a step",
 		questions: "Add a question",
@@ -71,19 +83,16 @@ export const addLabels: Record<SoftwarePath, Record<Lane, string>> = {
  */
 export const laneQuestions: Record<SoftwarePath, Record<Lane, string>> = {
 	website: {
-		purpose: "Is this what it’s for?",
 		audience: "Who is it for?",
 		parts: "Which pages does it need?",
 		questions: "What’s still undecided?",
 	},
 	webapp: {
-		purpose: "Is this what it’s for?",
 		audience: "Who will use it?",
 		parts: "What should people be able to do?",
 		questions: "What’s still undecided?",
 	},
 	workflow: {
-		purpose: "Is this what should change?",
 		audience: "Who does the work?",
 		parts: "What are the steps today?",
 		questions: "What’s still undecided?",
@@ -95,8 +104,52 @@ export const LANE_HINT = "From your answers. Keep, change or add your own.";
 
 export const LANE_HINT_EMPTY = "Add your own, or go on.";
 
+/**
+ * By hand (docs/plans/2026-11-living-brief.md, "By hand"): a lane screen while the outline's AI is off or has stopped. Each
+ * lane's hint says what to list, and the placeholder is one example answer, by path.
+ */
+const QUESTIONS_HINT =
+	"List anything you haven’t settled yet. It’s fine to leave this empty.";
+
+export const byHandHints: Record<SoftwarePath, Record<Lane, string>> = {
+	website: {
+		audience:
+			"List the people you want the site to reach. It keeps the design aimed at them.",
+		parts: "List the pages you have in mind. A rough list is fine.",
+		questions: QUESTIONS_HINT,
+	},
+	webapp: {
+		audience: "List the kinds of people who will use it.",
+		parts: "List the main things people should be able to do.",
+		questions: QUESTIONS_HINT,
+	},
+	workflow: {
+		audience: "List the people or roles who do this today.",
+		parts: "List the steps in the order they happen.",
+		questions: QUESTIONS_HINT,
+	},
+};
+
+export const byHandPlaceholders: Record<SoftwarePath, Record<Lane, string>> = {
+	website: {
+		audience: "Fans who want show dates",
+		parts: "Shows",
+		questions: "Do we sell tickets on the site?",
+	},
+	webapp: {
+		audience: "Front-desk staff",
+		parts: "Book an appointment",
+		questions: "Do people need to sign in?",
+	},
+	workflow: {
+		audience: "Office manager",
+		parts: "Copy new orders into the spreadsheet",
+		questions: "Who approves a refund?",
+	},
+};
+
 /** The most cards a lane holds, set-aside cards not counted. */
-export const laneLimits: Record<Lane, number> = {
+export const laneLimits: Record<StoredLane, number> = {
 	purpose: 2,
 	audience: 3,
 	parts: 8,
@@ -104,7 +157,7 @@ export const laneLimits: Record<Lane, number> = {
 };
 
 /** The longest text a card in each lane may have. */
-export const textLimits: Record<Lane, number> = {
+export const textLimits: Record<StoredLane, number> = {
 	purpose: 140,
 	audience: 80,
 	parts: 60,
@@ -115,8 +168,8 @@ export const QUOTE_MAX = 160;
 export const REASON_MAX = 100;
 export const ANSWER_MAX = 240;
 
-/** The most items an outline sent with a brief may have: every lane full. */
-export const OUTLINE_MAX = LANES.reduce(
+/** The most items an outline sent with a brief may have: every lane full, the stored purpose lane too. */
+export const OUTLINE_MAX = STORED_LANES.reduce(
 	(sum, lane) => sum + laneLimits[lane],
 	0,
 );
@@ -262,6 +315,65 @@ export const laneCount = <L extends string>(board: Board<L>, lane: L) =>
 	board.cards.filter(
 		(card) => card.lane === lane && card.status !== "dismissed",
 	).length;
+
+/** Whether a lane lists a card the AI made: any card on the screen that is not the visitor's own note. */
+export const hasAiCard = (board: Board, lane: Lane) =>
+	board.cards.some(
+		(card) =>
+			card.lane === lane &&
+			card.status !== "dismissed" &&
+			card.status !== "wrote",
+	);
+
+/** What a lane screen shows, apart from its cards. */
+export type LaneScreen = {
+	readonly heading: string;
+	readonly hint: string;
+	/** An example answer for the open field; "" with the AI on. */
+	readonly placeholder: string;
+	/** Whether the answer field is open on the screen, with an "Add" button, instead of behind the lane's "Add" link. */
+	readonly fieldOpen: boolean;
+	/** Whether "Skip these, no AI outline" is offered. */
+	readonly skipLink: boolean;
+	/** Whether Undo is on the screen (with the AI on it always is, disabled when there is nothing to undo). */
+	readonly undoShown: boolean;
+	/** Whether a card the visitor wrote says "Your note": not in a lane where every card is the visitor's own, by hand. */
+	readonly ownLabel: boolean;
+};
+
+/** The lane screen as the page draws it: the AI on as it always was, by hand as the design describes. */
+export function laneScreen(input: {
+	readonly path: SoftwarePath;
+	readonly lane: Lane;
+	readonly board: Board;
+	readonly byHand: boolean;
+	/** What Undo would undo, or null when there is nothing to undo. */
+	readonly undoLabel: string | null;
+}): LaneScreen {
+	const { path, lane, board, byHand, undoLabel } = input;
+	const heading = laneQuestions[path][lane];
+
+	if (!byHand)
+		return {
+			heading,
+			hint: laneCount(board, lane) ? LANE_HINT : LANE_HINT_EMPTY,
+			placeholder: "",
+			fieldOpen: false,
+			skipLink: true,
+			undoShown: true,
+			ownLabel: true,
+		};
+
+	return {
+		heading,
+		hint: byHandHints[path][lane],
+		placeholder: byHandPlaceholders[path][lane],
+		fieldOpen: true,
+		skipLink: false,
+		undoShown: undoLabel !== null,
+		ownLabel: hasAiCard(board, lane),
+	};
+}
 
 // ---- Text ---------------------------------------------------------------------------------------------------------
 
@@ -1885,7 +1997,7 @@ export const answerText = (
 export type OutlineOrigin = "answers" | "kept" | "edited" | "wrote";
 
 export type OutlineItem = {
-	readonly lane: Lane;
+	readonly lane: StoredLane;
 	readonly text: string;
 	readonly origin: OutlineOrigin;
 	readonly quote?: string;
@@ -1944,7 +2056,7 @@ export function briefOutline(board: Board, answers: string): OutlineItem[] {
 }
 
 const outlineItemFields = {
-	lane: oneOf(LANES),
+	lane: oneOf(STORED_LANES),
 	text: text(textLimits.purpose),
 	origin: oneOf(["answers", "kept", "edited", "wrote"]),
 	quote: text(QUOTE_MAX),
@@ -1997,7 +2109,7 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 
 	if (!read) return { ok: false, error: OUTLINE_CHANGED };
 
-	const counts: Record<Lane, number> = {
+	const counts: Record<StoredLane, number> = {
 		purpose: 0,
 		audience: 0,
 		parts: 0,
@@ -2096,7 +2208,7 @@ const savedCardFields = {
 		Schema.isPattern(/^c\d{1,6}$/, { message: "Not a card id." }),
 	),
 	lane: oneOf(LANES),
-	text: text(textLimits.purpose),
+	text: text(textLimits.questions),
 	status: oneOf(["proposed", "kept", "edited", "dismissed", "wrote"]),
 	basis: oneOf(["said", "suggested", "none"]),
 	quote: text(QUOTE_MAX),

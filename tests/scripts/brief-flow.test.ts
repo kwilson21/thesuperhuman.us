@@ -189,7 +189,7 @@ async function setup(
 	requestedPath?: string,
 	startSuggestionPass = grantedPass,
 	linkedPath: string | null | undefined = requestedPath,
-	// With the board, the page has the outline's four lane screens (data-step 9 to 12) and answers the board's route
+	// With the board, the page has the outline's three lane screens (data-step 10 to 12) and answers the board's route
 	// with `interpret`; without it the page is as the server renders it with the switch off.
 	board?: {
 		interpret: (body: string, signal: AbortSignal) => Promise<InterpretAnswer>;
@@ -305,7 +305,7 @@ async function setup(
 	}
 
 	if (board) {
-		for (const i of [9, 10, 11, 12])
+		for (const i of [10, 11, 12])
 			steps[i].nodes["[data-board-skip]"] = new Node();
 		form.nodes["[data-outline-add-back]"] = Object.assign(new Node(), {
 			hidden: true,
@@ -346,7 +346,7 @@ async function setup(
 		if (selector === "[data-skip]") return skips;
 
 		if (selector === "[data-board-skip]")
-			return steps.slice(9).map((node) => node.nodes[selector]);
+			return steps.slice(10).map((node) => node.nodes[selector]);
 
 		if (
 			[
@@ -412,7 +412,7 @@ async function setup(
 		},
 	);
 	// The progress dots mirror the page: eight items, each with a visually hidden label.
-	dots = Array.from({ length: board ? 12 : 8 }, () => {
+	dots = Array.from({ length: board ? 11 : 8 }, () => {
 		const item = new Node();
 		item.nodes[".sr-only"] = new Node();
 
@@ -1780,6 +1780,7 @@ it.each([
 );
 
 it.each([
+	["webapp", 7],
 	["workflow", 7],
 	["website", 8],
 ])(
@@ -1925,11 +1926,6 @@ const said = (lane: string, text: string, quote: string, ref = "") => ({
 });
 
 const FIRST_REPLY = [
-	said(
-		"purpose",
-		"A home for my band on the web",
-		"A home for my band on the web",
-	),
 	said("audience", "Fans", "Fans should hear new music"),
 	said("parts", "Music", "hear new music, see upcoming shows"),
 	said("parts", "Shows", "see upcoming shows near them"),
@@ -2031,42 +2027,40 @@ it("builds each path's plan from its written questions, the outline's lane scree
 	const { briefPlan } = await import("~/scripts/software-inquiry");
 
 	expect(briefPlan("website", true)).toEqual([
-		0, 1, 9, 10, 11, 12, 7, 8, 3, 4, 5, 6,
+		0, 1, 10, 11, 12, 7, 8, 3, 4, 5, 6,
 	]);
-	expect(briefPlan("webapp", true)).toEqual([
-		0, 1, 2, 9, 10, 11, 12, 3, 4, 5, 6,
-	]);
+	expect(briefPlan("webapp", true)).toEqual([0, 1, 2, 10, 11, 12, 3, 4, 5, 6]);
 	expect(briefPlan("workflow", true)).toEqual([
-		0, 1, 2, 9, 10, 11, 12, 3, 4, 5, 6,
+		0, 1, 2, 10, 11, 12, 3, 4, 5, 6,
 	]);
 	expect(briefPlan("website", false)).toEqual([0, 1, 7, 8, 3, 4, 5, 6]);
 	expect(briefPlan("webapp", false)).toEqual([0, 1, 2, 3, 4, 5, 6]);
 });
 
-it("walks the website's twelve screens with the outline in them, and the dots follow the plan", async () => {
+it("walks the website's eleven screens with the outline in them, and the dots follow the plan", async () => {
 	await boardSetup("website");
-	expect(visibleDots()).toEqual(Array(12).fill(false));
+	expect(visibleDots()).toEqual(Array(11).fill(false));
 	fill("purpose", ANSWER);
 	fill("name", "Alex");
 	fill("email", "alex@example.com");
 	choose("updates", "self");
-	expect(visit()).toEqual([1, 9, 10, 11, 12, 7, 8, 3, 4, 5, 6]);
-	expect(dots[1].nodes[".sr-only"].textContent).toBe("Question 2 of 12");
-	expect(dots[11].attrs["aria-current"]).toBe("step");
+	expect(visit()).toEqual([1, 10, 11, 12, 7, 8, 3, 4, 5, 6]);
+	expect(dots[1].nodes[".sr-only"].textContent).toBe("Question 2 of 11");
+	expect(dots[10].attrs["aria-current"]).toBe("step");
 });
 
-it("walks the web app and workflow's eleven screens with the outline in them", async () => {
+it("walks the web app and workflow's ten screens with the outline in them", async () => {
 	for (const [path, key] of [
 		["webapp", "appGoal"],
 		["workflow", "today"],
 	]) {
 		await boardSetup(path);
-		expect(visibleDots()).toEqual([...Array(11).fill(false), true]);
+		expect(visibleDots()).toEqual([...Array(10).fill(false), true]);
 		fill(key, ANSWER);
 		fill("name", "Alex");
 		fill("email", "alex@example.com");
-		expect(visit()).toEqual([1, 2, 9, 10, 11, 12, 3, 4, 5, 6]);
-		expect(dots[2].nodes[".sr-only"].textContent).toBe("Question 3 of 11");
+		expect(visit()).toEqual([1, 2, 10, 11, 12, 3, 4, 5, 6]);
+		expect(dots[2].nodes[".sr-only"].textContent).toBe("Question 3 of 10");
 	}
 });
 
@@ -2075,8 +2069,8 @@ it("focuses each lane screen's heading as the steps change", async () => {
 	fill("appGoal", ANSWER);
 	click("[data-next]");
 	click("[data-next]");
-	expect(current()).toBe(9);
-	expect(steps[9].nodes.h1.focus).toHaveBeenCalled();
+	expect(current()).toBe(10);
+	expect(steps[10].nodes.h1.focus).toHaveBeenCalled();
 });
 
 it("keeps the website without lane screens when the server switch is off", () => {
@@ -2094,20 +2088,18 @@ it("records what a lane listed when the visitor leaves it, by Next, Back, Ctrl+E
 	await readAnswers();
 	expect(savedBoard().seen).toEqual({});
 	click("[data-next]");
-	expect(current()).toBe(9);
+	expect(current()).toBe(10);
 	expect(savedBoard().seen).toEqual({});
 	click("[data-next]");
-	expect(savedBoard().seen.purpose).toEqual(["c1"]);
+	expect(savedBoard().seen.audience).toEqual(["c1"]);
 	click("[data-back]");
-	expect(current()).toBe(9);
-	expect(savedBoard().seen.audience).toEqual(["c2"]);
+	expect(current()).toBe(10);
+	expect(savedBoard().seen.parts).toEqual(["c2", "c3", "c4"]);
 	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
 	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
-	expect(current()).toBe(11);
-	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
-	expect(savedBoard().seen.parts).toEqual(["c3", "c4", "c5"]);
+	expect(current()).toBe(12);
 	fire(steps[12].nodes["[data-board-skip]"], "click");
-	expect(savedBoard().seen.questions).toEqual(["c6"]);
+	expect(savedBoard().seen.questions).toEqual(["c5"]);
 });
 
 it("holds a reply for the lane on screen, updates the others and lists unseen cards in the review", async () => {
@@ -2120,24 +2112,17 @@ it("holds a reply for the lane on screen, updates the others and lists unseen ca
 	await vi.advanceTimersByTimeAsync(SECOND);
 	expect(bodies).toHaveLength(2);
 	click("[data-next]");
-	click("[data-next]");
 	expect(current()).toBe(11);
 
-	// The reply lands two screens later, on the pages lane.
+	// The reply lands one screen later, on the pages lane.
 	await reply([
-		said(
-			"purpose",
-			"A home for my band on the web",
-			"A home for my band on the web",
-			"c1",
-		),
-		said("purpose", "Visitors hear new music", "Fans should hear new music"),
-		said("audience", "Fans", "Fans should hear new music", "c2"),
-		said("parts", "New music", "hear new music, see upcoming shows", "c3"),
-		said("parts", "Mailing list", "join the mailing list", "c5"),
+		said("audience", "Fans", "Fans should hear new music", "c1"),
+		said("audience", "Visitors hear new music", "Fans should hear new music"),
+		said("parts", "New music", "hear new music, see upcoming shows", "c2"),
+		said("parts", "Mailing list", "join the mailing list", "c4"),
 		said("parts", "Shop", "We also sell merch at shows"),
 		{
-			ref: "c6",
+			ref: "c5",
 			lane: "questions",
 			text: "Who will add new show dates?",
 			basis: "suggested",
@@ -2147,16 +2132,13 @@ it("holds a reply for the lane on screen, updates the others and lists unseen ca
 	// Nothing listed on the lane on screen changed or left; what the reply adds there came at the end.
 	expect(listed("parts")).toEqual(["Music", "Shows", "Mailing list", "Shop"]);
 	// Another lane took the reply in full.
-	expect(listed("purpose")).toEqual([
-		"A home for my band on the web",
-		"Visitors hear new music",
-	]);
+	expect(listed("audience")).toEqual(["Fans", "Visitors hear new music"]);
 	click("[data-next]");
 	expect(listed("parts")).toEqual(["New music", "Mailing list", "Shop"]);
 	toReview();
 	expect(current()).toBe(6);
 	expect(groupAfter("New since you last looked")).toContain(
-		`${laneLabels.website.purpose}: Visitors hear new music`,
+		`${laneLabels.website.audience}: Visitors hear new music`,
 	);
 	expect(groupAfter("New since you last looked")).not.toContain("Shop");
 	const row = reviewRows().find((node) => node.textContent === "Brief outline");
@@ -2172,22 +2154,19 @@ it("sends the visitor to a card's lane screen from the review, and stops listing
 	click("[data-next]");
 	await vi.advanceTimersByTimeAsync(SECOND);
 	click("[data-next]");
-	click("[data-next]");
 	await reply([
 		FIRST_REPLY[0],
-		said("purpose", "Fans hear new music", "Fans should hear new music"),
+		said("audience", "Venues", "see upcoming shows near them"),
 	]);
 	toReview();
-	expect(groupAfter("New since you last looked")).toContain(
-		"Fans hear new music",
-	);
+	expect(groupAfter("New since you last looked")).toContain("Venues");
 
 	const at = reviewRows().findIndex(
 		(node) => node.textContent === "New since you last looked",
 	);
 
 	fire(buttonsIn(reviewRows()[at + 1])[0], "click");
-	expect(current()).toBe(9);
+	expect(current()).toBe(10);
 	click("[data-next]");
 	toReview();
 	expect(groupAfter("New since you last looked")).toBeNull();
@@ -2209,7 +2188,6 @@ it("shows what changed in a lane after the visitor went back and edited an answe
 	]);
 	click("[data-next]");
 	click("[data-next]");
-	click("[data-next]");
 	expect(current()).toBe(11);
 	expect(core.statusLine("parts")).toBe(
 		"1 new, 1 removed since you last looked",
@@ -2223,7 +2201,7 @@ it("shows what changed in a lane after the visitor went back and edited an answe
 	expect(laneChanges(core.board(), "parts")).toEqual({ added: 1, removed: 1 });
 });
 
-it("skips the outline from the third lane screen: Back reaches the last written question, the dots drop by four and nothing is asked", async () => {
+it("skips the outline from the second lane screen: Back reaches the last written question, the dots drop by three and nothing is asked", async () => {
 	await boardSetup("website");
 	fill("purpose", ANSWER);
 	await readAnswers();
@@ -2232,7 +2210,6 @@ it("skips the outline from the third lane screen: Back reaches the last written 
 	click("[data-next]");
 	await vi.advanceTimersByTimeAsync(SECOND);
 	click("[data-next]");
-	click("[data-next]");
 	expect(current()).toBe(11);
 	const asked = bodies.length;
 	const before = core.board().cards;
@@ -2240,7 +2217,7 @@ it("skips the outline from the third lane screen: Back reaches the last written 
 	expect(current()).toBe(7);
 	expect(visibleDots()).toEqual([
 		...Array(8).fill(false),
-		...Array(4).fill(true),
+		...Array(3).fill(true),
 	]);
 	expect(core.outline()).toBeUndefined();
 	click("[data-back]");
@@ -2261,11 +2238,10 @@ it("skips the outline from the third lane screen: Back reaches the last written 
 	expect(visit()).toEqual([1, 7, 8, 3, 4, 5, 6]);
 });
 
-it("offers to add the outline back from the review after a skip, with the four screens and the cards", async () => {
+it("offers to add the outline back from the review after a skip, with the three screens and the cards", async () => {
 	await boardSetup("website");
 	fill("purpose", ANSWER);
 	await readAnswers();
-	click("[data-next]");
 	click("[data-next]");
 	click("[data-next]");
 	fire(steps[11].nodes["[data-board-skip]"], "click");
@@ -2278,8 +2254,8 @@ it("offers to add the outline back from the review after a skip, with the four s
 	const cards = core.board().cards.length;
 	fire(form.nodes["[data-outline-add-back]"], "click");
 	expect(current()).toBe(6);
-	expect(visibleDots()).toEqual(Array(12).fill(false));
-	expect(dots[11].attrs["aria-current"]).toBe("step");
+	expect(visibleDots()).toEqual(Array(11).fill(false));
+	expect(dots[10].attrs["aria-current"]).toBe("step");
 	expect(form.nodes["[data-outline-add-back]"].hidden).toBe(true);
 	expect(core.board().cards).toHaveLength(cards);
 	expect(
@@ -2287,14 +2263,13 @@ it("offers to add the outline back from the review after a skip, with the four s
 	).toBe(true);
 
 	while (current() !== 1) click("[data-back]");
-	expect(visit().slice(0, 6)).toEqual([1, 9, 10, 11, 12, 7]);
+	expect(visit().slice(0, 5)).toEqual([1, 10, 11, 12, 7]);
 });
 
 it("asks again after the outline is added back, though nothing was written since the skip", async () => {
 	await boardSetup("website");
 	fill("purpose", ANSWER);
 	await readAnswers();
-	click("[data-next]");
 	click("[data-next]");
 	click("[data-next]");
 	fire(steps[11].nodes["[data-board-skip]"], "click");
@@ -2334,11 +2309,10 @@ it("keeps the lane screens when suggestions are turned off, and asks nothing", a
 	await vi.advanceTimersByTimeAsync(30000);
 	expect(bodies).toHaveLength(0);
 	click("[data-next]");
-	expect(current()).toBe(9);
-	expect(core.statusLine("purpose")).toBe(
-		"Suggestions are off, so the outline is too. You can still add your own notes.",
-	);
-	expect(visibleDots()).toEqual(Array(12).fill(false));
+	expect(current()).toBe(10);
+	// By hand, and no card was made by the AI in this lane: nothing to say.
+	expect(core.statusLine("audience")).toBe("");
+	expect(visibleDots()).toEqual(Array(11).fill(false));
 });
 
 it("reads a draft saved by the old page: its step from the old plan, its plain flag and its cards", async () => {
@@ -2389,14 +2363,15 @@ it("reads a draft saved by the old page: its step from the old plan, its plain f
 	for (const [flags, dotCount] of [
 		[{ paused: false, plain: true }, 8],
 		[{ paused: true, plain: false }, 8],
-		[{ paused: false, plain: false }, 12],
+		[{ paused: false, plain: false }, 11],
 	] as const) {
 		store.set("software-brief-draft", draft(3));
 		store.set(BOARD_STORAGE_KEY, board(flags));
 		await boardSetup(undefined);
 		expect(current()).toBe(8);
 		expect(visibleDots().filter((hidden) => !hidden)).toHaveLength(dotCount);
-		expect(core.board().cards.map((card) => card.id)).toEqual(["c1", "c2"]);
+		// The purpose card (c1) is not the outline's any more: only the audience card stays.
+		expect(core.board().cards.map((card) => card.id)).toEqual(["c2"]);
 		expect(core.board().seen).toEqual({});
 		expect(core.skipped()).toBe(dotCount === 8);
 	}
@@ -2444,15 +2419,15 @@ it("says the outline could not update while it backs off after a failed request,
 	fill("purpose", ANSWER);
 	await vi.advanceTimersByTimeAsync(30000);
 	expect(bodies).toHaveLength(1);
-	expect(core.statusLine("purpose")).toBe("Reading your answers\u2026");
+	expect(core.statusLine("audience")).toBe("Reading your answers\u2026");
 	waiting.shift()!({ status: 500, json: null });
 	await vi.advanceTimersByTimeAsync(0);
-	expect(core.statusLine("purpose")).toBe(
+	expect(core.statusLine("audience")).toBe(
 		"The outline couldn\u2019t update just now. Trying again shortly.",
 	);
 	await vi.advanceTimersByTimeAsync(30000);
 	expect(bodies).toHaveLength(2);
-	expect(core.statusLine("purpose")).toBe("Reading your answers\u2026");
+	expect(core.statusLine("audience")).toBe("Reading your answers\u2026");
 });
 
 it("resumes a draft saved by this page on the screen it was left on, lane screens included", async () => {
@@ -2461,9 +2436,9 @@ it("resumes a draft saved by this page on the screen it was left on, lane screen
 	await readAnswers();
 	click("[data-next]");
 	click("[data-next]");
-	expect(current()).toBe(10);
+	expect(current()).toBe(11);
 	await boardSetup(undefined);
-	expect(current()).toBe(10);
+	expect(current()).toBe(11);
 	expect(core.board().cards.length).toBeGreaterThan(0);
 });
 
@@ -2495,4 +2470,201 @@ it("says a full list is full after Add and after Bring back, until there is room
 	expect(core.fullNoteFor(aside())).toBe("");
 	expect(core.fullNote("parts")).toBe("");
 	expect(core.tryBringBack(music.id)).toBe(true);
+});
+
+// ---- By hand (docs/plans/2026-11-living-brief.md, "By hand") ---------------------------------------------------
+
+const stopped =
+	"The outline isn’t available right now. You can add your own notes.";
+
+/** Three failed requests in a row stop the outline for the page. */
+async function failThrice() {
+	for (let i = 0; i < 3; i++) {
+		fill("purpose", `${ANSWER} ${"more ".repeat(i + 1)}`);
+		await vi.advanceTimersByTimeAsync(30000);
+		waiting.shift()!({ status: 500, json: null });
+		await vi.advanceTimersByTimeAsync(0);
+	}
+}
+
+const toggleSuggestions = () =>
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+
+it("is by hand while the AI is off or has stopped, and not while it is on, retrying or skipped", async () => {
+	await boardSetup("website");
+	expect(core.byHand()).toBe(false);
+	toggleSuggestions();
+	expect(core.byHand()).toBe(true);
+	toggleSuggestions();
+	expect(core.byHand()).toBe(false);
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	// One failure is only a retry coming.
+	expect(core.byHand()).toBe(false);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.byHand()).toBe(true);
+
+	// A skipped outline is out of the plan, so it is not by hand.
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	click("[data-next]");
+	fire(steps[10].nodes["[data-board-skip]"], "click");
+	expect(core.byHand()).toBe(false);
+});
+
+it.each([
+	["a limit", { status: 429, json: { reason: "limit" } }],
+	["the server switch", { status: 403, json: { reason: "off" } }],
+	["an unreadable brief", { status: 400, json: null }],
+])("is by hand after %s", async (_label, answer) => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	// SAFETY: the route answers are plain JSON, which the board reads as unknown.
+	waiting.shift()!(answer as never);
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.byHand()).toBe(true);
+});
+
+it("says nothing by hand in a lane the AI made no card in, and keeps the sentence that says it stopped in a lane it did", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([said("parts", "Shows", "see upcoming shows near them")]);
+	await failThrice();
+	expect(core.byHand()).toBe(true);
+	expect(core.statusLine("parts")).toBe(stopped);
+	expect(core.statusLine("audience")).toBe("");
+	expect(core.statusLine("questions")).toBe("");
+	// The visitor's own note is not a card the AI made.
+	expect(core.tryAddNote("audience", "Fans")).toBe(true);
+	expect(core.statusLine("audience")).toBe("");
+});
+
+it("says nothing by hand with suggestions off in a lane with no AI card, and keeps the sentence in one that has one", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([said("parts", "Shows", "see upcoming shows near them")]);
+	toggleSuggestions();
+	expect(core.statusLine("parts")).toBe(
+		"Suggestions are off, so the outline is too. You can still add your own notes.",
+	);
+	expect(core.statusLine("audience")).toBe("");
+});
+
+it("keeps the AI-on status line as it was while the AI is on", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(core.statusLine("audience")).toBe("Reading your answers…");
+});
+
+it("says the outline could not update only while a retry is coming", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.statusLine("audience")).toBe(
+		"The outline couldn’t update just now. Trying again shortly.",
+	);
+	// The answers drop under the minimum: nothing will be asked, so nothing is retrying.
+	fill("purpose", "A band site.");
+	expect(core.statusLine("audience")).toBe("");
+	// Enough words again: the retry is coming again.
+	fill("purpose", ANSWER);
+	expect(core.statusLine("audience")).toBe(
+		"The outline couldn’t update just now. Trying again shortly.",
+	);
+});
+
+it("keeps three lane screens with the AI on or off", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	toggleSuggestions();
+	expect(visit().slice(0, 5)).toEqual([1, 10, 11, 12, 7]);
+});
+
+it("restores a draft left on the old purpose screen, with its purpose cards, without error and without sending them", async () => {
+	const draft = JSON.stringify({
+		answers: {
+			path: "website",
+			purpose: ANSWER,
+			timing: "flexible",
+			updates: "self",
+		},
+		step: 2,
+		section: 9,
+		submissionId: "00000000-0000-4000-8000-000000000001",
+	});
+
+	const card = (id: string, lane: string, text: string, status: string) => ({
+		id,
+		lane,
+		text,
+		status,
+		basis: "said",
+		quote: "A home for my band on the web",
+		reason: "",
+		answer: "",
+	});
+
+	store.set("software-brief-draft", draft);
+	store.set(
+		BOARD_STORAGE_KEY,
+		JSON.stringify({
+			boards: {
+				website: {
+					cards: [
+						card("c1", "purpose", "A home for my band on the web", "kept"),
+						card("c2", "audience", "Fans", "kept"),
+						card("c3", "purpose", "Sell music", "wrote"),
+					],
+					seen: { purpose: ["c1"], audience: ["c2"] },
+				},
+			},
+			paused: false,
+			plain: false,
+		}),
+	);
+	await boardSetup(undefined);
+	// The old purpose screen is gone: the first written question opens.
+	expect(current()).toBe(1);
+	expect(core.board().cards.map((c) => c.id)).toEqual(["c2"]);
+	expect(core.outline()?.map((item) => item.lane)).toEqual(["audience"]);
+	expect(core.board().nextId).toBe(3);
+	toReview();
+	expect(JSON.stringify(savedBoard())).not.toContain('purpose"');
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(JSON.stringify(bodies)).not.toContain("A home for my band");
+	expect(JSON.stringify(bodies)).not.toContain("Sell music");
+});
+
+it("lists only the three lanes in the review", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([
+		said("audience", "Fans", "Fans should hear new music"),
+		said(
+			"purpose",
+			"A home for my band on the web",
+			"A home for my band on the web",
+		),
+	]);
+	toReview();
+
+	const outline = reviewRows().find(
+		(node) => node.textContent === "Brief outline",
+	);
+
+	expect(outline).toBeDefined();
+	expect(groupAfter("Brief outline")).toContain("Fans");
+	expect(groupAfter("Brief outline")).not.toContain("A home for my band");
+	expect(JSON.stringify(core.outline())).not.toContain("purpose");
 });

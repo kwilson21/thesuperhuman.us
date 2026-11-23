@@ -24,6 +24,7 @@ import {
 	bringBack,
 	emptyBoard,
 	fitContext,
+	hasAiCard,
 	laneChanges,
 	laneChangesLine,
 	laneCount,
@@ -140,6 +141,11 @@ export type BriefBoardCore = BriefBoardHandle & {
 	board(): Board;
 	/** Makes `next` the board after a change of the visitor's, saves it and tells the page. */
 	change(next: Board): void;
+	/**
+	 * Whether the lane screens work by hand: the outline's AI is turned off or has stopped asking (a limit, three failures,
+	 * the server switch). Not while the visitor has skipped the outline, whose screens are then out of the plan.
+	 */
+	byHand(): boolean;
 	/** The line under a lane screen's hint. */
 	statusLine(lane: Lane): string;
 	/** Whether the visitor tried to add to a list that was full, and the list still is: the reason, else "". */
@@ -228,6 +234,7 @@ export function createBriefBoardCore(
 	const currentAnswers = () => answerText(options.answers(), options.path());
 	const paused = () => skipped || !options.aiEnabled();
 	const render = () => options.onRender?.();
+	const byHand = () => !skipped && (!options.aiEnabled() || stopped !== "");
 
 	const persist = () => {
 		try {
@@ -503,15 +510,20 @@ export function createBriefBoardCore(
 	return {
 		board,
 		change,
+		byHand,
 		statusLine(lane) {
+			// By hand the line only says why nothing new arrives, and only in a lane that lists a card the AI made.
+			if (byHand() && !hasAiCard(board(), lane)) return "";
+
 			if (!options.aiEnabled()) return SUGGESTIONS_OFF;
 
 			if (stopped) return stopped;
 
-			// A failed request clears the last-sent key, which makes the board "waiting" through the back-off: name the failure first.
+			// A failed request clears the last-sent key, which makes the board "waiting" through the back-off: name the failure
+			// first, but only while a retry is in fact coming (the answers may have dropped under the minimum since).
 			if (phase === "reading") return READING;
 
-			if (failures > 0) return FAILING;
+			if (failures > 0 && canAsk()) return FAILING;
 
 			if (waiting()) return READING;
 

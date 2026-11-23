@@ -31,7 +31,7 @@ const plans = {
 } as const;
 
 /**
- * A path's screens in order, by data-step. With the outline, its four lane screens follow the written questions, whatever
+ * A path's screens in order, by data-step. With the outline, its three lane screens follow the written questions, whatever
  * the cards are, so the dots never change because an answer changed.
  */
 export function briefPlan(
@@ -833,7 +833,7 @@ export function setupSoftwareInquiry(
 			continueStep();
 		}),
 	);
-	// "Skip these, no AI outline": the four lane screens leave the plan and the visitor goes on to the step after them.
+	// "Skip these, no AI outline": the lane screens leave the plan and the visitor goes on to the step after them.
 	form
 		.querySelectorAll<HTMLButtonElement>("[data-board-skip]")
 		.forEach((button) =>

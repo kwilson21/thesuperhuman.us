@@ -1,6 +1,6 @@
 // The living brief's outline (docs/plans/2026-11-living-brief.md) on a fictional website brief, at both widths: each of its
-// four lane screens, going back to edit an answer and seeing what changed in a lane, the review with "New since you last
-// looked", the skipped outline, and the owner's readback. The route is answered locally by the scripted interpreter
+// three lane screens, the same screens by hand (the outline's AI turned off), going back to edit an answer and seeing what
+// changed in a lane, the review with "New since you last looked", the skipped outline, and the owner's readback. The route is answered locally by the scripted interpreter
 // (../brief-board-script.mjs), a little late, as the model would be; no model is called and nothing is sent.
 import { scriptedReply } from "../brief-board-script.mjs";
 import { stubTurnstile } from "../turnstile-stub.mjs";
@@ -43,15 +43,26 @@ const OUTLINE = [
 const QUESTION = "Who will add new show dates?";
 const NOTE = "Fans hear new songs first.";
 
-/** Each lane screen's question, as the website path shows it. */
+/** Each lane screen's question, as the website path shows it. The purpose has no screen. */
 const HEADINGS = {
-	purpose: "Is this what it’s for?",
 	audience: "Who is it for?",
 	parts: "Which pages does it need?",
 	questions: "What’s still undecided?",
 };
 
 const LANES = Object.keys(HEADINGS);
+
+/** What the website path's by-hand screens say: each lane's hint and example answer, as the design gives them. */
+const BY_HAND = {
+	audience: {
+		hint: "List the people you want the site to reach. It keeps the design aimed at them.",
+		placeholder: "Fans who want show dates",
+	},
+	questions: {
+		hint: "List anything you haven’t settled yet. It’s fine to leave this empty.",
+		placeholder: "Do we sell tickets on the site?",
+	},
+};
 
 /** Polls `check` until it is true, so a slow reply or a settling card fails with a name rather than a bare timeout. */
 async function until(page, what, check, timeout = 20000) {
@@ -245,8 +256,8 @@ async function quotesEndOnce(page) {
 	await note("Add a page", "Press kit", ".");
 	await next(page);
 	await card(QUESTION, "");
-	await back(page, 3);
-	await note(/^Add what it/, NOTE, "");
+	await back(page, 2);
+	await note(/^Add who it/, NOTE, "");
 }
 
 export default {
@@ -335,6 +346,97 @@ export default {
 					},
 				);
 
+			// The same screens by hand: the outline's AI turned off under the first answer, so each lane is an ordinary question.
+			const byHand = async (page, lane) => {
+				await open(page);
+				await page.locator('[data-step="1"] [data-suggestions-toggle]').click();
+				await page.locator('[data-step="1"] textarea').fill(PURPOSE);
+				await toLane(page, lane);
+				const screen = page.locator(`[data-lane-screen="${lane}"]`);
+				const text = await screen.innerText();
+
+				if (!text.includes(BY_HAND[lane].hint))
+					throw new Error(`The ${lane} screen does not show its by-hand hint`);
+
+				if (
+					(await screen
+						.locator("[data-lane-input]")
+						.getAttribute("placeholder")) !== BY_HAND[lane].placeholder
+				)
+					throw new Error(`The ${lane} screen has the wrong example`);
+
+				if (!(await screen.locator("[data-lane-input]").isVisible()))
+					throw new Error("The answer field is not open");
+
+				if (
+					await screen
+						.getByRole("button", { name: "Skip these, no AI outline" })
+						.isVisible()
+				)
+					throw new Error("A by-hand screen offers the AI skip");
+
+				if (await screen.locator("[data-board-undo]").isVisible())
+					throw new Error("Undo shows with nothing to undo");
+
+				if ((await statusOf(page, lane)) !== "")
+					throw new Error("The by-hand status line is not empty");
+
+				return screen;
+			};
+
+			await shot(
+				"byhand-audience",
+				"The audience screen by hand: hint, open field with an example, Add",
+				async (page) => {
+					await byHand(page, "audience");
+					await page.mouse.move(0, 0);
+				},
+			);
+
+			await shot(
+				"byhand-audience-notes",
+				"The audience screen by hand after two notes: no Your note label, Undo shown",
+				async (page) => {
+					const screen = await byHand(page, "audience");
+					const input = screen.locator("[data-lane-input]");
+
+					for (const note of [
+						"Fans who want show dates",
+						"Venues that book us",
+					]) {
+						await input.fill(note);
+						await input.press("Enter");
+
+						if ((await input.inputValue()) !== "")
+							throw new Error("The field was not cleared after Add");
+
+						if (
+							!(await input.evaluate((node) => node === document.activeElement))
+						)
+							throw new Error("Focus left the field after Add");
+					}
+
+					if ((await screen.locator(".board-card").count()) !== 2)
+						throw new Error("The two notes are not listed");
+
+					if ((await screen.innerText()).includes("Your note"))
+						throw new Error("A lane of the visitor's own notes says Your note");
+
+					if (!(await screen.locator("[data-board-undo]").isVisible()))
+						throw new Error("Undo is not shown after a note");
+					await page.mouse.move(0, 0);
+				},
+			);
+
+			await shot(
+				"byhand-questions",
+				"The questions screen by hand: hint, open field with an example, Add",
+				async (page) => {
+					await byHand(page, "questions");
+					await page.mouse.move(0, 0);
+				},
+			);
+
 			// A lane with no cards left: the visitor set aside every card, so the hint says to add their own or go on.
 			await shot(
 				"lane-empty",
@@ -374,10 +476,10 @@ export default {
 					const state = await open(page);
 
 					await write(page, state, PURPOSE);
-					await next(page, 4);
-					await back(page, 4);
-					await write(page, state, MORE, 2);
 					await next(page, 3);
+					await back(page, 3);
+					await write(page, state, MORE, 2);
+					await next(page, 2);
 					await page
 						.locator('[data-lane-screen="parts"] .board-card')
 						.first()
@@ -401,8 +503,8 @@ export default {
 					const state = await open(page);
 
 					await write(page, state, PURPOSE);
-					await next(page, 5);
-					await back(page, 5);
+					await next(page, 4);
+					await back(page, 4);
 					let release = () => {};
 
 					state.gate = new Promise((resolve) => (release = resolve));
@@ -413,7 +515,7 @@ export default {
 					// The request goes out from the first lane screen, and the visitor is past every lane before it is answered.
 					await next(page);
 					await until(page, "the request", async () => state.requests >= 2);
-					await next(page, 4);
+					await next(page, 3);
 					await toReview(page);
 					release();
 					await until(page, "the new group in the review", async () =>
@@ -504,7 +606,7 @@ export default {
 
 						await toEnd(first);
 						await first.pressSequentially(MORE, { delay: 2 });
-						await next(page, 3);
+						await next(page, 2);
 						await until(
 							page,
 							"a request in flight",

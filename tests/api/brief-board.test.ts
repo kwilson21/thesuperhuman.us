@@ -211,6 +211,10 @@ describe("a request the page never sends", () => {
 		["a ref of another form", { ...body, cards: [{ ...cards[0], ref: "x1" }] }],
 		["an unknown state", { ...body, cards: [{ ...cards[0], state: "maybe" }] }],
 		[
+			"a purpose card, which the outline no longer has",
+			{ ...body, cards: [{ ...cards[0], lane: "purpose" }] },
+		],
+		[
 			"31 cards",
 			{
 				...body,
@@ -447,7 +451,6 @@ describe("the model", () => {
 		expect(JSON.parse(inputs.messages[1].content)).toEqual({
 			project: "a website",
 			lanes: {
-				purpose: "What it’s for",
 				audience: "Who it’s for",
 				parts: "Pages",
 				questions: "Open questions",
@@ -456,6 +459,13 @@ describe("the model", () => {
 			cards,
 		});
 		expect(inputs.messages[1].content).not.toMatch(/Secret notes|Alex/);
+	});
+
+	it("never asks for a purpose card: the visitor's written answer is the statement of purpose", () => {
+		expect(BOARD_INSTRUCTIONS).not.toMatch(/purpose/i);
+		expect(
+			BOARD_REPLY_SCHEMA.properties.cards.items.properties.lane.enum,
+		).toEqual(["audience", "parts", "questions"]);
 	});
 
 	it("answers the cards, read as untrusted data", async () => {

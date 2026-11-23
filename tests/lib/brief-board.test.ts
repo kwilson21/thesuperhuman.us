@@ -3,7 +3,18 @@ import {
 	type Board,
 	type BoardCard,
 	type ReplyCard,
+	LANES,
+	LANE_STEPS,
 	OUTLINE_CHANGED,
+	STORED_LANES,
+	BOARD_STORAGE_KEY,
+	addLabels,
+	byHandHints,
+	byHandPlaceholders,
+	hasAiCard,
+	laneLabels,
+	laneScreen,
+	outlineText,
 	REPLY_MAX,
 	addNote,
 	answerCard,
@@ -458,14 +469,15 @@ describe("the visitor's actions", () => {
 		expect(addNote(emptyBoard(), "parts", "   ")).toEqual(emptyBoard());
 		let board = emptyBoard();
 
-		for (let i = 0; i < laneLimits.purpose; i++)
-			board = addNote(board, "purpose", `Purpose ${i}`);
-		expect(addNote(board, "purpose", "One more")).toBe(board);
+		for (let i = 0; i < laneLimits.audience; i++)
+			board = addNote(board, "audience", `Purpose ${i}`);
+		expect(addNote(board, "audience", "One more")).toBe(board);
 
-		let full = started(suggested("purpose", "For fans"));
+		let full = started(suggested("audience", "For fans"));
 		full = setAside(full, "c1");
-		full = addNote(full, "purpose", "First");
-		full = addNote(full, "purpose", "Second");
+		full = addNote(full, "audience", "First");
+		full = addNote(full, "audience", "Second");
+		full = addNote(full, "audience", "Third");
 		expect(bringBack(full, "c1")).toBe(full);
 	});
 });
@@ -478,7 +490,7 @@ describe("the outline sent with the brief", () => {
 			suggested("parts", "Shop"),
 			suggested("parts", "Photos"),
 			suggested("questions", "Who adds dates?"),
-			said("purpose", "A home for a band", "A home for my band"),
+			said("audience", "A home for a band", "A home for my band"),
 		);
 
 		board = keepCard(board, card(board, "Contact").id);
@@ -588,8 +600,8 @@ describe("the outline sent with the brief", () => {
 			[{ ...outline[1], answer: "Me\ud800" }],
 			[{ lane: "parts", text: "", origin: "wrote" }],
 			[{ lane: "nowhere", text: "X", origin: "wrote" }],
-			Array.from({ length: 3 }, (_, i) => ({
-				lane: "purpose",
+			Array.from({ length: 4 }, (_, i) => ({
+				lane: "audience",
 				text: `P${i}`,
 				origin: "wrote",
 			})),
@@ -664,7 +676,7 @@ describe("the saved boards", () => {
 
 		const good = {
 			id: "c1",
-			lane: "purpose",
+			lane: "audience",
 			text: "One",
 			status: "wrote",
 			basis: "none",
@@ -681,6 +693,7 @@ describe("the saved boards", () => {
 						good,
 						{ ...good, id: "c2", text: "Two" },
 						{ ...good, id: "c3", text: "Three" },
+						{ ...good, id: "c4", text: "Four" },
 						{ ...good, id: "x", text: "Bad id" },
 						{ ...good, id: "c9", status: "unknown" },
 					],
@@ -693,7 +706,11 @@ describe("the saved boards", () => {
 
 		expect(read.plain).toBe(true);
 		expect(Object.keys(read.boards)).toEqual(["webapp"]);
-		expect(read.boards.webapp?.cards.map((c) => c.id)).toEqual(["c1", "c2"]);
+		expect(read.boards.webapp?.cards.map((c) => c.id)).toEqual([
+			"c1",
+			"c2",
+			"c3",
+		]);
 	});
 });
 
@@ -1271,8 +1288,8 @@ describe("found in the fourth review", () => {
 	});
 
 	it("leaves a card where it was when the reply moves it to a full lane", () => {
-		let board = addNote(emptyBoard(), "purpose", "One");
-		board = addNote(board, "purpose", "Two");
+		let board = addNote(emptyBoard(), "audience", "One");
+		board = addNote(board, "audience", "Two");
 		let n: number;
 		[board, n] = sendRequest(board);
 		board = applyReply(
@@ -1287,7 +1304,7 @@ describe("found in the fourth review", () => {
 
 		const after = applyReply(
 			board,
-			[{ ...suggested("purpose", "Track attendance"), ref: "c3" }],
+			[{ ...suggested("audience", "Track attendance"), ref: "c3" }],
 			n,
 			ANSWERS,
 			false,
@@ -1295,8 +1312,8 @@ describe("found in the fourth review", () => {
 		);
 
 		expect(after.board.cards.map((c) => [c.lane, c.text])).toEqual([
-			["purpose", "One"],
-			["purpose", "Two"],
+			["audience", "One"],
+			["audience", "Two"],
 			["parts", "Track attendance"],
 		]);
 		expect(after.withdrawn).toBe(0);
@@ -1314,7 +1331,7 @@ describe("found in the fifth review", () => {
 
 	it("keeps a card the reply names from another lane only while it still stands", () => {
 		let board = started(
-			said("purpose", "Small business owners", "Fans should hear new music"),
+			said("audience", "Small business owners", "Fans should hear new music"),
 		);
 
 		let n: number;
@@ -1802,37 +1819,41 @@ describe("the lane on screen", () => {
 	});
 
 	it("gives a full lane the reply's new cards when it is left, as an off-screen delivery would have", () => {
-		// Purpose holds two (its limit), both open, and is on screen; a reply rewords both without naming them.
+		// Audience holds three (its limit), all open, and is on screen; a reply rewords all without naming them.
 		const full = started(
-			suggested("purpose", "Sell tickets"),
-			suggested("purpose", "Grow the list"),
+			suggested("audience", "Sell tickets"),
+			suggested("audience", "Grow the list"),
+			suggested("audience", "Meet venues"),
 		);
 
 		const wording = [
-			suggested("purpose", "Book more gigs"),
-			suggested("purpose", "Reach new fans"),
+			suggested("audience", "Book more gigs"),
+			suggested("audience", "Reach new fans"),
+			suggested("audience", "Find a venue"),
 		];
 
 		const [sent, n] = sendRequest(full);
-		const onScreen = applyReply(sent, wording, n, ANSWERS, false, "purpose");
+		const onScreen = applyReply(sent, wording, n, ANSWERS, false, "audience");
 
 		// On screen the lane is full: nothing listed changes and the new cards are refused.
-		expect(texts(onScreen.board, "purpose")).toEqual([
+		expect(texts(onScreen.board, "audience")).toEqual([
 			"Sell tickets",
 			"Grow the list",
+			"Meet venues",
 		]);
 
-		const left = leaveLane(onScreen.board, "purpose", ANSWERS);
+		const left = leaveLane(onScreen.board, "audience", ANSWERS);
 		const offScreen = applyReply(sent, wording, n, ANSWERS, false, null).board;
 
-		expect(texts(left, "purpose")).toEqual([
+		expect(texts(left, "audience")).toEqual([
 			"Book more gigs",
 			"Reach new fans",
+			"Find a venue",
 		]);
-		expect(texts(left, "purpose")).toEqual(texts(offScreen, "purpose"));
-		// The visitor saw the two cards it listed on screen; the two the leave added are new to them.
-		expect(left.seen.purpose).toEqual(["c1", "c2"]);
-		expect(laneChanges(left, "purpose")).toEqual({ added: 2, removed: 2 });
+		expect(texts(left, "audience")).toEqual(texts(offScreen, "audience"));
+		// The visitor saw the three cards it listed on screen; the three the leave added are new to them.
+		expect(left.seen.audience).toEqual(["c1", "c2", "c3"]);
+		expect(laneChanges(left, "audience")).toEqual({ added: 3, removed: 3 });
 	});
 
 	it("never changes a card the same reply added to the lane", () => {
@@ -1862,13 +1883,14 @@ describe("the lane on screen", () => {
 	});
 
 	it("counts a card added on leave as new, since the visitor never saw it, and one it withdraws as removed", () => {
-		// Purpose holds two cards and has been visited once.
+		// Audience holds three cards (its limit) and has been visited once.
 		let b = started(
-			said("purpose", "A home for the band", "A home for my band"),
-			said("purpose", "Grow the mailing list", "join the mailing list"),
+			said("audience", "A home for the band", "A home for my band"),
+			said("audience", "Grow the mailing list", "join the mailing list"),
+			said("audience", "Reach fans", "Fans should hear new music"),
 		);
 
-		b = leaveLane(b, "purpose", ANSWERS);
+		b = leaveLane(b, "audience", ANSWERS);
 
 		let n: number;
 		[b, n] = sendRequest(b);
@@ -1877,10 +1899,16 @@ describe("the lane on screen", () => {
 		b = applyReply(
 			b,
 			[
-				said("purpose", "A home for the band", "A home for my band", "c1"),
-				said("purpose", "Grow the mailing list", "join the mailing list", "c2"),
+				said("audience", "A home for the band", "A home for my band", "c1"),
 				said(
-					"purpose",
+					"audience",
+					"Grow the mailing list",
+					"join the mailing list",
+					"c2",
+				),
+				said("audience", "Reach fans", "Fans should hear new music", "c3"),
+				said(
+					"audience",
 					"Share new music with fans",
 					"Fans should hear new music",
 				),
@@ -1888,18 +1916,18 @@ describe("the lane on screen", () => {
 			n,
 			ANSWERS,
 			false,
-			"purpose",
+			"audience",
 		).board;
 
 		// The visitor sets c2 aside (the page records it with ownChange), then presses Next.
 		const before = b;
 		b = ownChange(before, setAside(before, "c2"));
 
-		const left = leaveLane(b, "purpose", ANSWERS);
+		const left = leaveLane(b, "audience", ANSWERS);
 		const added = card(left, "Share new music with fans");
 
-		expect(left.seen.purpose).toEqual(["c1"]);
-		expect(laneChanges(left, "purpose")).toEqual({ added: 1, removed: 0 });
+		expect(left.seen.audience).toEqual(["c1", "c3"]);
+		expect(laneChanges(left, "audience")).toEqual({ added: 1, removed: 0 });
 		expect(unseenFromAnswers(left, ANSWERS).map((c) => c.id)).toEqual([
 			added.id,
 		]);
@@ -2455,7 +2483,7 @@ describe("a board saved with its last-seen lists", () => {
 				website: {
 					cards: [],
 					seen: {
-						purpose: ["c1", "c1", "x", 5, "c2", "c3"],
+						audience: ["c1", "c1", "x", 5, "c2", "c3"],
 						parts: "c1",
 						other: ["c1"],
 					},
@@ -2465,28 +2493,28 @@ describe("a board saved with its last-seen lists", () => {
 
 		// Undo can leave a lane over its limit for a moment, so a list keeps what it held, up to the limit and the
 		// history's length.
-		expect(read?.seen).toEqual({ purpose: ["c1", "c2", "c3"] });
+		expect(read?.seen).toEqual({ audience: ["c1", "c2", "c3"] });
 	});
 
 	it("keeps a list that Undo left past its lane's limit, so no seen card comes back as new", () => {
 		const ids = Array.from(
-			{ length: laneLimits.purpose + 5 },
+			{ length: laneLimits.audience + 5 },
 			(_, i) => `c${i + 1}`,
 		);
 
 		const read = readSavedBoards({
-			boards: { website: { cards: [], seen: { purpose: ids } } },
+			boards: { website: { cards: [], seen: { audience: ids } } },
 		}).boards.website;
 
-		expect(read?.seen.purpose).toEqual(ids);
+		expect(read?.seen.audience).toEqual(ids);
 
 		const huge = Array.from({ length: 100 }, (_, i) => `c${i + 1}`);
 
 		const capped = readSavedBoards({
-			boards: { website: { cards: [], seen: { purpose: huge } } },
-		}).boards.website?.seen.purpose;
+			boards: { website: { cards: [], seen: { audience: huge } } },
+		}).boards.website?.seen.audience;
 
-		expect(capped).toHaveLength(laneLimits.purpose + HISTORY_MAX);
+		expect(capped).toHaveLength(laneLimits.audience + HISTORY_MAX);
 		expect(capped?.[0]).toBe("c1");
 	});
 
@@ -2532,22 +2560,19 @@ describe("a board saved with its last-seen lists", () => {
 });
 
 describe("the outline screens' words", () => {
-	it("gives each path the twelve headings, none speaking as the owner", () => {
+	it("gives each path the nine headings, none speaking as the owner", () => {
 		expect(laneQuestions).toEqual({
 			website: {
-				purpose: "Is this what it’s for?",
 				audience: "Who is it for?",
 				parts: "Which pages does it need?",
 				questions: "What’s still undecided?",
 			},
 			webapp: {
-				purpose: "Is this what it’s for?",
 				audience: "Who will use it?",
 				parts: "What should people be able to do?",
 				questions: "What’s still undecided?",
 			},
 			workflow: {
-				purpose: "Is this what should change?",
 				audience: "Who does the work?",
 				parts: "What are the steps today?",
 				questions: "What’s still undecided?",
@@ -2576,8 +2601,8 @@ describe("going back and editing an answer", () => {
 			suggested("audience", "Fans"),
 		);
 
-		// The visitor edits the first answer, presses Next at once and is on the purpose screen when the reply lands.
-		board = leaveLane(board, "purpose", edited);
+		// The visitor edits the first answer, presses Next at once and is on the questions screen when the reply lands.
+		board = leaveLane(board, "questions", edited);
 		let n: number;
 		[board, n] = sendRequest(board);
 
@@ -2585,33 +2610,33 @@ describe("going back and editing an answer", () => {
 			board,
 			[
 				said("parts", "Music", "hear new music", "c2"),
-				said("purpose", "A home for a band", "A home for my band"),
+				said("questions", "A home for a band", "A home for my band"),
 				suggested("audience", "Venues", "c3"),
 			],
 			n,
 			edited,
 			false,
-			"purpose",
+			"questions",
 		).board;
 
-		// The purpose lane on screen got its new card; "Shows" left the parts lane (its passage is gone) at once.
+		// The questions lane on screen got its new card; "Shows" left the parts lane (its passage is gone) at once.
 		expect(board.cards.map((c) => [c.lane, c.text])).toEqual([
 			["parts", "Music"],
 			["audience", "Venues"],
-			["purpose", "A home for a band"],
+			["questions", "A home for a band"],
 		]);
 
 		// Review: the cards read from the answers that no lane has shown are listed, and each lane's line says what changed.
 		expect(unseenFromAnswers(board, edited).map((c) => c.text)).toEqual([
-			"A home for a band",
 			"Music",
+			"A home for a band",
 		]);
 
-		board = leaveLane(board, "purpose", edited);
+		board = leaveLane(board, "questions", edited);
 		expect(unseenFromAnswers(board, edited).map((c) => c.text)).toEqual([
 			"Music",
 		]);
-		expect(laneChanges(board, "purpose")).toEqual({ added: 0, removed: 0 });
+		expect(laneChanges(board, "questions")).toEqual({ added: 0, removed: 0 });
 		expect(board.seen.audience).toBeUndefined();
 	});
 
@@ -2637,5 +2662,210 @@ describe("going back and editing an answer", () => {
 			ok: true,
 			value: outline,
 		});
+	});
+});
+
+describe("the outline's three screens", () => {
+	it("has a screen for the audience, the parts and the questions, and none for the purpose", () => {
+		expect(LANES).toEqual(["audience", "parts", "questions"]);
+		expect(LANE_STEPS).toEqual([10, 11, 12]);
+
+		for (const path of ["website", "webapp", "workflow"] as const) {
+			expect(Object.keys(laneQuestions[path])).toEqual([...LANES]);
+			expect(Object.keys(addLabels[path])).toEqual([...LANES]);
+		}
+	});
+
+	it("still reads and names a purpose item of a stored outline, for the owner", () => {
+		expect(STORED_LANES).toEqual(["purpose", "audience", "parts", "questions"]);
+
+		const stored = [
+			{ lane: "purpose", text: "A home for the band", origin: "wrote" },
+			{ lane: "audience", text: "Fans", origin: "wrote" },
+		];
+
+		expect(readBriefOutline(stored, ANSWERS)).toEqual({
+			ok: true,
+			value: stored,
+		});
+		// SAFETY: the items are the stored shape of an outline, which outlineText reads field by field.
+		expect(outlineText(stored as never, "website")).toBe(
+			`${laneLabels.website.purpose}: A home for the band · own note\n${laneLabels.website.audience}: Fans · own note`,
+		);
+	});
+
+	it("never sends a purpose item, whatever the board holds", () => {
+		const board = started(
+			said("audience", "Fans", "Fans should hear new music"),
+		);
+
+		expect(briefOutline(board, ANSWERS).map((item) => item.lane)).toEqual([
+			"audience",
+		]);
+	});
+
+	it("leaves a purpose card out of a reply and keeps the others", () => {
+		const cards = readReply(
+			{
+				cards: [
+					{
+						lane: "purpose",
+						text: "A home for my band",
+						basis: "suggested",
+						reason: "Why",
+					},
+					{ lane: "audience", text: "Fans", basis: "suggested", reason: "Why" },
+				],
+			},
+			ANSWERS,
+		);
+
+		expect(cards?.map((card) => card.lane)).toEqual(["audience"]);
+	});
+
+	it("drops purpose cards and their last-seen list from a saved board, and keeps the rest", () => {
+		const base = {
+			status: "kept",
+			basis: "said",
+			quote: "A home for my band",
+			reason: "",
+			answer: "",
+		};
+
+		const read = readSavedBoards({
+			boards: {
+				website: {
+					cards: [
+						{ ...base, id: "c1", lane: "purpose", text: "A home for my band" },
+						{ ...base, id: "c2", lane: "audience", text: "Fans" },
+						{
+							...base,
+							id: "c7",
+							lane: "purpose",
+							text: "Sell music",
+							status: "wrote",
+						},
+					],
+					seen: { purpose: ["c1", "c7"], audience: ["c2"] },
+				},
+			},
+		});
+
+		const website = read.boards.website!;
+
+		expect(website.cards.map((card) => card.id)).toEqual(["c2"]);
+		expect(website.seen).toEqual({ audience: ["c2"] });
+		expect(website.nextId).toBe(3);
+		expect(BOARD_STORAGE_KEY).toBe("software-brief-board");
+	});
+});
+
+describe("by hand", () => {
+	it("carries the owner's hints and example placeholders", () => {
+		expect(byHandHints).toEqual({
+			website: {
+				audience:
+					"List the people you want the site to reach. It keeps the design aimed at them.",
+				parts: "List the pages you have in mind. A rough list is fine.",
+				questions:
+					"List anything you haven\u2019t settled yet. It\u2019s fine to leave this empty.",
+			},
+			webapp: {
+				audience: "List the kinds of people who will use it.",
+				parts: "List the main things people should be able to do.",
+				questions:
+					"List anything you haven\u2019t settled yet. It\u2019s fine to leave this empty.",
+			},
+			workflow: {
+				audience: "List the people or roles who do this today.",
+				parts: "List the steps in the order they happen.",
+				questions:
+					"List anything you haven\u2019t settled yet. It\u2019s fine to leave this empty.",
+			},
+		});
+		expect(byHandPlaceholders).toEqual({
+			website: {
+				audience: "Fans who want show dates",
+				parts: "Shows",
+				questions: "Do we sell tickets on the site?",
+			},
+			webapp: {
+				audience: "Front-desk staff",
+				parts: "Book an appointment",
+				questions: "Do people need to sign in?",
+			},
+			workflow: {
+				audience: "Office manager",
+				parts: "Copy new orders into the spreadsheet",
+				questions: "Who approves a refund?",
+			},
+		});
+	});
+
+	const screen = (
+		board: Board,
+		byHand: boolean,
+		undoLabel: string | null = null,
+	) =>
+		laneScreen({ path: "website", lane: "audience", board, byHand, undoLabel });
+
+	it("shows the AI-on screen as it was", () => {
+		const empty = screen(emptyBoard(), false);
+
+		expect(empty).toEqual({
+			heading: laneQuestions.website.audience,
+			hint: LANE_HINT_EMPTY,
+			placeholder: "",
+			fieldOpen: false,
+			skipLink: true,
+			undoShown: true,
+			ownLabel: true,
+		});
+		expect(
+			screen(
+				started(said("audience", "Fans", "Fans should hear new music")),
+				false,
+			).hint,
+		).toBe(LANE_HINT);
+	});
+
+	it("shows the by-hand screen: its own hint, an open field with an example, no skip link", () => {
+		const hand = screen(emptyBoard(), true);
+
+		expect(hand.heading).toBe(laneQuestions.website.audience);
+		expect(hand.hint).toBe(byHandHints.website.audience);
+		expect(hand.placeholder).toBe("Fans who want show dates");
+		expect(hand.fieldOpen).toBe(true);
+		expect(hand.skipLink).toBe(false);
+	});
+
+	it("shows Undo by hand only when there is something to undo", () => {
+		expect(screen(emptyBoard(), true).undoShown).toBe(false);
+		expect(screen(emptyBoard(), true, "added “Fans”").undoShown).toBe(true);
+	});
+
+	it("labels a visitor's note by hand only in a lane that also has a card the AI made", () => {
+		const own = addNote(emptyBoard(), "audience", "Fans");
+
+		expect(hasAiCard(own, "audience")).toBe(false);
+		expect(screen(own, true).ownLabel).toBe(false);
+		expect(screen(own, false).ownLabel).toBe(true);
+
+		const mixed = addNote(
+			started(said("audience", "Fans", "Fans should hear new music")),
+			"audience",
+			"Venues",
+		);
+
+		expect(hasAiCard(mixed, "audience")).toBe(true);
+		expect(screen(mixed, true).ownLabel).toBe(true);
+
+		// A card set aside is not on the screen.
+		const aside = setAside(
+			started(said("audience", "Fans", "Fans should hear new music")),
+			"c1",
+		);
+
+		expect(hasAiCard(aside, "audience")).toBe(false);
 	});
 });

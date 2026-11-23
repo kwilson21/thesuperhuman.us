@@ -49,15 +49,8 @@ function passage(text, match) {
 		.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 }
 
-function firstSentence(text) {
-	const sentence = text.trim().split(/(?<=[.!?])\s/)[0] ?? "";
-	const words = sentence.split(/\s+/).slice(0, 14).join(" ");
-
-	return words.replace(/[.!?,;:]+$/, "");
-}
-
 /**
- * The reply for one request body (the JSON text the page sends): purpose and the parts and audience the answers name, read
+ * The reply for one request body (the JSON text the page sends): the parts and audience the answers name, read
  * from the answers with their passage; a contact page and two questions as suggestions, for a website about music;
  * existing open cards repeated by ref while their idea is still there.
  */
@@ -82,16 +75,6 @@ export function scriptedReply(body) {
 			open.has(card.text) ? { ref: open.get(card.text), ...card } : card,
 		);
 	};
-
-	const purpose = firstSentence(text);
-
-	if (purpose.split(/\s+/).length >= 4)
-		add({
-			lane: "purpose",
-			text: purpose.slice(0, 140),
-			basis: "said",
-			quote: purpose.split(/\s+/).slice(0, 8).join(" "),
-		});
 
 	for (const [pattern, name] of AUDIENCE) {
 		const match = pattern.exec(text);

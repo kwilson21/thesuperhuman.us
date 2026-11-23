@@ -40,8 +40,8 @@ const selected =
 			: null;
 
 // The screens of the longest plan are rendered as dots; the script hides the ones the chosen plan does not use. With the
-// outline the plans have four more screens (its lanes). Website: 12, web app and workflow: 11.
-const count = (selected === "website" ? 8 : 7) + (boardEnabled ? 4 : 0);
+// outline the plans have three more screens (its lanes). Website: 11, web app and workflow: 10.
+const count = (selected === "website" ? 8 : 7) + (boardEnabled ? 3 : 0);
 
 const href = (path: string) =>
 	mainSitePath(Astro.request.headers.get("host") ?? Astro.url.host, path);
@@ -50,7 +50,7 @@ const href = (path: string) =>
   <article class="site-shell intake-page software-intake">
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Work with me <span aria-hidden="true">←</span></a></p>
     <p class="intake-muted" data-brief-kicker>{selected ? softwareBriefKickers[selected] : 'Project brief'}</p>
-    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: boardEnabled ? 12 : 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i >= count}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
+    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: boardEnabled ? 11 : 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i >= count}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
     <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} data-board={boardEnabled ? "true" : undefined} data-linked-path={selected ?? undefined} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">

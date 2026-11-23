@@ -8,19 +8,19 @@ owner approved showing the outline as its own steps (sections 1 and 4, and rule 
 
 Inspired by "Beyond Taking Turns": instead of a chatbot that waits for its turn, the visitor and the system shape one
 shared artifact at the same time. The visitor keeps writing; an outline of the project fills in behind the written
-questions and is shown on four screens of its own, one for each lane; the visitor keeps, edits, answers or sets aside
+questions and is shown on three screens of its own, one for each lane; the visitor keeps, edits, answers or sets aside
 what appears, and their choices always win.
 
 ## 1. What the visitor sees
 
 The project brief at `/software/start` is a step-by-step brief. The written questions (and the website's two extra
 steps) are one column: the heading, a hint, "See example answers", the answer box, and under it the AI line with Privacy
-and "Turn off". While the outline is part of the brief, four screens follow the written questions, one for each lane of
+and "Turn off". While the outline is part of the brief, three screens follow the written questions, one for each lane of
 the outline, in lane order. The plans, with the outline in them, are:
 
-- Website: path, purpose, the four lane screens, what you have today, who updates it, timing, budget, contact, review
-  (12 dots).
-- Web app and workflow: path, two written questions, the four lane screens, timing, budget, contact, review (11 dots).
+- Website: path, purpose, the three lane screens, what you have today, who updates it, timing, budget, contact, review
+  (11 dots).
+- Web app and workflow: path, two written questions, the three lane screens, timing, budget, contact, review (10 dots).
 
 The lane screens are in the plan whatever the cards are, so the dots never change because an answer changed. The page
 calls its AI "the outline", apart from the answer boxes' "suggestions". The review step lists the outline as it will be
@@ -28,7 +28,6 @@ sent. The lanes, named for the chosen path:
 
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|
-| `purpose` | What it’s for | What it’s for | What should change |
 | `audience` | Who it’s for | Who uses it | Who does the work |
 | `parts` | Pages | What people can do | Steps today |
 | `questions` | Open questions | Open questions | Open questions |
@@ -41,7 +40,6 @@ no heading says "I".
 
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|
-| `purpose` | Is this what it’s for? | Is this what it’s for? | Is this what should change? |
 | `audience` | Who is it for? | Who will use it? | Who does the work? |
 | `parts` | Which pages does it need? | What should people be able to do? | What are the steps today? |
 | `questions` | What’s still undecided? | What’s still undecided? | What’s still undecided? |
@@ -72,11 +70,49 @@ The review step lists the outline as it will be sent and, when a card read from 
 visitor last left it, a group "New since you last looked" with each such card and a link to its lane screen. Next is
 never blocked.
 
-**Without the AI.** "Turn off" under an answer box stops the outline's AI; the four lane screens stay and work by hand.
-"Skip these, no AI outline" on a lane screen takes the four screens out of the plan, sends no outline and stops its
-requests; the review step then offers "Add the outline back", which restores the four screens and the cards. At a limit,
-after three failures or with the switch off on the server, the lane screens work by hand and say so once. With
+**Without the AI.** "Turn off" under an answer box stops the outline's AI; the three lane screens stay and work by hand.
+"Skip these, no AI outline" on a lane screen takes the three screens out of the plan, sends no outline and stops its
+requests; the review step then offers "Add the outline back", which restores the three screens and the cards. At a limit,
+after three failures or with the switch off on the server, the lane screens work by hand. With
 `SOFTWARE_BOARD_ENABLED` off the page has no lane screens.
+
+**No purpose screen** (owner decision, 2026-11-23). Going from the written question "What’s the website for?" to a lane
+screen "Is this what it’s for?" asked the same thing twice. The purpose lane therefore has no screen on any path, with
+the AI on or off: the visitor's own written answer is the statement of purpose. The outline's screens are three
+(`audience`, `parts`, `questions`), the review step lists those three lanes, and a purpose card is neither asked for,
+shown nor sent. Wherever this document says four lane screens or lists `L1..L4`, read three. Briefs already stored
+with purpose cards still show them to the owner, who sees them under "What it’s for" ("What should change" for a
+workflow). The model is no longer asked for a purpose card and its reply schema has no `purpose` lane; the server still
+reads a purpose item in a stored or older outline sent with a brief, and the visitor's page drops purpose cards from a
+saved draft without sending them.
+
+**By hand** (owner decision, 2026-11-23). The outline is context the owner needs and a way for the visitor to order
+their thoughts, so with no AI its screens are ordinary questions of the brief, not an optional extra. A lane screen is
+by hand while the outline's AI is turned off or has stopped asking (a limit, three failures, the server switch); it is
+not by hand while the visitor has skipped the outline, because the screens are then out of the plan. By hand:
+
+- The heading is the lane's question as above.
+- The hint is the lane's own by-hand hint (below) in place of "From your answers…" and "Add your own, or go on."
+- The answer field is open on the screen with an example placeholder and an "Add" button; it is not behind the lane's
+  "Add" link. Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds
+  nothing and Next is never blocked.
+- There is no "Skip these, no AI outline" link. Undo shows only when there is something to undo.
+- The status line is empty in a lane with no card the AI made. In a lane that has one (the AI stopped part-way), it
+  keeps the one sentence that says the outline stopped, so the visitor knows why nothing new arrives.
+- A card the visitor wrote shows no "Your note" label in a lane where every card is the visitor's own; Edit and Remove
+  stay.
+
+| Lane | Website | Web app | Workflow |
+|---|---|---|---|
+| `audience` hint | List the people you want the site to reach. It keeps the design aimed at them. | List the kinds of people who will use it. | List the people or roles who do this today. |
+| `audience` placeholder | Fans who want show dates | Front-desk staff | Office manager |
+| `parts` hint | List the pages you have in mind. A rough list is fine. | List the main things people should be able to do. | List the steps in the order they happen. |
+| `parts` placeholder | Shows | Book an appointment | Copy new orders into the spreadsheet |
+| `questions` hint | List anything you haven’t settled yet. It’s fine to leave this empty. | (same) | (same) |
+| `questions` placeholder | Do we sell tickets on the site? | Do people need to sign in? | Who approves a refund? |
+
+The status line while the outline is retrying after a failed update says "The outline couldn’t update just now. Trying
+again shortly." only while a retry is in fact coming; a request in flight says "Reading your answers…".
 
 **Approaches considered.** The owner's feedback on the first page, with the outline in a board beside the answer box, was
 that it was too much at once.

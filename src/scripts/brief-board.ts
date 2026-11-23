@@ -8,15 +8,13 @@ import {
 	type Board,
 	type BoardCard,
 	LANES,
-	LANE_HINT,
-	LANE_HINT_EMPTY,
 	type Lane,
 	addLabels,
 	answerText,
 	editCard,
 	answerCard,
 	keepCard,
-	laneQuestions,
+	laneScreen,
 	removeNote,
 	setAside,
 	standsOn,
@@ -63,6 +61,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		asideSummary: HTMLElement;
 		asideList: HTMLElement;
 		undo: HTMLButtonElement;
+		skip: HTMLButtonElement;
 	};
 
 	// BriefBoard.astro renders every lane screen with each of these parts; a missing one throws at the first use, as elsewhere.
@@ -92,11 +91,11 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			asideSummary: part("[data-lane-aside-summary]"),
 			asideList: part("[data-lane-aside-list]"),
 			undo: part("[data-board-undo]"),
+			skip: part("[data-board-skip]"),
 		};
 	};
 
 	const lanes: Record<Lane, LaneParts> = {
-		purpose: laneParts("purpose"),
 		audience: laneParts("audience"),
 		parts: laneParts("parts"),
 		questions: laneParts("questions"),
@@ -110,6 +109,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 	const nodes = new Map<string, HTMLLIElement>();
 
+	// Whether the screens were last drawn by hand; the first drawing sets the fields up for whichever it is.
+	let wasByHand: boolean | undefined;
+
 	const core = createBriefBoardCore({ ...options, onRender: render });
 
 	const currentAnswers = () => answerText(options.answers(), options.path());
@@ -120,9 +122,15 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	};
 
 	// ---- Drawing ------------------------------------------------------------------------------------------------------
-	const originLabel = (card: BoardCard, grounded: boolean) =>
+	const originLabel = (
+		card: BoardCard,
+		grounded: boolean,
+		ownLabel: boolean,
+	) =>
 		card.status === "wrote"
-			? "Your note"
+			? ownLabel
+				? "Your note"
+				: ""
 			: card.status === "edited"
 				? "Edited by you"
 				: card.status === "kept"
@@ -152,13 +160,20 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		return list;
 	};
 
-	function drawCard(node: HTMLLIElement, card: BoardCard, answers: string) {
+	function drawCard(
+		node: HTMLLIElement,
+		card: BoardCard,
+		answers: string,
+		ownLabel: boolean,
+	) {
 		const grounded = card.basis === "said" && standsOn(card, answers);
 		node.dataset.status = card.status;
 		node.dataset.basis = card.basis;
 		node.dataset.grounded = String(grounded);
-		node.querySelector<HTMLElement>("[data-card-origin]")!.textContent =
-			originLabel(card, grounded);
+		const origin = node.querySelector<HTMLElement>("[data-card-origin]")!;
+		origin.textContent = originLabel(card, grounded, ownLabel);
+		// A visitor's note in a lane of their own notes carries no label, so no empty line is left in the card.
+		origin.hidden = !origin.textContent;
 		node.querySelector<HTMLElement>("[data-card-text]")!.textContent =
 			card.text;
 		const quote = node.querySelector<HTMLElement>("[data-card-quote]")!;
@@ -239,13 +254,38 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			}
 
 		const undoLabel = core.undoLabel();
+		const byHand = core.byHand();
+
+		// When the lane screens change between working with the AI and by hand, the open field is put back as that mode has it.
+		const modeChanged = byHand !== wasByHand;
+		wasByHand = byHand;
 
 		for (const lane of LANES) {
 			const parts = lanes[lane];
-			parts.title.textContent = laneQuestions[path][lane];
+
+			const screen = laneScreen({
+				path,
+				lane,
+				board: current,
+				byHand,
+				undoLabel,
+			});
+
+			parts.title.textContent = screen.heading;
 			parts.add.textContent = addLabels[path][lane];
 			parts.editorLabel.textContent = addLabels[path][lane];
 			parts.input.maxLength = textLimits[lane];
+			parts.input.placeholder = screen.placeholder;
+			parts.skip.hidden = !screen.skipLink;
+
+			// By hand the field stays open for the next note; with the AI on it opens from the lane's "Add".
+			if (modeChanged) {
+				parts.input.value = "";
+				parts.editor.hidden = !screen.fieldOpen;
+				parts.add.hidden = screen.fieldOpen;
+			}
+
+			parts.cancel.hidden = screen.fieldOpen;
 
 			// Says why a note cannot be added, once the visitor has tried.
 			const full = core.fullNote(lane);
@@ -274,7 +314,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 					nodes.set(card.id, node);
 				}
 
-				drawCard(node, card, answers);
+				drawCard(node, card, answers, screen.ownLabel);
 
 				// New cards go after the ones before them. A node already in place is never moved, so focus inside it stays.
 				const expected: Element | null = previous
@@ -291,7 +331,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			}
 
 			parts.region.hidden = cards.length === 0;
-			parts.hint.textContent = cards.length ? LANE_HINT : LANE_HINT_EMPTY;
+			parts.hint.textContent = screen.hint;
 
 			// The line is read aloud when it changes, so it is set only when it says something different.
 			const line = core.statusLine(lane);
@@ -333,6 +373,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			);
 
 			// Undo is the whole board's last action; its name says what it will undo.
+			parts.undo.hidden = !screen.undoShown;
 			parts.undo.disabled = !undoLabel;
 			parts.undo.setAttribute(
 				"aria-label",
@@ -594,6 +635,14 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			}
 
 			parts.input.value = "";
+
+			// By hand the field stays open with focus in it, for the next note.
+			if (core.byHand()) {
+				parts.input.focus();
+
+				return;
+			}
+
 			parts.editor.hidden = true;
 			parts.add.hidden = false;
 			parts.add.focus();

@@ -4367,7 +4367,7 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 	}
 });
 
-it("renders the outline's four lane screens inside the form, and no side board, only while the switch is on", async () => {
+it("renders the outline's three lane screens inside the form, and no side board, only while the switch is on", async () => {
 	const container = await AstroContainer.create();
 
 	const render = async (board: boolean) =>
@@ -4387,13 +4387,11 @@ it("renders the outline's four lane screens inside the form, and no side board, 
 	);
 
 	expect(lanes.map((lane) => attrOf(lane, "data-step"))).toEqual([
-		"9",
 		"10",
 		"11",
 		"12",
 	]);
 	expect(lanes.map((lane) => attrOf(lane, "data-lane-screen"))).toEqual([
-		"purpose",
 		"audience",
 		"parts",
 		"questions",
@@ -4418,9 +4416,10 @@ it("renders the outline's four lane screens inside the form, and no side board, 
 		expect(output).not.toContain("data-skip");
 	}
 
-	expect(serialize(lanes[0])).toContain("Is this what it’s for?");
+	expect(serialize(lanes[0])).toContain("Who is it for?");
+	expect(serialize(on)).not.toContain("Is this what it’s for?");
 
-	// Twelve dots for the website's longest plan, eleven for the other two paths; none of the board's old parts.
+	// Eleven dots for the website's longest plan, ten for the other two paths; none of the board's old parts.
 	const dotsFor = (document: typeof on) =>
 		findElements(
 			findElement(document, (element) =>
@@ -4429,7 +4428,7 @@ it("renders the outline's four lane screens inside the form, and no side board, 
 			(element) => element.tagName === "li",
 		);
 
-	expect(dotsFor(on)).toHaveLength(12);
+	expect(dotsFor(on)).toHaveLength(11);
 	expect(dotsFor(on).filter((dot) => hasAttr(dot, "hidden"))).toHaveLength(0);
 
 	const webapp = parse(
