@@ -18,6 +18,13 @@ function node(href = "") {
 
 	return {
 		href,
+		rendered: true,
+		getBoundingClientRect() {
+			return { width: this.rendered ? 40 : 0, height: this.rendered ? 40 : 0 };
+		},
+		checkVisibility() {
+			return this.rendered;
+		},
 		hidden: true,
 		textContent: "",
 		isConnected: true,
@@ -61,14 +68,16 @@ function fixture(
 	const navigator = { onLine: true, connection };
 
 	const window = node();
-	const observers: Array<() => void> = [];
+	const observers: Array<(records?: unknown[]) => void> = [];
 	const disconnect = vi.fn();
 	vi.stubGlobal("window", window);
 	vi.stubGlobal(
 		"MutationObserver",
 		class {
-			constructor(callback: () => void) {
-				observers.push(callback);
+			constructor(callback: (records: unknown[]) => void) {
+				observers.push((records = [{ type: "childList" }]) =>
+					callback(records),
+				);
 			}
 			observe() {}
 			disconnect = disconnect;
@@ -76,6 +85,8 @@ function fixture(
 	);
 
 	const document = {
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
 		body: {},
 		visibilityState: "visible",
 		querySelector: (selector: string) => {
@@ -339,4 +350,99 @@ describe("prefetch trial runtime boundaries", () => {
 			referrerPolicy: "no-referrer",
 		});
 	});
+});
+
+describe("prefetch visibility lifecycle", () => {
+	it("does not register hidden menu links and registers after opening", async () => {
+		const f = fixture();
+		f.anchors[0].rendered = false;
+		await setupPrefetchTrial(loadManager);
+		expect(callbacks).toHaveLength(3);
+		f.anchors[0].rendered = true;
+		f.observers[0]();
+		expect(callbacks).toHaveLength(4);
+		callbacks[3]();
+		expect(f.appendChild).toHaveBeenCalledTimes(1);
+	});
+	it("drops a stale hidden prediction without spending budget and can register again", async () => {
+		const f = fixture();
+		await setupPrefetchTrial(loadManager);
+		f.anchors[0].rendered = false;
+		callbacks[0]();
+		expect(f.appendChild).not.toHaveBeenCalled();
+		expect(unregister).toHaveBeenCalledTimes(1);
+		f.anchors[0].rendered = true;
+		f.observers[0]();
+		expect(callbacks).toHaveLength(5);
+		callbacks[4]();
+		expect(f.appendChild).toHaveBeenCalledTimes(1);
+	});
+	it("reconciles breakpoint changes and removes its resize listener on cleanup", async () => {
+		const f = fixture();
+		const cleanup = await setupPrefetchTrial(loadManager);
+		f.anchors[0].rendered = false;
+		f.window.emit("resize");
+		expect(unregister).toHaveBeenCalledTimes(1);
+		f.anchors[0].rendered = true;
+		f.window.emit("resize");
+		expect(callbacks).toHaveLength(5);
+		cleanup?.();
+		f.window.emit("resize");
+		expect(callbacks).toHaveLength(5);
+	});
+});
+
+it("ignores animation-only style updates but reconciles visibility styles", async () => {
+	const f = fixture();
+	await setupPrefetchTrial(loadManager);
+	f.anchors[0].rendered = false;
+
+	const target = {
+		matches: () => true,
+		querySelector: () => null,
+		getAttribute: () => "--p: 0.5; --rx: 1;",
+	};
+
+	f.observers[0]([
+		{
+			type: "attributes",
+			attributeName: "style",
+			oldValue: "--p: 0.1;",
+			target,
+		},
+	]);
+	expect(unregister).not.toHaveBeenCalled();
+	target.getAttribute = () => "display: none; --p: 0.5;";
+	f.observers[0]([
+		{
+			type: "attributes",
+			attributeName: "style",
+			oldValue: "--p: 0.5;",
+			target,
+		},
+	]);
+	expect(unregister).toHaveBeenCalledTimes(1);
+});
+
+it("ignores decorative animation styles with no link descendants", async () => {
+	const f = fixture();
+	await setupPrefetchTrial(loadManager);
+	f.anchors[0].rendered = false;
+
+	for (const style of ["--glow: 1", "--lit: .8", "transform: rotate(1deg)"]) {
+		f.observers[0]([
+			{
+				type: "attributes",
+				attributeName: "style",
+				oldValue: "",
+				target: {
+					matches: () => false,
+					querySelector: () => null,
+					getAttribute: () => style,
+				},
+			},
+		]);
+	}
+
+	expect(unregister).not.toHaveBeenCalled();
 });

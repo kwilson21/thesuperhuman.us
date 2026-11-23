@@ -1,3 +1,4 @@
+import { withAboutDocumentCache } from "~/lib/about-document-cache";
 import type { APIContext, MiddlewareNext } from "astro";
 import {
 	canonicalAgreementRequest,
@@ -190,7 +191,12 @@ async function handle(
 /** The middleware with its owner check supplied. Astro runs `onRequest` below, which uses the Cloudflare Access check. */
 export function createOnRequest(verifyOwner: VerifyOwner) {
 	return defineMiddleware(async (context, next) =>
-		withSecurityHeaders(await handle(context, next, verifyOwner)),
+		withSecurityHeaders(
+			withAboutDocumentCache(
+				context.request,
+				await handle(context, next, verifyOwner),
+			),
+		),
 	);
 }
 
