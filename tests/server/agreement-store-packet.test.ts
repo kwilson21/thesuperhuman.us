@@ -1380,7 +1380,10 @@ describe("the statements, against today's code and the golden corpora", () => {
 
 		// The signing notices' two added reads, which the converted sign route runs (src/server/flows/agreement-messages.ts):
 		// the offer-sign corpus records them once re-recorded, so they are left out of both checks.
-		const signNotices = [MESSAGE_SQL.notice, MESSAGE_SQL.messageAgreement];
+		const signNotices: readonly string[] = [
+			MESSAGE_SQL.notice,
+			MESSAGE_SQL.messageAgreement,
+		];
 
 		expect(
 			[...ran]
