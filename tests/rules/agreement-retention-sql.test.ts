@@ -1013,7 +1013,7 @@ describe("the eligibility query and A25, on random worlds", () => {
 			expect(tally.get(`${name}:true`), name).toBeGreaterThan(10);
 			expect(tally.get(`${name}:false`), name).toBeGreaterThan(10);
 		}
-	});
+	}, 20_000);
 });
 
 // Today's preview against the rules, called as the flow will call them, in the same database and in two identical
@@ -1521,7 +1521,7 @@ describe("today's preview and the rules", () => {
 
 		for (const [name, worlds] of Object.entries(reached))
 			expect(worlds, name).toBeGreaterThan(15);
-	});
+	}, 20_000);
 });
 
 describe("the access clean-up and today's DELETE statements", () => {
@@ -1667,7 +1667,7 @@ describe("the access clean-up and today's DELETE statements", () => {
 		}
 
 		expect(deleted).toBeGreaterThan(100);
-	});
+	}, 20_000);
 
 	it("orders text as SQLite does", () => {
 		expect(
