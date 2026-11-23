@@ -158,11 +158,11 @@ const updated = pricing.updatedAt
         {lastSearch && <p class="rail-muted">{lastSearch}</p>}
         {refresh.askedAt && <p class="rail-muted">You asked for a search {inEastern(refresh.askedAt)}. It runs at the next daily check, within a day.</p>}
         {proposal && !shown && <div data-proposal={proposal.id}>
-          <p>A web search on {proposal.market.researchedOn} found figures, but your research changed after it and they no longer make research on their own. Discard them and ask for a new search.</p>
+          <p>A web search on {proposal.market.researchedOn.replace(/-/g, '\u2011')} found figures, but your research changed after it and they no longer make research on their own. Discard them and ask for a new search.</p>
           <div class="software-actions"><button class="studio-quiet" type="button" data-refresh-discard>Discard</button></div>
         </div>}
         {shown && <div data-proposal={shown.id}>
-          <p>Proposed figures from a web search on {shown.market.researchedOn}. Each new figure appears in the text of a source it cites; read the sources before you use them.</p>
+          <p>Proposed figures from a web search on {shown.market.researchedOn.replace(/-/g, '\u2011')}. Each new figure appears in the text of a source it cites; read the sources before you use them.</p>
           <div class="pricing-table-scroll" role="region" aria-labelledby="pricing-proposal-caption" tabindex="0">
           <table class="pricing-table">
             <caption id="pricing-proposal-caption" class="visually-hidden">Your current ranges beside the proposed ones</caption>
@@ -170,7 +170,7 @@ const updated = pricing.updatedAt
             <tbody>{shown.changes.map(change => <tr><th scope="row">{cellLabel(change.cell)}</th><td>{change.before ? span(change.before) : 'None'}</td><td>{change.after ? span(change.after) : 'No new figure; stays as it is'}</td><td>{change.sourceIds.join(', ')}</td></tr>)}</tbody>
           </table>
           </div>
-          {shown.market.sources.length > 0 && <details><summary>Sources ({shown.market.sources.length})</summary><ol class="pricing-sources">{shown.market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && <span class="pricing-source-meta">{source.published}</span>}</li>)}</ol></details>}
+          {shown.market.sources.length > 0 && <details><summary>Sources ({shown.market.sources.length})</summary><ol class="pricing-sources">{shown.market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && <span class="pricing-source-meta">{source.published.replace(/(\d)-(\d)/g, '$1\u2011$2')}</span>}</li>)}</ol></details>}
           <div class="software-actions"><button class="studio-button" type="button" data-refresh-use>Use these figures</button><button class="studio-quiet" type="button" data-refresh-discard>Discard</button></div>
         </div>}
         {hasSearchKey && !proposal && !refresh.askedAt && <button class="studio-quiet" type="button" data-refresh-ask>Search for new figures</button>}
@@ -220,9 +220,9 @@ const updated = pricing.updatedAt
   .pricing-refresh { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
   .pricing-refresh, .pricing-refresh [data-proposal] { display: grid; gap: .5rem; }
   .pricing-refresh > *, .pricing-refresh [data-proposal] > * { min-width: 0; }
-  .pricing-refresh h3 { font: 500 1rem/1.3 var(--font-sans); margin: 0 0 .5rem; }
+  .pricing-refresh h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0 0 .5rem; }
   .pricing-refresh .pricing-table { min-width: 0; }
-  .pricing-refresh .pricing-table td:nth-child(2), .pricing-refresh .pricing-table td:nth-child(3) { white-space: normal; }
+  .pricing-refresh .pricing-table td:nth-child(2), .pricing-refresh .pricing-table td:nth-child(3) { white-space: normal; font-variant-numeric: tabular-nums; }
   .pricing-refresh .pricing-table td:last-child { min-width: 0; }
   .pricing-caveats { padding-left: 1.1rem; }
   .pricing-caveats li, .pricing-sources li { overflow-wrap: anywhere; }
