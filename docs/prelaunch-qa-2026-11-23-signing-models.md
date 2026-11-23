@@ -1,12 +1,15 @@
 # Signing models: release gate
 
-Date: November 23, 2026 Repository: `kwilson21/thesuperhuman.us` Pull request: opened after this record was written; its
-number is in the next record. Merge facts are recorded after the merge, in the next pull request. Target: production
-`https://thesuperhuman.us` Decisions: Kazon Wilson. The order of `docs/plans/2026-11-effect-conversion.md` ("Go",
-2026-11-15) and the step 3 design (`docs/plans/2026-11-signing-conversion.md`, #376), whose section 8 makes this PR 3:
-the two Quint models extended before any fix or conversion code. The model work was done with Claude Code. Rollback
-revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. Models, the Quint driver's
-registry, its tests and docs only.
+Date: November 23, 2026
+Repository: `kwilson21/thesuperhuman.us`
+Pull request: [#383](https://github.com/kwilson21/thesuperhuman.us/pull/383). Merge facts are recorded after the merge,
+in the next pull request.
+Target: production `https://thesuperhuman.us`
+Decisions: Kazon Wilson. The order of `docs/plans/2026-11-effect-conversion.md` ("Go", 2026-11-15) and the step 3
+design (`docs/plans/2026-11-signing-conversion.md`, #376), whose section 8 makes this PR 3: the two Quint models
+extended before any fix or conversion code. The model work was done with Claude Code.
+Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. Models, the Quint
+driver's registry, its tests and docs only.
 
 ## Scope
 
