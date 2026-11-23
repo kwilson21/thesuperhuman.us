@@ -22,10 +22,12 @@ The header comments of six golden corpora, corrected to what their fixtures hold
 - `tests/golden/owner-agreements-publish.test.ts`: a stale or racing version answers 409 with the generic sentence;
   a failed batch or read answers 500.
 - `tests/golden/owner-agreements-template-version.test.ts`: a failed read answers 500.
-- `tests/golden/owner-agreements-retention-preview.test.ts`: any throw answers 500.
+- `tests/golden/owner-agreements-retention-preview.test.ts`: any throw answers 500; its two 400 answers are listed.
 
 Each line was checked against its fixture's recorded statuses and bodies. Nothing under `src/` and no fixture changed;
 nothing deployed behaves differently.
+
+Also `docs/prelaunch-qa-2026-11-23-signing-decision-fixes.md`: #391's merge facts, reviews, CI and live check.
 
 ## 1 to 6. Content, search, accessibility, performance, forms, privacy
 
