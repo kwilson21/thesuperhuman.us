@@ -18,6 +18,9 @@ export const LANES = ["purpose", "audience", "parts", "questions"] as const;
 
 export type Lane = (typeof LANES)[number];
 
+/** The data-steps of the lane screens in the brief's form (src/components/BriefBoard.astro), in lane order. */
+export const LANE_STEPS = [9, 10, 11, 12] as const;
+
 /** Each lane's heading, by path. */
 export const laneLabels: Record<SoftwarePath, Record<Lane, string>> = {
 	website: {
@@ -1679,7 +1682,7 @@ function savedCards(board: Board) {
 	);
 }
 
-/** What a page saves: each path's cards, and whether the board is paused or set aside for the plain form. */
+/** What a page saves: each path's cards, and whether the outline is stopped (a page saves "plain" for a skipped outline, "paused" from before it). */
 export const savedBoards = (saved: SavedBoards) => ({
 	boards: Object.fromEntries(
 		Object.entries(saved.boards).map(([path, board]) => [

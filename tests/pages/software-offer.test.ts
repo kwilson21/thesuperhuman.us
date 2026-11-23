@@ -4291,6 +4291,108 @@ it("renders all four personalized receipt outcomes into the rendered page", asyn
 	}
 });
 
+it("renders the outline's four lane screens inside the form, and no side board, only while the switch is on", async () => {
+	const container = await AstroContainer.create();
+
+	const render = async (board: boolean) =>
+		parse(
+			await container.renderToString(start, {
+				request: new Request(
+					"https://thesuperhuman.us/software/start?path=website",
+				),
+				locals: fakeLocals(board ? { SOFTWARE_BOARD_ENABLED: "true" } : {}),
+			}),
+		);
+
+	const on = await render(true);
+
+	const lanes = findElements(on, (element) =>
+		hasAttr(element, "data-lane-screen"),
+	);
+
+	expect(lanes.map((lane) => attrOf(lane, "data-step"))).toEqual([
+		"9",
+		"10",
+		"11",
+		"12",
+	]);
+	expect(lanes.map((lane) => attrOf(lane, "data-lane-screen"))).toEqual([
+		"purpose",
+		"audience",
+		"parts",
+		"questions",
+	]);
+
+	const form = findElement(
+		on,
+		(element) => attrOf(element, "id") === "software-inquiry",
+	)!;
+
+	for (const lane of lanes) {
+		const output = serialize(lane);
+
+		// Inside the form, hidden until the script shows it, with the lane's question as its heading.
+		expect(findElements(form, (element) => element === lane)).toHaveLength(1);
+		expect(hasAttr(lane, "hidden")).toBe(true);
+		expect(output).toContain('tabindex="-1"');
+		expect(output).toContain('role="status"');
+		expect(output).toContain("Skip these, no AI outline");
+		expect(output).toContain("Undo");
+		expect(output).toContain("Set aside");
+		expect(output).not.toContain("data-skip");
+	}
+
+	expect(serialize(lanes[0])).toContain("Is this what it’s for?");
+
+	// Twelve dots for the website's longest plan, eleven for the other two paths; none of the board's old parts.
+	const dotsFor = (document: typeof on) =>
+		findElements(
+			findElement(document, (element) =>
+				hasAttr(element, "data-intake-progress"),
+			)!,
+			(element) => element.tagName === "li",
+		);
+
+	expect(dotsFor(on)).toHaveLength(12);
+	expect(dotsFor(on).filter((dot) => hasAttr(dot, "hidden"))).toHaveLength(0);
+
+	const webapp = parse(
+		await container.renderToString(start, {
+			request: new Request(
+				"https://thesuperhuman.us/software/start?path=webapp",
+			),
+			locals: fakeLocals({ SOFTWARE_BOARD_ENABLED: "true" }),
+		}),
+	);
+
+	expect(dotsFor(webapp).filter((dot) => hasAttr(dot, "hidden"))).toHaveLength(
+		1,
+	);
+
+	const html = serialize(on);
+
+	for (const gone of [
+		"Your brief so far",
+		"Show the outline",
+		"Pause the outline",
+		"Use the plain form",
+		"brief-workspace",
+		"data-board-pulse",
+		"Cards marked",
+	])
+		expect(html).not.toContain(gone);
+	expect(html).toContain("Add the outline back");
+
+	const off = serialize(await render(false));
+
+	for (const absent of [
+		"data-lane-screen",
+		"Add the outline back",
+		"Skip these",
+	])
+		expect(off).not.toContain(absent);
+});
+
 it("renders the AI disclosure beside both answer boxes and the dated retention notice", async () => {
 	const container = await AstroContainer.create();
 
@@ -4315,9 +4417,8 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 		expect(output).toContain(
 			"Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes.",
 		);
-		expect(output).toContain(
-			"Please leave out passwords, access details and real customer data.",
-		);
+		expect(output).not.toContain("Plain language is fine");
+		expect(output).toContain("See example answers");
 		expect(output).not.toContain("Leave out passwords and customer data.");
 		expect(output).toContain('href="/privacy#software-briefs"');
 		expect(output).toContain("Suggestions are off.");

@@ -1,7 +1,7 @@
-// The living brief's board (docs/plans/2026-11-living-brief.md) on a fictional website brief, at both widths: cards
-// arriving while the visitor writes, the visitor's choices, a reply held while they are in the board, the review with
-// the outline, the plain form, and the owner's readback. The board's route is answered locally by the scripted
-// interpreter (../brief-board-script.mjs), a little late, as the model would be; no model is called and nothing is sent.
+// The living brief's outline (docs/plans/2026-11-living-brief.md) on a fictional website brief, at both widths: each of its
+// four lane screens, going back to edit an answer and seeing what changed in a lane, the review with "New since you last
+// looked", the skipped outline, and the owner's readback. The route is answered locally by the scripted interpreter
+// (../brief-board-script.mjs), a little late, as the model would be; no model is called and nothing is sent.
 import { scriptedReply } from "../brief-board-script.mjs";
 import { stubTurnstile } from "../turnstile-stub.mjs";
 
@@ -39,26 +39,154 @@ const OUTLINE = [
 	},
 ].map(({ quote, ...item }) => (quote ? { ...item, quote } : item));
 
-/** A suggested question and a note that each end their own sentence, for the board's messages that quote a card. */
+/** A suggested question and a note that each end their own sentence, for the messages that quote a card. */
 const QUESTION = "Who will add new show dates?";
 const NOTE = "Fans hear new songs first.";
+
+/** Each lane screen's question, as the website path shows it. */
+const HEADINGS = {
+	purpose: "Is this what it’s for?",
+	audience: "Who is it for?",
+	parts: "Which pages does it need?",
+	questions: "What’s still undecided?",
+};
+
+const LANES = Object.keys(HEADINGS);
+
+/** Polls `check` until it is true, so a slow reply or a settling card fails with a name rather than a bare timeout. */
+async function until(page, what, check, timeout = 20000) {
+	const end = Date.now() + timeout;
+
+	while (!(await check())) {
+		if (Date.now() > end) throw new Error(`Timed out waiting for ${what}`);
+		await page.waitForTimeout(100);
+	}
+}
+
+/**
+ * Opens the brief at the website's first question with the outline's route answered locally, 400 ms late. `state.gate`,
+ * when set to a promise, holds every reply until it settles; `state.requests` and `state.replies` count what the route
+ * received and answered.
+ */
+async function open(page) {
+	const state = { requests: 0, replies: 0, gate: null };
+
+	await page.route("**/api/software/brief/pass", (route) =>
+		route.fulfill({ json: { ok: true } }),
+	);
+	await page.route("**/api/software/brief/suggest", (route) =>
+		route.fulfill({ json: { suggestion: "" } }),
+	);
+	await page.route("**/api/software/brief/board", async (route) => {
+		const body = route.request().postData() ?? "{}";
+
+		state.requests++;
+		await new Promise((resolve) => setTimeout(resolve, 400));
+
+		if (state.gate) await state.gate;
+		await route.fulfill({ json: scriptedReply(body) });
+		state.replies++;
+	});
+	await stubTurnstile(page);
+	await page.addInitScript(() => {
+		localStorage.removeItem("software-brief-draft");
+		localStorage.removeItem("software-brief-board");
+		localStorage.removeItem("software-suggestions");
+	});
+	await page.reload();
+	await page.waitForFunction(() => !!window.turnstile);
+
+	return state;
+}
+
+/** Types `text` into the first question and waits for the reply it asks for. */
+async function write(page, state, text, replies = 1) {
+	const box = page.locator('[data-step="1"] textarea');
+
+	await box.click();
+	// A tap on a phone can land mid-text; the visitor adds to the end.
+	await box.press("Control+End");
+	await box.pressSequentially(text, { delay: 2 });
+	await until(page, `reply ${replies}`, async () => state.replies >= replies);
+	await page.waitForTimeout(300);
+}
+
+const next = async (page, times = 1) => {
+	for (let i = 0; i < times; i++) await page.locator("[data-next]").click();
+};
+
+const back = async (page, times = 1) => {
+	for (let i = 0; i < times; i++) await page.locator("[data-back]").click();
+};
+
+/** From the first question: Next to a lane's screen, checking its question is the heading and has focus. */
+async function toLane(page, lane) {
+	await next(page, LANES.indexOf(lane) + 1);
+	const screen = page.locator(`[data-lane-screen="${lane}"]`);
+	const heading = screen.locator("h1");
+
+	await heading.waitFor();
+
+	if ((await heading.textContent()) !== HEADINGS[lane])
+		throw new Error(`The ${lane} screen asks "${await heading.textContent()}"`);
+
+	if (!(await heading.evaluate((node) => node === document.activeElement)))
+		throw new Error(`The ${lane} screen's heading did not take focus`);
+	// New cards rise in over 180 ms and keep an accent edge for 1.6 s; measure and capture once they have settled.
+	await page.waitForFunction(
+		() => !document.querySelector(".board-card.is-new"),
+	);
+}
+
+/** The lane screen's one-line status, as a screen reader hears it. */
+const statusOf = (page, lane) =>
+	page.locator(`[data-lane-screen="${lane}"] [data-lane-status]`).textContent();
+
+/** From wherever the visitor is: through the steps after the outline, to the review. */
+async function toReview(page) {
+	for (let i = 0; i < 20; i++) {
+		const step = await page.evaluate(
+			() =>
+				document.querySelector("#software-inquiry [data-step]:not([hidden])")
+					?.dataset.step,
+		);
+
+		if (step === "6") return;
+
+		if (step === "7" || step === "4")
+			await page.locator(`[data-step="${step}"] [data-skip]`).click();
+		else {
+			if (step === "8")
+				await page.locator("[name=updates][value=self]").check();
+
+			if (step === "5") {
+				await page.locator("[name=name]").fill("Sam Example");
+				await page.locator("[name=email]").fill("sam@example.com");
+			}
+
+			await next(page);
+		}
+	}
+
+	throw new Error("The brief did not reach its review");
+}
 
 /**
  * Each message that quotes a card (Kept, Set aside, Brought back, Removed, Undid) ends its sentence once: no period
  * after a quote that already ends a sentence (checked here with "?" and "."), and one after a quote that does not
- * (checked with "Shows" and "Press kit"). Every action is undone, so the board keeps the same cards. The Undid message
+ * (checked with "Shows" and "Press kit"). Every action is undone, so the outline keeps the same cards. The Undo message
  * that also names the cards Undo withdrew is not reached here.
  */
 async function quotesEndOnce(page) {
 	const live = page.locator("[data-board-live]");
-	const aside = page.locator("[data-board-aside]");
+	const screen = page.locator("[data-lane-screen]:not([hidden])");
 
 	const said = async (expected) => {
 		const text = await live.textContent();
 
 		if (text !== expected)
 			throw new Error(
-				`The board said ${JSON.stringify(text)}, not ${JSON.stringify(expected)}`,
+				`The outline said ${JSON.stringify(text)}, not ${JSON.stringify(expected)}`,
 			);
 	};
 
@@ -68,7 +196,7 @@ async function quotesEndOnce(page) {
 	};
 
 	const undo = async (expected) => {
-		await page.locator("[data-board-undo]").click();
+		await screen.locator("[data-board-undo]").click();
 		await said(expected);
 	};
 
@@ -82,8 +210,10 @@ async function quotesEndOnce(page) {
 			`Set aside “${text}”${end} Undo or Bring back restores it.`,
 		);
 
-		if (!(await aside.evaluate((list) => list.open)))
-			await page.locator("[data-board-aside-summary]").click();
+		if (
+			!(await screen.locator("[data-lane-aside]").evaluate((list) => list.open))
+		)
+			await screen.locator("[data-lane-aside-summary]").click();
 		await press(`Bring back: ${text}`, `Brought back “${text}”${end}`);
 		await undo(`Undid: brought back “${text}”${end}`);
 		await undo(`Undid: set aside “${text}”${end}`);
@@ -102,14 +232,17 @@ async function quotesEndOnce(page) {
 		await undo(`Undid: added “${text}”${end}`);
 	};
 
+	await toLane(page, "parts");
 	await card("Shows", ".");
-	await card(QUESTION, "");
 	await note("Add a page", "Press kit", ".");
+	await next(page);
+	await card(QUESTION, "");
+	await back(page, 3);
 	await note(/^Add what it/, NOTE, "");
 }
 
 export default {
-	title: "Living brief board",
+	title: "Living brief outline",
 	async run({ capture, sql }) {
 		sql(`INSERT OR IGNORE INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at,submission_id)
       VALUES ('screenshot-board','software','website','Sam Example','sam@example.com','A home for my band on the web.',
@@ -118,63 +251,7 @@ export default {
 		const steps = [];
 
 		for (const viewport of ["desktop", "phone"]) {
-			/** Opens the brief at the website's first question with the board's route answered locally, 400 ms late. */
-			const open = async (page) => {
-				await page.route("**/api/software/brief/pass", (route) =>
-					route.fulfill({ json: { ok: true } }),
-				);
-				await page.route("**/api/software/brief/suggest", (route) =>
-					route.fulfill({ json: { suggestion: "" } }),
-				);
-				await page.route("**/api/software/brief/board", async (route) => {
-					const body = route.request().postData() ?? "{}";
-
-					await new Promise((resolve) => setTimeout(resolve, 400));
-					await route.fulfill({ json: scriptedReply(body) });
-				});
-				await stubTurnstile(page);
-				await page.addInitScript(() => {
-					localStorage.removeItem("software-brief-draft");
-					localStorage.removeItem("software-brief-board");
-					localStorage.removeItem("software-suggestions");
-				});
-				await page.reload();
-				await page.waitForFunction(() => !!window.turnstile);
-			};
-
-			const write = async (page, text) => {
-				const box = page.locator('[data-step="1"] textarea');
-
-				await box.click();
-				await box.pressSequentially(text, { delay: 2 });
-				await page.waitForFunction(
-					() =>
-						document
-							.querySelector("[data-board-status]")
-							?.textContent?.startsWith("Up to date"),
-					undefined,
-					{ timeout: 20000 },
-				);
-				// New cards rise in over 180 ms and keep an accent edge for 1.6 s; measure and capture once they have settled.
-				await page.waitForFunction(
-					() => !document.querySelector(".board-card.is-new"),
-				);
-			};
-
-			const choose = async (page) => {
-				await page.getByRole("button", { name: "Keep: Shows" }).click();
-				await page.getByRole("button", { name: "Not this: Contact" }).click();
-				await page
-					.getByRole("button", { name: /^Answer: Do you sell tickets/ })
-					.click();
-				await page.keyboard.type("We link to a ticket seller.");
-				await page.keyboard.press("Enter");
-				await page.getByRole("button", { name: "Add a page" }).click();
-				await page.keyboard.type("Press kit");
-				await page.keyboard.press("Enter");
-			};
-
-			const shot = async (name, caption, prepare, extra = {}) =>
+			const shot = async (name, caption, prepare) =>
 				steps.push({
 					title: `${caption}, ${viewport}`,
 					images: [
@@ -184,109 +261,167 @@ export default {
 								path: "/software/start?path=website",
 								viewport,
 								prepare,
-								...extra,
 							}),
 							caption,
 						},
 					],
 				});
 
+			// Each lane screen, with the cards the scripted reply read from the answers.
+			for (const lane of LANES)
+				await shot(
+					`lane-${lane}`,
+					`The outline's ${lane} screen, with its cards`,
+					async (page) => {
+						const state = await open(page);
+
+						await write(page, state, PURPOSE);
+						await toLane(page, lane);
+
+						if ((await page.locator(".board-card").count()) < 5)
+							throw new Error("The outline did not fill in while writing");
+
+						if (lane === "parts") {
+							await page.getByRole("button", { name: "Keep: Shows" }).click();
+							await page
+								.getByRole("button", { name: "Not this: Contact" })
+								.click();
+							await page.getByRole("button", { name: "Add a page" }).click();
+							await page.keyboard.type("Press kit");
+							await page.keyboard.press("Enter");
+
+							if (
+								!(await page
+									.locator('[data-lane-screen="parts"] [data-lane-aside]')
+									.isVisible())
+							)
+								throw new Error("The set-aside list did not appear");
+						}
+
+						// Move the pointer off the controls, so no hover style is captured.
+						await page.mouse.move(0, 0);
+					},
+				);
+
+			// Going back to edit an answer: the lane that gained cards says what changed, and nothing moved while it was open.
 			await shot(
-				"writing",
-				"Cards arrive while the visitor writes",
+				"edited",
+				"Back to edit an answer: the pages screen says what is new",
 				async (page) => {
-					await open(page);
-					await write(page, PURPOSE);
+					const state = await open(page);
 
-					if ((await page.locator(".board-card").count()) < 5)
-						throw new Error("The board did not fill in while writing");
-				},
-			);
-
-			await shot(
-				"chosen",
-				"Kept, set aside, answered and added by the visitor",
-				async (page) => {
-					await open(page);
-					await write(page, PURPOSE);
-					await choose(page);
-
-					if (!(await page.locator("[data-board-aside]").isVisible()))
-						throw new Error("The set-aside list did not appear");
-				},
-			);
-
-			await shot(
-				"held",
-				"A reply held while the visitor is in the board",
-				async (page) => {
-					await open(page);
-					await write(page, PURPOSE);
-					const edit = page.getByRole("button", { name: "Edit: Music" });
-
-					await edit.focus();
-					const before = await edit.boundingBox();
-
+					await write(page, state, PURPOSE);
+					await next(page, 4);
+					await back(page, 4);
+					await write(page, state, MORE, 2);
+					await next(page, 3);
 					await page
-						.locator('[data-step="1"] textarea')
-						.evaluate((box, more) => {
-							box.value += more;
-							box.dispatchEvent(new Event("input", { bubbles: true }));
-						}, MORE);
-					await edit.focus();
-					await page.locator("[data-board-held]").waitFor({ timeout: 20000 });
-					const after = await edit.boundingBox();
+						.locator('[data-lane-screen="parts"] .board-card')
+						.first()
+						.waitFor();
+					const line = await statusOf(page, "parts");
 
-					if (JSON.stringify(before) !== JSON.stringify(after))
-						throw new Error("A held reply moved the focused control");
+					if (!/new since you edited your answer/.test(line))
+						throw new Error(`The pages screen says "${line}"`);
+					await page.waitForFunction(
+						() => !document.querySelector(".board-card.is-new"),
+					);
+					await page.mouse.move(0, 0);
 				},
 			);
 
+			// A reply that lands after the visitor has left a lane: the review lists what the lane never showed them.
 			await shot(
 				"review",
-				"The outline in the review, before sending",
+				"The review, with the outline and what is new since the visitor last looked",
 				async (page) => {
-					await open(page);
-					await write(page, PURPOSE);
-					await choose(page);
-					await page.locator("[data-next]").click();
-					await page.locator('[data-step="7"] [data-skip]').click();
-					await page.locator("[name=updates][value=self]").check();
-					await page.locator("[data-next]").click();
-					await page.locator("[data-next]").click();
-					await page.locator('[data-step="4"] [data-skip]').click();
-					await page.locator("[name=name]").fill("Sam Example");
-					await page.locator("[name=email]").fill("sam@example.com");
-					await page.locator("[data-next]").click();
-					await page.locator('[data-step="6"]:visible').waitFor();
+					const state = await open(page);
+
+					await write(page, state, PURPOSE);
+					await next(page, 5);
+					await back(page, 5);
+					let release = () => {};
+
+					state.gate = new Promise((resolve) => (release = resolve));
+					const box = page.locator('[data-step="1"] textarea');
+
+					await box.click();
+					await box.press("Control+End");
+					await box.pressSequentially(MORE, { delay: 2 });
+					// The request goes out from the first lane screen, and the visitor is past every lane before it is answered.
+					await next(page);
+					await until(page, "the request", async () => state.requests >= 2);
+					await next(page, 4);
+					await toReview(page);
+					release();
+					await until(page, "the new group in the review", async () =>
+						(await page.locator("[data-review]").innerText()).includes(
+							"New since you last looked",
+						),
+					);
+
 					const review = await page.locator("[data-review]").innerText();
 
 					if (!review.includes("Brief outline") || review.includes("Contact ·"))
 						throw new Error(
 							"The review does not show the outline as it will be sent",
 						);
+
+					if (!/Pages: (Shop|Photos)/.test(review))
+						throw new Error(`The review lists no new page: ${review}`);
+					await page.mouse.move(0, 0);
 				},
 			);
 
+			// "Skip these, no AI outline": the four screens leave the plan, no outline is sent, and the review can bring it back.
 			await shot(
-				"plain",
-				"The plain form, with the board hidden",
+				"skipped",
+				"The review after skipping the outline, with Add the outline back",
 				async (page) => {
-					await open(page);
-					await write(page, PURPOSE);
+					const state = await open(page);
 
-					// The check runs in this step because the plain form hides the board before the capture: it leaves focus in
-					// the board and redraws the cards it brought back with the new-card edge, which a visible board would show.
-					// Desktop only: the messages are the same at every width.
-					if (viewport === "desktop") await quotesEndOnce(page);
+					await write(page, state, PURPOSE);
+					await toLane(page, "parts");
 					await page
-						.getByRole("button", { name: "Use the plain form" })
+						.getByRole("button", { name: "Skip these, no AI outline" })
 						.click();
+					await toReview(page);
 
-					if (await page.locator("[data-brief-board]").isVisible())
-						throw new Error("The board stayed visible on the plain form");
+					const review = await page.locator("[data-review]").innerText();
+
+					if (review.includes("Brief outline"))
+						throw new Error("A skipped outline is listed in the review");
+
+					if (
+						!(await page
+							.getByRole("button", { name: "Add the outline back" })
+							.isVisible())
+					)
+						throw new Error("The review does not offer the outline back");
+
+					if (
+						(await page.locator(".brief-dots li:not([hidden])").count()) !== 8
+					)
+						throw new Error(
+							"The dots did not drop to the plan without the outline",
+						);
+					await page.mouse.move(0, 0);
 				},
 			);
+
+			// The messages that quote a card, on the lane screens. Desktop only: they are the same at every width.
+			if (viewport === "desktop")
+				await shot(
+					"quotes",
+					"Messages that quote a card end their sentence once",
+					async (page) => {
+						const state = await open(page);
+
+						await write(page, state, PURPOSE);
+						await quotesEndOnce(page);
+						await page.mouse.move(0, 0);
+					},
+				);
 
 			// Choices made while a request is in flight win over its reply. Desktop only: the rule is the same at every width.
 			if (viewport === "desktop")
@@ -294,8 +429,9 @@ export default {
 					"stale",
 					"Choices made while a reply was on its way",
 					async (page) => {
-						await open(page);
-						await write(page, PURPOSE);
+						const state = await open(page);
+
+						await write(page, state, PURPOSE);
 						const held = [];
 
 						await page.unroute("**/api/software/brief/board");
@@ -305,20 +441,16 @@ export default {
 						await page
 							.locator('[data-step="1"] textarea')
 							.pressSequentially(MORE, { delay: 2 });
-						await page.waitForFunction(
-							() =>
-								document.querySelector("[data-board-status]")?.textContent ===
-								"Reading your answers…",
-							undefined,
-							{ timeout: 20000 },
+						await next(page, 3);
+						await until(
+							page,
+							"a request in flight",
+							async () => held.length > 0,
 						);
 						await page
 							.getByRole("button", { name: "Not this: Contact" })
 							.click();
 						await page.getByRole("button", { name: "Keep: Shows" }).click();
-						// Leave the board (pointer and focus), or the reply is rightly held until the visitor does.
-						await page.mouse.move(5, 5);
-						await page.locator('[data-step="1"] textarea').focus();
 
 						// The reply was made before those choices: it offers Contact again, in other words, and rewords Shows.
 						const reply = scriptedReply(held[0].request().postData() ?? "{}");
@@ -341,7 +473,7 @@ export default {
 								reason: "You sell merch at shows",
 							},
 						);
-						// The choices above ask again (the board sends the visitor's choices too); the model answers alike.
+						// The choices above ask again (the outline sends the visitor's choices too); the model answers alike.
 						await page.unroute("**/api/software/brief/board");
 						await page.route("**/api/software/brief/board", (route) =>
 							route.fulfill({ json: reply }),
@@ -349,20 +481,17 @@ export default {
 
 						// Only one request is ever in flight, so held[0] is the reply made before the choices.
 						await held[0].fulfill({ json: reply });
-						await page.waitForFunction(() =>
-							document
-								.querySelector("[data-board-status]")
-								?.textContent?.startsWith("Up to date"),
+						await until(page, "the reply to apply", async () =>
+							(
+								await page
+									.locator(".board-card [data-card-text]")
+									.allTextContents()
+							).includes("Who will run the merch table?"),
 						);
 
 						const texts = await page
 							.locator(".board-card [data-card-text]")
 							.allTextContents();
-
-						if (!texts.includes("Who will run the merch table?"))
-							throw new Error(
-								"The reply was not applied, so it proves nothing",
-							);
 
 						if (
 							texts.some((text) => /Contact|Tour dates/.test(text)) ||

@@ -1,6 +1,14 @@
 import { setupBriefAutocomplete } from "./brief-autocomplete";
-import { type BriefBoardHandle, setupBriefBoard } from "./brief-board";
-import { boardAnswerKeys, laneLabels, originLabels } from "../lib/brief-board";
+import { setupBriefBoard, type BriefBoardOptions } from "./brief-board";
+import type { BriefBoardHandle, Where } from "./brief-board-core";
+import {
+	LANES,
+	LANE_STEPS,
+	type Lane,
+	boardAnswerKeys,
+	laneLabels,
+	originLabels,
+} from "../lib/brief-board";
 import { setupSuggestionPass } from "./brief-suggestion-pass";
 import {
 	clientSoftwareLabels,
@@ -15,12 +23,37 @@ import { ownLabel } from "../lib/type-guards";
 import { greetingName, setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
-// Each path's screens in order, by data-step. Website adds two screens after its first question.
+// Each path's screens in order, by data-step, without the outline. Website adds two screens after its first question.
 const plans = {
 	website: [0, 1, 7, 8, 3, 4, 5, 6],
 	webapp: [0, 1, 2, 3, 4, 5, 6],
 	workflow: [0, 1, 2, 3, 4, 5, 6],
 } as const;
+
+/**
+ * A path's screens in order, by data-step. With the outline, its four lane screens follow the written questions, whatever
+ * the cards are, so the dots never change because an answer changed.
+ */
+export function briefPlan(
+	path: SoftwarePath,
+	outline: boolean,
+): readonly number[] {
+	const base = plans[path];
+
+	if (!outline) return base;
+	// The written questions are data-steps 1 and, for the web app and workflow, 2.
+	const after = briefQuestions[path].length + 1;
+
+	return [...base.slice(0, after), ...LANE_STEPS, ...base.slice(after)];
+}
+
+const laneOfSection = (section: number): Lane | null =>
+	LANES[LANE_STEPS.findIndex((step) => step === section)] ?? null;
+
+/** What a screen is to the outline: one of its lane screens, a written question, or neither. */
+const whereIs = (section: number): Where =>
+	laneOfSection(section) ??
+	(section === 1 || section === 2 ? "written" : "other");
 
 const pathFields = {
 	website: ["purpose", "currentUrl", "existing", "updates"],
@@ -175,6 +208,9 @@ export function renderSoftwareReceipt(
 export function setupSoftwareInquiry(
 	form: HTMLFormElement,
 	startSuggestionPass: typeof setupSuggestionPass,
+	startBoard: (
+		options: BriefBoardOptions,
+	) => BriefBoardHandle = setupBriefBoard,
 ) {
 	const steps = [...form.querySelectorAll<HTMLElement>("[data-step]")];
 	const next = form.querySelector<HTMLButtonElement>("[data-next]")!;
@@ -195,6 +231,8 @@ export function setupSoftwareInquiry(
 		"This brief was already sent from another tab. Your changes here will be sent as a new brief.";
 
 	let step = isSoftwarePath(linkedPath) ? 1 : 0,
+		// The data-step a saved draft was left on, when there is one to go back to.
+		resumeAt: number | undefined,
 		submissionId = crypto.randomUUID();
 
 	const path = (): SoftwarePath => {
@@ -203,7 +241,12 @@ export function setupSoftwareInquiry(
 		return isSoftwarePath(value) ? value : "workflow";
 	};
 
-	const plan = (): readonly number[] => plans[path()];
+	// Set once the outline is set up, below: the plan depends on whether the visitor skipped it.
+	let briefBoard: BriefBoardHandle | null = null;
+
+	const plan = (): readonly number[] =>
+		briefPlan(path(), briefBoard !== null && !briefBoard.skipped());
+
 	const last = () => plan().length - 1;
 
 	const fields = () => [
@@ -279,6 +322,8 @@ export function setupSoftwareInquiry(
 				JSON.stringify({
 					answers: { ...payload(false), ...kept, ...answers },
 					step,
+					// The screen by its data-step: the plan changes when the outline is skipped or added back.
+					section: plan()[step],
 					submissionId,
 				}),
 			);
@@ -290,11 +335,6 @@ export function setupSoftwareInquiry(
 	function configureQuestions() {
 		const questions = briefQuestions[path()];
 
-		const footnote =
-			path() === "website"
-				? "Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details."
-				: "Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.";
-
 		questions.forEach(({ key, title, hint, placeholder, max, examples }, i) => {
 			const section = steps[i + 1],
 				box = section.querySelector<HTMLTextAreaElement>("[data-answer]")!;
@@ -305,7 +345,6 @@ export function setupSoftwareInquiry(
 			section.querySelector("h1")!.textContent = title;
 			section.querySelector("[data-answer-label]")!.textContent = title;
 			section.querySelector("[data-question-hint]")!.textContent = hint;
-			section.querySelector("[data-question-footnote]")!.textContent = footnote;
 			// More answers in other situations, read-only, for a visitor who doesn't know what to write. The placeholder holds one more.
 			section.querySelector("[data-examples-list]")?.replaceChildren(
 				...examples.map((text) => {
@@ -380,15 +419,17 @@ export function setupSoftwareInquiry(
 					);
 			}
 
-			// A link that names a path has already made the choice, so a draft saved on the choice screen resumes at the first question instead.
+			// The screen the draft was left on, by its data-step: the plan depends on the saved outline, which is read below. A
+			// draft from before the outline had screens saved only an index into the plans without one.
 			if (
-				validPath &&
+				isSoftwarePath(stored.path) &&
 				(!requestedPath || requestedPath === stored.path) &&
-				Number.isInteger(saved.step) &&
-				saved.step >= (isSoftwarePath(linkedPath) ? 1 : 0) &&
-				saved.step <= last()
+				(Number.isInteger(saved.section) ||
+					(Number.isInteger(saved.step) && saved.step >= 0))
 			)
-				step = saved.step;
+				resumeAt = Number.isInteger(saved.section)
+					? saved.section
+					: plans[stored.path][saved.step];
 
 			if (
 				isString(saved.submissionId) &&
@@ -422,9 +463,8 @@ export function setupSoftwareInquiry(
 			}),
 		);
 
-	// One Turnstile pass serves the autocomplete and the brief board: the same cookie, sent to the same path.
+	// One Turnstile pass serves the autocomplete and the outline: the same cookie, sent to the same path.
 	const startPass = startSuggestionPass(form);
-	let briefBoard: BriefBoardHandle | null = null;
 
 	const suggestions = setupBriefAutocomplete(
 		form,
@@ -439,7 +479,7 @@ export function setupSoftwareInquiry(
 		() => briefBoard?.aiChanged(),
 	);
 
-	// The written answers the board reads: the boxes the autocomplete reads, never the contact details.
+	// The written answers the outline reads: the boxes the autocomplete reads, never the contact details.
 	const writtenAnswers = () => {
 		const values = payload(false);
 
@@ -448,25 +488,31 @@ export function setupSoftwareInquiry(
 		);
 	};
 
-	const boardRoot =
+	briefBoard =
 		form.dataset.board === "true"
-			? document.querySelector<HTMLElement>("[data-brief-board]")
+			? startBoard({
+					form,
+					path,
+					answers: writtenAnswers,
+					startPass,
+					aiEnabled: () => suggestions.isEnabled(),
+					onChange: () => {
+						if (step === last()) renderSummary();
+					},
+				})
 			: null;
 
-	briefBoard = boardRoot
-		? setupBriefBoard({
-				root: boardRoot,
-				form,
-				path,
-				answers: writtenAnswers,
-				startPass,
-				aiEnabled: () => suggestions.isEnabled(),
-				live: boardRoot.dataset.live !== "false",
-				onChange: () => {
-					if (step === last()) renderSummary();
-				},
-			})
-		: null;
+	// Back to the screen the draft was left on, now that the plan is known. One that the plan no longer has (a lane screen
+	// of a skipped outline, or an index past the end) opens the first written question.
+	if (resumeAt !== undefined) {
+		const at = plan().indexOf(resumeAt);
+
+		step = at >= (isSoftwarePath(linkedPath) ? 1 : 0) ? at : 1;
+	}
+
+	/** A lane screen's position in the plan; it is only asked while the outline is in the plan. */
+	const laneIndex = (lane: Lane) =>
+		plan().indexOf(LANE_STEPS[LANES.indexOf(lane)]);
 
 	function renderSummary() {
 		const list = form.querySelector<HTMLDListElement>("[data-review]")!;
@@ -511,7 +557,7 @@ export function setupSoftwareInquiry(
 			list.appendChild(dd);
 		}
 
-		// The board's outline, as it will be sent: each item with where it came from. Suggestions not kept are not listed.
+		// The outline, as it will be sent: each item with where it came from. Suggestions not kept are not listed.
 		const outline = briefBoard?.outline();
 
 		if (outline) {
@@ -529,9 +575,9 @@ export function setupSoftwareInquiry(
 					origin = document.createElement("span");
 
 				origin.className = "review-outline-origin";
-				// An answered question reads as it did on the board.
+				// An answered question reads as it did on its lane screen.
 				origin.textContent = ` · ${item.answer && item.origin === "kept" ? "You answered" : originLabels[item.origin]}`;
-				// Each item with its lane, as the outline is grouped on the board ("Pages: Shows").
+				// Each item with its lane, as the outline is grouped on its screens ("Pages: Shows").
 				entry.appendChild(
 					document.createTextNode(
 						`${laneLabels[path()][item.lane]}: ${item.text}`,
@@ -549,12 +595,48 @@ export function setupSoftwareInquiry(
 			edit.type = "button";
 			edit.textContent = "Edit";
 			edit.setAttribute("aria-label", "Edit Brief outline");
-			edit.addEventListener("click", () => showStep(1));
+			edit.addEventListener("click", () => showStep(laneIndex(LANES[0])));
 			dd.appendChild(items);
 			dd.appendChild(edit);
 			list.appendChild(dt);
 			list.appendChild(dd);
 		}
+
+		// Cards read from the answers that their lane has not shown the visitor: they go with the brief unless removed.
+		const unseen = briefBoard?.unseen() ?? [];
+
+		if (unseen.length) {
+			const dt = document.createElement("dt"),
+				dd = document.createElement("dd"),
+				items = document.createElement("ul");
+
+			dt.textContent = "New since you last looked";
+			items.className = "review-outline";
+			items.setAttribute("role", "list");
+
+			for (const card of unseen) {
+				const entry = document.createElement("li"),
+					edit = document.createElement("button"),
+					label = `${laneLabels[path()][card.lane]}: ${card.text}`;
+
+				entry.appendChild(document.createTextNode(`${label} `));
+				edit.type = "button";
+				edit.textContent = "Edit";
+				edit.setAttribute("aria-label", `Edit ${label}`);
+				edit.addEventListener("click", () => showStep(laneIndex(card.lane)));
+				entry.appendChild(edit);
+				items.appendChild(entry);
+			}
+
+			dd.appendChild(items);
+			list.appendChild(dt);
+			list.appendChild(dd);
+		}
+
+		// After a skip, the outline can come back from here.
+		const addBack = form.querySelector<HTMLElement>("[data-outline-add-back]");
+
+		if (addBack) addBack.hidden = !briefBoard?.skipped();
 	}
 
 	function showStep(index: number, focus = true) {
@@ -564,8 +646,8 @@ export function setupSoftwareInquiry(
 		steps.forEach((node, i) => (node.hidden = i !== section));
 
 		if (section === 1 || section === 2) suggestions.start();
-		// The board sits beside the written questions and the website's extra screens, not the contact or review steps.
-		briefBoard?.show([1, 2, 7, 8].includes(section));
+		// Leaving a lane screen, by any way out, applies what the lane held back (see leaveLane).
+		briefBoard?.screen(whereIs(section));
 		document
 			.querySelectorAll<HTMLElement>(".intake-progress li")
 			.forEach((item, i) => {
@@ -750,6 +832,24 @@ export function setupSoftwareInquiry(
 			continueStep();
 		}),
 	);
+	// "Skip these, no AI outline": the four lane screens leave the plan and the visitor goes on to the step after them.
+	form
+		.querySelectorAll<HTMLButtonElement>("[data-board-skip]")
+		.forEach((button) =>
+			button.addEventListener("click", () => {
+				const after = plan()[laneIndex(LANES[LANES.length - 1]) + 1];
+
+				briefBoard?.skip();
+				showStep(plan().indexOf(after));
+			}),
+		);
+	// "Add the outline back" (on the review, after a skip): the screens and the cards return, and the visitor stays on the review.
+	form
+		.querySelector<HTMLButtonElement>("[data-outline-add-back]")
+		?.addEventListener("click", () => {
+			briefBoard?.addBack();
+			showStep(plan().indexOf(6));
+		});
 	form.addEventListener("keydown", (event) => {
 		if (
 			(event.ctrlKey || event.metaKey) &&
@@ -818,7 +918,7 @@ export function setupSoftwareInquiry(
 		},
 		onSuccess: (result: SoftwareReceiptResult) => {
 			suggestions.clear();
-			briefBoard?.show(false);
+			briefBoard?.screen("other");
 			briefBoard?.sent();
 
 			try {

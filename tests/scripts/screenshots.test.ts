@@ -434,10 +434,10 @@ describe("screenshot coverage", () => {
 			},
 		});
 
-		expect(steps).toHaveLength(11);
+		expect(steps).toHaveLength(12);
 		expect(steps.every((step) => step.images.length === 2)).toBe(true);
-		// Nine client screens, then the owner's brief and the request list, each at desktop and phone width.
-		expect(captures.filter((item) => !item.owner)).toHaveLength(18);
+		// Ten client screens, then the owner's brief and the request list, each at desktop and phone width.
+		expect(captures.filter((item) => !item.owner)).toHaveLength(20);
 		expect(
 			captures
 				.filter((item) => !item.owner)
@@ -457,7 +457,7 @@ describe("screenshot coverage", () => {
 			{ path: "/owner/requests?kind=software", owner: true },
 			{ path: "/owner/requests?kind=software", owner: true },
 		]);
-		expect(captures).toHaveLength(22);
+		expect(captures).toHaveLength(24);
 	});
 
 	it("captures bare, expired and valid one-time landings with their document statuses and destinations", async () => {
