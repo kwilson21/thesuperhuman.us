@@ -663,7 +663,7 @@ const posts: Case[] = [
 	),
 	...outage(
 		"the session lookup fails",
-		/SELECT \* FROM software_agreement_sessions WHERE token_hash/,
+		/FROM software_agreement_sessions WHERE token_hash=\? AND purpose=\?/,
 	),
 	...outage(
 		"the draft save batch fails (its message is not returned)",
@@ -671,7 +671,7 @@ const posts: Case[] = [
 	),
 	...outage(
 		"the agreements lookup fails",
-		/SELECT \* FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+		/FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 	),
 	...outage(
 		"the client lookup fails",
@@ -679,7 +679,7 @@ const posts: Case[] = [
 	),
 	...outage(
 		"the reused MSA lookup fails",
-		/SELECT \* FROM software_agreements WHERE id=\? AND kind='msa'/,
+		/FROM software_agreements a LEFT JOIN software_agreement_artifacts f ON f\.agreement_id=a\.id WHERE a\.id=\?/,
 		1,
 		reuse(),
 	),
@@ -761,7 +761,7 @@ const posts: Case[] = [
 	),
 	...race(
 		"a signature is saved between the draft save and the agreements lookup",
-		/SELECT \* FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+		/FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 		"UPDATE software_agreements SET status='client_signed'",
 		{ agreements: "review" },
 	),
@@ -1204,7 +1204,7 @@ const gets: Case[] = [
 		{
 			failures: [
 				{
-					on: /SELECT \* FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+					on: /FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 					message: "the lookup fails",
 				},
 			],
@@ -1217,7 +1217,7 @@ const gets: Case[] = [
 		{
 			failures: [
 				{
-					on: /SELECT \* FROM software_agreement_sessions WHERE token_hash/,
+					on: /FROM software_agreement_sessions WHERE token_hash=\? AND purpose=\?/,
 					message: "the lookup fails",
 				},
 			],
@@ -1240,7 +1240,7 @@ const gets: Case[] = [
 		{
 			interleave: [
 				{
-					on: /SELECT \* FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+					on: /FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 					label: "the session is revoked after the check",
 					run: (sqlite) =>
 						sqlite.exec(
