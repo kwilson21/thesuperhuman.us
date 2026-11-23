@@ -77,7 +77,7 @@ function walk(seed: number, steps: number) {
 	const failures: string[] = [];
 
 	// The ideas a delivery added to the lane on screen during this visit, and how often each shows on the lane.
-	let visitAdded: { lane: Lane; text: string }[] = [];
+	let visitAdded: { id: string; lane: Lane; text: string }[] = [];
 	// Set when a reply says an idea the visitor edited away again, naming another open card: the visitor then leaves soon,
 	// so the held reply is applied before another replaces it.
 	let leaveSoon = false;
@@ -102,6 +102,7 @@ function walk(seed: number, steps: number) {
 		addedThenGone: 0,
 		rewordIntoEdited: 0,
 		rewordAddedCard: 0,
+		rewordOlderIntoAdded: 0,
 	};
 
 	const fail = (step: number, what: string) =>
@@ -114,12 +115,12 @@ function walk(seed: number, steps: number) {
 		// A directed case: the visitor edited away an idea a delivery added during this visit, and a reply then sent says
 		// that idea again, naming another open card of the lane. It arrives at once, and the visitor soon leaves, so the
 		// leave applies it (and must not reword that card into the idea).
-		let aimed: { lane: Lane; text: string } | undefined;
+		let aimed: { id: string; lane: Lane; text: string } | undefined;
 
 		// A second directed case: a reply that rewords, by its id, a card a delivery added during this visit arrives at once.
 		let rewordAim = false;
 
-		if (!aimed && screen && !paused && visitAdded.length && next() < 0.15) {
+		if (!aimed && screen && !paused && visitAdded.length && next() < 0.3) {
 			rewordAim = true;
 			let n: number;
 			[board, n] = sendRequest(board);
@@ -305,6 +306,45 @@ function walk(seed: number, steps: number) {
 						);
 				}
 
+				// A held reply rewords, by its id, an older unowned card into words that contain an idea a delivery added during
+				// the visit: check 10 holds that no card then says the idea again.
+				if (held && !dropped)
+					for (const item of held.reply) {
+						const older = board.cards.find((c) => c.id === item.ref);
+
+						if (
+							older &&
+							older.lane === screen &&
+							item.lane === screen &&
+							older.status === "proposed" &&
+							older.since < held.n &&
+							(restoredAt.get(older.id) ?? -1) < held.n &&
+							// No other item names the card, by its id or by saying its idea (that one may reword it).
+							held.reply.every(
+								(o) =>
+									o === item ||
+									(o.ref !== older.id &&
+										!(o.lane === older.lane && sameIdea(o.text, older.text))),
+							) &&
+							visitAdded.some(
+								(i) =>
+									i.lane === item.lane &&
+									sameIdea(i.text, item.text) &&
+									i.id !== older.id,
+							)
+						) {
+							seen.rewordOlderIntoAdded++;
+
+							if (
+								left.cards.find((c) => c.id === older.id)?.text !== older.text
+							)
+								fail(
+									step,
+									`leaving ${screen} reworded ${older.id} into "${item.text}", an idea a delivery added during the visit`,
+								);
+						}
+					}
+
 				// 11. leaveUpdatesAddedCard: an untouched card a delivery added during the visit takes the wording of a held
 				// reply that names it by its id, when nothing else forbids it (no other card or item says that idea).
 				if (held && !dropped)
@@ -318,9 +358,7 @@ function walk(seed: number, steps: number) {
 							card.status !== "proposed" ||
 							card.since >= held.n ||
 							(restoredAt.get(card.id) ?? -1) >= held.n ||
-							!visitAdded.some(
-								(i) => i.lane === card.lane && sameIdea(i.text, card.text),
-							) ||
+							!visitAdded.some((i) => i.id === card.id) ||
 							held.reply.filter((o) => o.ref === card.id).length !== 1 ||
 							held.reply.some(
 								(o) =>
@@ -339,7 +377,7 @@ function walk(seed: number, steps: number) {
 								(i) =>
 									i.lane === item.lane &&
 									sameIdea(i.text, item.text) &&
-									!sameIdea(i.text, card.text),
+									i.id !== card.id,
 							) ||
 							(item.basis === "said" && !quotedFrom(item.quote, answers()))
 						)
@@ -527,6 +565,37 @@ function walk(seed: number, steps: number) {
 				if (next() < 0.9) leaveSoon = true;
 			}
 
+			// Some replies reword, by its id, an older open card into words that contain an idea a delivery added during this
+			// visit (whether or not that card still says it), and the leave must not do it.
+			if (visitAdded.length && (rewordAim || next() < 0.6)) {
+				const idea = pick(visitAdded)!;
+
+				const open = board.cards.filter(
+					(c) =>
+						c.lane === idea.lane &&
+						c.status === "proposed" &&
+						c.since < request.n &&
+						!visitAdded.some((i) => i.id === c.id),
+				);
+
+				// Mostly a card whose own words sit inside the idea (the case a word comparison would mistake for its card).
+				const inside = open.filter((c) => sameIdea(c.text, idea.text));
+				const older = pick(inside.length && next() < 0.8 ? inside : open);
+
+				if (older) {
+					reply.push({
+						ref: older.id,
+						lane: idea.lane,
+						text: `${idea.text} each week`,
+						basis: "suggested",
+						quote: "",
+						reason: "",
+					});
+
+					if (next() < 0.9) leaveSoon = true;
+				}
+			}
+
 			if (aimed) {
 				const other = pick(
 					board.cards.filter(
@@ -659,7 +728,7 @@ function walk(seed: number, steps: number) {
 						!board.cards.some((b) => b.id === c.id) &&
 						c.status === "proposed"
 					)
-						visitAdded.push({ lane: c.lane, text: c.text });
+						visitAdded.push({ id: c.id, lane: c.lane, text: c.text });
 
 			board = applied;
 
@@ -728,6 +797,7 @@ describe("the board's properties on the real code", () => {
 			"addedThenGone",
 			"rewordIntoEdited",
 			"rewordAddedCard",
+			"rewordOlderIntoAdded",
 		] as const)
 			expect(total(key), key).toBeGreaterThan(20);
 	});

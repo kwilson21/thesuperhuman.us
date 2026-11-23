@@ -213,9 +213,14 @@ export type HeldReply<L extends string = Lane> = {
 	readonly refs: readonly string[];
 	/**
 	 * The ideas (lane and words) any delivery added to the lane while it has been on screen, across replies that replaced
-	 * one another: leaving does not add them again, whatever the visitor did to those cards (edited, set aside).
+	 * one another, each with the id of the card the delivery added for it: leaving does not add them again, whatever the
+	 * visitor did to those cards (edited, set aside).
 	 */
-	readonly added: readonly { readonly lane: L; readonly text: string }[];
+	readonly added: readonly {
+		readonly id: string;
+		readonly lane: L;
+		readonly text: string;
+	}[];
 };
 
 export type Board<L extends string = Lane> = {
@@ -1030,8 +1035,15 @@ type Scope<L extends string> = {
 	readonly skip: L | null;
 	/** The only lane whose cards the pass may change or withdraw (null: any). */
 	readonly only: L | null;
-	/** Ideas the pass does not add as new cards, though the reply carries them (a lane's ideas a delivery already added). */
-	readonly notAdded: readonly { readonly lane: L; readonly text: string }[];
+	/**
+	 * Ideas the pass does not add as new cards, though the reply carries them (a lane's ideas a delivery already added),
+	 * each with the id of the card the delivery added: no other card is reworded into the idea, and that card may be.
+	 */
+	readonly notAdded: readonly {
+		readonly id: string;
+		readonly lane: L;
+		readonly text: string;
+	}[];
 };
 
 /**
@@ -1052,7 +1064,9 @@ function reconcile<L extends string>(
 	answers: string,
 	refs: readonly string[],
 	scope: Scope<L>,
-): Applied<L> & { readonly addedItems: readonly ReplyCard<L>[] } {
+): Applied<L> & {
+	readonly addedItems: readonly { id: string; lane: L; text: string }[];
+} {
 	const cards = [...board.cards];
 
 	// Whether the pass may change or withdraw a card of this lane.
@@ -1140,7 +1154,7 @@ function reconcile<L extends string>(
 				(idea) =>
 					idea.lane === item.lane &&
 					sameIdea(idea.text, item.text) &&
-					!sameIdea(idea.text, card.text),
+					idea.id !== card.id,
 			) ||
 			removedIdea(board, item)
 		)
@@ -1172,7 +1186,7 @@ function reconcile<L extends string>(
 	let nextId = board.nextId,
 		added = 0;
 
-	const addedItems: ReplyCard<L>[] = [];
+	const addedItems: { id: string; lane: L; text: string }[] = [];
 
 	for (const item of scope.add ? fresh : []) {
 		// A pass limited to one lane adds to that lane only: the others took the reply in full when it arrived.
@@ -1192,8 +1206,10 @@ function reconcile<L extends string>(
 		)
 			continue;
 
+		const id = `c${nextId++}`;
+
 		kept.push({
-			id: `c${nextId++}`,
+			id,
 			lane: item.lane,
 			text: item.text,
 			status: "proposed",
@@ -1205,7 +1221,7 @@ function reconcile<L extends string>(
 			edited: false,
 		});
 		added++;
-		addedItems.push(item);
+		addedItems.push({ id, lane: item.lane, text: item.text });
 	}
 
 	return {
@@ -1288,7 +1304,7 @@ export function applyReplyIn<L extends string>(
 							...(board.deferred?.lane === onScreen
 								? board.deferred.added
 								: []),
-							...addedItems.map(({ lane, text }) => ({ lane, text })),
+							...addedItems,
 						],
 					}
 				: result.board.deferred,
@@ -1304,7 +1320,7 @@ export function applyReplyIn<L extends string>(
  * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
  * listed before the held reply applied, so a card the leave adds counts as new and one it withdraws as removed. A
  * idea a delivery added to the lane while it was on screen (any reply's, including one a newer reply replaced) is not
- * added again, and no other card is reworded into it, though a reply still carries it: the held reply is applied whole,
+ * added again, and no card but the one the delivery added for it (known by its id, not by its words) is reworded into it, though a reply still carries it: the held reply is applied whole,
  * so the card still counts as named, and the visitor may have edited it or set it aside.
  */
 export function leaveLane(

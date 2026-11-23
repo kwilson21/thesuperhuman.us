@@ -2044,6 +2044,49 @@ describe("the lane on screen", () => {
 		},
 	);
 
+	it("does not reword an older card whose words sit inside an idea a delivery added, once the added card was edited away", () => {
+		let b = started(suggested("parts", "Booking"));
+		b = editCard(b, "c1", "Payments");
+
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[
+				suggested("parts", "Payments", "c1"),
+				suggested("parts", "Online booking for classes"),
+			],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		const added = card(b, "Online booking for classes");
+
+		// Undo brings c1 back to "Booking", unowned; the visitor then edits the added card away.
+		b = undo(b);
+		expect(card(b, "Booking").id).toBe("c1");
+		b = editCard(b, added.id, "Gift cards");
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[
+				suggested("parts", "Online booking for classes each week", "c1"),
+				suggested("parts", "Gift cards", added.id),
+			],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(left.cards.find((c) => c.id === "c1")?.text).toBe("Booking");
+		expect(left.cards.find((c) => c.id === added.id)?.text).toBe("Gift cards");
+	});
+
 	it("does not bring back, on leave, a card the delivery added and the visitor then set aside", () => {
 		let b = started(suggested("parts", "Shows"));
 		let n: number;
