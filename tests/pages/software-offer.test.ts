@@ -4404,7 +4404,7 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 		request: new Request("https://thesuperhuman.us/privacy"),
 	});
 
-	expect(notice).toContain("Updated November 15, 2026");
+	expect(notice).toContain("Updated November 22, 2026");
 	expect(notice).toContain('id="software-briefs"');
 	expect(notice).toContain(
 		"Suggestion limits, and the outline’s own limits, use counters derived from your IP address, kept for up to two days",

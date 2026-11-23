@@ -6,6 +6,7 @@ import {
 	propertiesWithoutMutant,
 } from "../../scripts/lib/quint-run.mjs";
 import {
+	allowanceMutants,
 	agreementLinkMutants,
 	audioProjectFilesMutants,
 	audioProjectMessagesMutants,
@@ -14,6 +15,8 @@ import {
 	briefCopyMutants,
 	budgetMutants,
 	discountMutants,
+	offerBoardMutants,
+	pricingMutants,
 	inquiryMutants,
 	musicMutants,
 	publicationMutants,
@@ -354,6 +357,48 @@ describe("the brief board model's mutant registry", () => {
 	});
 });
 
+// The three models added with the offer board: each property in allProperties has a mutant that breaks it, and every
+// mutant names a module of the model.
+describe.each([
+	["offer-board", "offerBoardModel", "offerBoard", offerBoardMutants, 10],
+	["daily-allowance", "dailyAllowanceModel", "allowance", allowanceMutants, 4],
+	["pricing-save", "pricingSaveModel", "pricing", pricingMutants, 3],
+])(
+	"the %s model's mutant registry",
+	(file, base, current, registry, propertyCount) => {
+		const model = readFileSync(
+			new URL(`../../verification/${file}.qnt`, import.meta.url),
+			"utf8",
+		);
+
+		it("every property in allProperties has a mutant that must break it", () => {
+			const properties: string[] = propertiesOf(model);
+
+			expect(properties).toHaveLength(propertyCount);
+			expect(propertiesWithoutMutant(properties, registry)).toEqual([]);
+		});
+
+		it("every mutant names a module in the model, and every module is listed", () => {
+			const modules = [
+				...model.matchAll(
+					new RegExp(`^module (\\w+) \\{ import ${base}`, "gm"),
+				),
+			].map((match) => match[1]);
+
+			expect([...modules].sort()).toEqual(
+				[...Object.keys(registry), current].sort(),
+			);
+		});
+
+		it("every mutant property is one of allProperties", () => {
+			const properties: string[] = propertiesOf(model);
+
+			for (const { property } of Object.values<{ property: string }>(registry))
+				expect(properties).toContain(property);
+		});
+	},
+);
+
 describe("the mutants of verification/software-inquiry.qnt", () => {
 	const model = readFileSync(
 		new URL("../../verification/software-inquiry.qnt", import.meta.url),
@@ -646,13 +691,16 @@ describe("the brief copy model", () => {
 });
 
 describe("the models the driver runs", () => {
-	it("lists the thirteen models, each with its own registry", () => {
+	it("lists the sixteen models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
 			"verification/signin-codes.qnt",
 			"verification/music-playback.qnt",
 			"verification/brief-board.qnt",
+			"verification/offer-board.qnt",
+			"verification/daily-allowance.qnt",
+			"verification/pricing-save.qnt",
 			"verification/software-inquiry.qnt",
 			"verification/suggestion-budget.qnt",
 			"verification/publication-journal.qnt",
@@ -667,14 +715,17 @@ describe("the models the driver runs", () => {
 		expect(models[2].mutants).toBe(signinMutants);
 		expect(models[3].mutants).toBe(musicMutants);
 		expect(models[4].mutants).toBe(boardMutants);
-		expect(models[5].mutants).toBe(inquiryMutants);
-		expect(models[6].mutants).toBe(budgetMutants);
-		expect(models[7].mutants).toBe(publicationMutants);
-		expect(models[8].mutants).toBe(agreementLinkMutants);
-		expect(models[9].mutants).toBe(audioProjectMessagesMutants);
-		expect(models[10].mutants).toBe(audioProjectFilesMutants);
-		expect(models[11].mutants).toBe(audioProjectNoticesMutants);
-		expect(models[12].mutants).toBe(briefCopyMutants);
+		expect(models[5].mutants).toBe(offerBoardMutants);
+		expect(models[6].mutants).toBe(allowanceMutants);
+		expect(models[7].mutants).toBe(pricingMutants);
+		expect(models[8].mutants).toBe(inquiryMutants);
+		expect(models[9].mutants).toBe(budgetMutants);
+		expect(models[10].mutants).toBe(publicationMutants);
+		expect(models[11].mutants).toBe(agreementLinkMutants);
+		expect(models[12].mutants).toBe(audioProjectMessagesMutants);
+		expect(models[13].mutants).toBe(audioProjectFilesMutants);
+		expect(models[14].mutants).toBe(audioProjectNoticesMutants);
+		expect(models[15].mutants).toBe(briefCopyMutants);
 	});
 
 	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {

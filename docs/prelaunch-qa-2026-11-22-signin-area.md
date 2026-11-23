@@ -48,14 +48,14 @@ model extension merged as #360 and the behaviour fixes S1 to S3 as #367 (records
   refusal: the generic 200 and the same cookie on a code request, the one 401 on an entry. A 409 would tell a stranger
   that the address had an open project and room for a code when the request read it, which the non-interference
   property forbids. The rule files `signin-issue.ts` and `signin-complete.ts` record it.
-- **UNVERIFIED, with no owner-accepted exception · The expiry gap.** Not an owner decision yet: asked of the owner on
-  2026-11-22 with #360, not yet answered. An entry that read its code just before the code expired is accepted just
-  after, in the gap of one round trip between its read and its write batch (`docs/verification.md`, "What the time
-  alignment found (for the owner)"). The options: keep the code as it is (recommended; the code was valid when the
-  entry read it, and the gap is one round trip after a ten-minute life), or re-check expiry at write time, which needs
-  a second clock reading that the non-interference test's clock guard fails on today. The conversion keeps today's
-  behaviour, so it neither widens nor closes the gap; a change, if asked for, is a behaviour fix in its own pull
-  request.
+- **Decided after release · The expiry gap.** Asked of the owner on 2026-11-22 with #360; the owner answered "You
+  decide" (in conversation, 2026-11-22), and Claude Code decided as recommended: keep the code as it is. An entry that
+  read its code just before the code expired is accepted just after, in the gap between its clock reading (made before
+  its two hashes and its read batch) and its write batch (`docs/verification.md`, "What the time alignment found (for
+  the owner)"). The options were: keep the code as it is (the code was valid at the entry's clock reading, and the gap
+  is milliseconds after a ten-minute life), or re-check expiry at write time, which needs a second clock reading that
+  the non-interference test's clock guard fails on today. The conversion keeps today's behaviour, so it neither widens
+  nor closes the gap; a change, if asked for, is a behaviour fix in its own pull request.
 
 ## The conversion
 
@@ -216,9 +216,8 @@ UNVERIFIED until checked:
 ## 1. Purpose and content
 
 - **PASS · Changes, instructions and audience.** Three public routes converted; no answer in the corpora changes.
-- **PASS, with exception · Approved decisions.** Quoted above, the 409 exception included. The exception, which the
-  owner has not accepted: the expiry gap is UNVERIFIED (under "Owner decisions"); the conversion keeps today's
-  behaviour.
+- **PASS · Approved decisions.** Quoted above, the 409 exception included. The expiry gap was decided after release
+  (under "Owner decisions"): the conversion keeps today's behaviour, as decided.
 - **N/A · Public copy, first screen, navigation.** No page changes; every sentence a visitor reads is byte-identical.
 
 ## 2. Search and sharing
@@ -254,7 +253,7 @@ UNVERIFIED until checked:
 
 - **PASS · Checks and neutrality.** See "Golden neutrality" and "Evidence".
 - **N/A · Bindings, migrations.** None.
-- **UNVERIFIED, with no owner-accepted exception · The expiry gap.** Under "Owner decisions".
+- **PASS, decided after release · The expiry gap.** Under "Owner decisions".
 - **PASS · Reviews.** #368: Codex's code and security reviews found nothing; an independent review found a guard missing
   for a counted row whose count is null (the store now answers no count, refused as the old `Infinity` was) and a test
   gap (differential cases at the exact character limits), both fixed in `2aa90db6`; a review of the merge of `main` and
