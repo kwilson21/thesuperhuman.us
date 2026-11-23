@@ -618,8 +618,8 @@ it for the archive link, the downloads and the session reads (`AgreementStoreFai
 is `GuardRefused`; a UNIQUE failure that section 2 reads and decides again is `ChangedSinceRead`, and the others it
 names (the signature and notice UNIQUEs, countersign's packet and copy keys) are `GuardRefused`; a FOREIGN KEY failure
 with the evidence read after it is `ChangedSinceRead` (the review's client) or `GuardRefused` (an agreement deleted
-under a record). Statements keep today's SQL where a golden hook matches it; where one must change, its pattern changes
-in the re-record commit and the `trigger-hit` marker stays the same.
+under a record). Statements keep today's SQL where a golden hook matches it; where one must change, its pattern is
+re-pointed in a commit before the route PR's re-record (section 7), and the `trigger-hit` marker stays the same.
 
 | Group | Functions | Today |
 |---|---|---|
@@ -920,7 +920,7 @@ payment_failed or uncollectible), refunded or not, or is paid and not refunded. 
 `countsAsFirstDeposit` leaves out every refunded invoice (software-deposit-block.ts:35-42), for an unpaid invoice with a
 refund recorded. The conversion keeps A12's meaning; aligning the two would be a behaviour fix of its own.
 `tests/lib/software-deposit-block.test.ts` runs A12's SQL (agreement.ts:34-35) on sqlite against it for every status,
-kind, milestone and refund. It lands in the conversion's bottom PR, with the rules. The SOW's printed amounts are
+kind, milestone and refund. It landed in part 1 (#401), with the rules. The SOW's printed amounts are
 formatting, held by the review corpus and the discount plan's contracts.
 
 ### The golden corpora
@@ -1013,7 +1013,7 @@ fixtures hold the 500 that `f78896099` brought: `tests/golden/owner-agreements-a
 
 ## 9. What the rules PR found
 
-The first PR of the stack (readers, machines, rules) holds each rule to today's code on sqlite and, where it could, runs
+Part 1 (readers, machines, rules) holds each rule to today's code on sqlite and, where it could, runs
 today's function beside the rule on the same database. What it found, for the store, flows and routes that follow:
 
 - **Rules are staged.** Where today's code reads, draws an id or calls an outside service between two decisions, the
@@ -1041,12 +1041,11 @@ today's function beside the rule on the same database. What it found, for the st
   a contractor notice email that is not text (today 409, 500 or 200 by its type; the review always writes text) is
   `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.
 - **New reads.** Before claiming a packet, a copy or a notice, and before the contractor's save, the flows read the row
-  they decide on; PR 2 checks each new read against the golden hook patterns, which count statements by `nth`.
+  they decide on; part 2 checks each new read against the golden hook patterns, which count statements by `nth`.
 - **Hook patterns parts 3 and 4 re-point** (part 3 the client corpora: `offer-link`, `offer-verify-page`,
   `offer-review`, `offer-sign`; part 4 the owner corpora): the store keeps today's text wherever a golden hook picks a
-  statement; where a read had to change, the pattern below no longer picks it, and the route PR's re-record commit
-  re-points it to the converted
-  statement (the same operation, table and access, so its `trigger-hit` marker is unchanged). Each store test lists its
+  statement; where a read had to change, the pattern below no longer picks it, and the route PR re-points it, in a commit
+  before its re-record, to the converted statement (the same operation, table and access, so its `trigger-hit` marker is unchanged). Each store test lists its
   own and checks them against the corpora.
   - `offer-link`, "the used_at update after a sent email fails": `/UPDATE software_agreement_links SET used_at=\? WHERE
     purpose/`. A6 consumes the older links through `consumeLinks` (`WHERE id IN (...)`), as `agreements-link` does.
@@ -1087,7 +1086,7 @@ today's function beside the rule on the same database. What it found, for the st
     (`tests/server/agreement-store-retention.test.ts` checks both).
 
   `tests/api/signing-owner-outages.test.ts` picks today's deposit check and today's sent-offer read by the same texts
-  (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which PR 4 deletes with its tests.
+  (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which part 4 deletes with its tests.
 - **Retention's two reads.** Today's eligibility query (`SELECT a.* ... WHERE eligible ORDER BY a.id LIMIT 20`) returns
   at most 20 rows. Read as plain rows for the rule, every agreement with every column (`canonical_text` alone may be 256
   KiB) would outgrow D1's result limit long before today's query does, on every preview and again in the apply's fresh

@@ -17,9 +17,10 @@ changes no answer.
 New code that nothing calls yet, for the signing and agreement routes to use in landings 2 and 3:
 
 - **Part 1, readers, machines and rules** (#396 to #407, and #409's fixes): the Effect Schema readers of the link,
-  review and sign bodies and of the owner's agreements command, with frozen Zod copies and differential tests; the `agreementDocument`, `agreementPacket` and
-  `agreementMessage` machines; one rule file per row of plan section 2 under `src/server/rules/`; `abandonBlocked` with
-  its LemmaScript contract; and tests that hold each kept SQL guard to its rule.
+  review and sign bodies and of the owner's agreements command, with frozen Zod copies and differential tests; the
+  `agreementDocument`, `agreementPacket` and `agreementMessage` machines; one rule file per row of plan section 2 under
+  `src/server/rules/`; `abandonBlocked` with its LemmaScript contract; and tests that hold each kept SQL guard to its
+  rule.
 - **Part 2, store, services and answers** (#411 to #420): `src/server/agreement-store.ts` (one function per statement or
   batch), `src/server/agreement-services.ts` (mail key and attachments, the allowance's answer, the packet build and
   render, the PDF check), and each route's fixed answers in `src/lib/agreement-access.ts`.
@@ -97,8 +98,8 @@ On the integration branch's tree (identical to `claude/signing-store-10` at `c96
 - On #418's branch, every golden corpus (`vitest run tests/golden`): 93 files, 9,842 passed. These record today's live
   answers, so they are what shows the sign-in routes and the archive link answer as before.
 - The models were last checked exhaustively in #383 (`docs/verification.md`, "Exhaustive, after the signing extension";
-  `docs/prelaunch-qa-2026-11-23-signing-models.md`), where `offerBoard` and `allowance` were stopped early. Nothing under
-  `verification/` changed since.
+  `docs/prelaunch-qa-2026-11-23-signing-models.md`), where `offerBoard` and `allowance` were stopped early. None of
+  those models changed since; `main` has since added an unrelated one (`market-refresh.qnt`, #378).
 
 ## Applicable Definition of Done
 
@@ -131,8 +132,8 @@ On the integration branch's tree (identical to `claude/signing-store-10` at `c96
 
 ### Software agreement signing
 
-- **N/A.** No signing route runs new code in this landing. Landings 2 and 3, which switch the signing routes, carry
-  these checks.
+- **N/A.** No signing route runs the new rules or store in this landing; the archive link's two changes (#418, #419)
+  answer as before (section 5). Landings 2 and 3, which switch the signing routes, carry these checks.
 
 ## Remaining work
 
