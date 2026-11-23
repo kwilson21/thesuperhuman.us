@@ -4,11 +4,14 @@
 // `deliverAgreementNotifications` in src/lib/agreement-artifacts.ts, and the two reset statements of the retry-copy
 // action in src/pages/api/owner/requests/[id]/agreement.ts). Whether a status may move is the machine's answer (`MESSAGE_MOVES`,
 // src/server/machines/agreement-message.ts). Nothing is refused: a row that cannot move is skipped, as today.
-// - `copyClaimable`: a party's copy is claimed only when the party signed, the copy is pending (CLAIM), and its agreement
-//   is executed with its archive open. Re-checked at write time by the claim's compare-and-set (A18).
-// - `noticeClaimable`: a signing notice is claimed only when it is pending and current: its agreement is client_signed,
-//   its archive open, and its request has no project (today's `currentSigningNotification`). Re-checked at write time by
-//   the claim's compare-and-set (A19).
+// - `copySigned`, then `copyClaimable`: a party with no signature is skipped before an attempt is drawn, as today; then
+//   the copy is claimed only when it is pending (CLAIM) and its agreement is executed with its archive open. Re-checked
+//   at write time by the claim's compare-and-set (A18), which re-checks the copy and its agreement, not the signature
+//   (retention deletes a signature only with its agreement, after closing its archive, which the claim refuses).
+// - `noticeAgreementFound`, then `noticeClaimable`: nothing is drawn when the agreement is gone, as today; then, per kind,
+//   a signing notice is claimed only when it is pending and current: its agreement is client_signed, its archive open,
+//   and its request has no project (today's `currentSigningNotification`). Re-checked at write time by the claim's
+//   compare-and-set (A19).
 // - `messageOutcome`: an accepted send is sent, a refused one failed, and an uncertain one writes nothing, so the row stays
 //   sending for the owner to judge. The write is made only by the attempt that claimed the row while it is still sending
 //   (SEND and FAIL, A18 and A19), a compare-and-set with no read ahead of it.
@@ -95,7 +98,34 @@ export type CopyClaimFacts = {
 	readonly agreement: MessageAgreement | null;
 };
 
-/** The party's copy is claimed for sending by this attempt, or skipped. */
+/** The party's signature, as today's copy delivery reads it before it draws an attempt. */
+export type CopySignatureFacts = {
+	readonly signature: { readonly receipt_id: string } | null;
+};
+
+/**
+ * Stage 1 of a party's copy: today's delivery skips a party with no signature before it draws the attempt
+ * (`deliverAgreementCopies`, the `continue` before `crypto.randomUUID()`), so a flow decides this first and draws the
+ * attempt and the time only for a party that signed; `copyClaimable` then decides the claim with them. Deciding both at
+ * once would draw an attempt for a party with no signature and move every id drawn after it (golden retry-copy "the
+ * client signature row is missing").
+ */
+export const copySigned = rule({
+	name: "consider a party's copy only once the party signed",
+	given: (_request: null, facts: CopySignatureFacts) => facts,
+	nothingToDoIf: term(
+		"the party has not signed",
+		(given: CopySignatureFacts) => given.signature === null,
+	),
+	refusals: [],
+	// A gate: what it answers is handed to the flow, which saves nothing for it.
+	// SAFETY: `writes` runs only when `nothingToDoIf` did not hold, which ruled out a missing signature.
+	writes: (given) => given.signature as { readonly receipt_id: string },
+	writesText:
+		"nothing: the flow draws the attempt and the time, then decides the claim",
+});
+
+/** Stage 2 of a party's copy: claimed for sending by the attempt drawn after `copySigned`, or skipped. */
 export const copyClaimable = rule({
 	name: "claim a party's copy of the signed agreement for sending",
 	given: (request: ClaimRequest, facts: CopyClaimFacts): ClaimGiven => ({
@@ -121,7 +151,36 @@ export type NoticeClaimFacts = {
 	readonly agreement: MessageAgreement | null;
 };
 
-/** The notice is claimed for sending by this attempt, or skipped. */
+/** The agreement as today's notice delivery reads it first: its request and the client's receipt, or null. */
+export type NoticeAgreementRow = {
+	readonly request_id: string;
+	readonly receipt_id: string | null;
+};
+
+/**
+ * Stage 1 of the signing notices: today's delivery returns when the agreement is gone, before it draws any attempt
+ * (`deliverAgreementNotifications`, `if (!agreement) return`), so a flow decides this first and then, for each kind in
+ * order, draws the attempt and the time and asks `noticeClaimable`.
+ */
+export const noticeAgreementFound = rule({
+	name: "consider the signing notices only while their agreement exists",
+	given: (_request: null, facts: NoticeAgreementRow | null) => ({
+		agreement: facts,
+	}),
+	nothingToDoIf: term(
+		"the agreement is gone",
+		(given: { readonly agreement: NoticeAgreementRow | null }) =>
+			given.agreement === null,
+	),
+	refusals: [],
+	// A gate: what it answers is handed to the flow, which saves nothing for it.
+	// SAFETY: `writes` runs only when `nothingToDoIf` did not hold, which ruled out a missing agreement.
+	writes: (given) => given.agreement as NoticeAgreementRow,
+	writesText:
+		"nothing: for each kind, the flow draws the attempt and the time, then decides the claim",
+});
+
+/** Stage 2 of a signing notice: claimed for sending by the attempt drawn for its kind, or skipped. */
 export const noticeClaimable = rule({
 	name: "claim a signing notice for sending",
 	given: (request: ClaimRequest, facts: NoticeClaimFacts): ClaimGiven => ({
