@@ -2,7 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: to be filled in when it is opened. Merge facts are recorded after the merge, in the next pull request.
+Pull request: [#387](https://github.com/kwilson21/thesuperhuman.us/pull/387), merged at 10:37:49 UTC as `6f86f18b`
+(head `ba26709c`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The 2026-11-14 decision (an unexpected database or store failure answers 500 with the route's
 fixed sentence and never the error's own text; a lost race or a stale version 409; 503 only for a missing binding or a
@@ -12,8 +13,8 @@ known unavailable dependency) gives B1, B2, B3, B4 and B8. B3's answer for a mis
 copy whose file is missing with a logged 500, not the 404 the visitor routes give (the alternative is 404 "Not found").
 Section 8 of the plan, PR order item 4, third bullet, makes this the owner routes' fix, made on today's code before the
 conversion so that the conversion changes no behaviour; no `conversion` label. The work was done with Claude Code.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. No migration, no
-binding.
+Rollback revision: `f9c215e3`, the revision of `main` before the merge; or `git revert -m 1 6f86f18b`. No migration,
+no binding.
 
 ## Scope
 
@@ -176,7 +177,7 @@ binding.
   line never carries the address in a database message (`logUnexpected` redacts it), and no answer carries an error's
   text. `tests/lib/software-agreements.test.ts` passes the failures to `agreementDownload` and expects the upload's
   failed batch to answer the 500 and log once.
-- PENDING: reviews of the pull request, CI on its head, and the deploy and live check after merge.
+- Reviews, CI, the deploy and the live check: see section 7.
 
 ## 1 to 4. Content, search, accessibility, performance
 
@@ -196,7 +197,18 @@ binding.
 ## 7. Release and final QA
 
 - **PASS · Checks, rollback.** See above.
-- **PENDING · Reviews, CI, production revision and live check.**
+- **PASS · Reviews.** Codex's code and security reviews of `ba26709c` found nothing. An independent Claude Code pass
+  found nothing blocking (the severity bar of CLAUDE.md applied: a large pull request): exactly the 85 cases changed,
+  each only in its answer, one log line and the two second triggers now optional; the deposit refusal (A12) holds and
+  no store failure lets an abandon or end proceed; no write was reordered or dropped; the three judgment calls are
+  acceptable. Its notes, not changed: retry-artifact's renderer import is not marked as a store call, so a failed
+  import still answers the generic 409 (the conversion makes it a defect); an upload whose request is deleted between
+  the refused batch and the read answers 404 rather than 409 (both refusals, no golden case); the attachment GET still
+  binds a missing id as `undefined` (unchanged, and Astro always supplies the segment).
+- **PASS · CI.** On the head `ba26709c` before merge, all 20 check runs succeeded, the Workers preview build among them.
+- **PASS · Production revision and live check.** After merge, on `6f86f18b`: the Workers build succeeded (10:40:52 UTC)
+  and `validate` succeeded (10:41:16 UTC). Live check at 10:41:55 UTC: `https://thesuperhuman.us/` answered 200, and an
+  owner route without sign-in answered 302 to Cloudflare Access, as before.
 - **UNVERIFIED · The 500 answers live.** No database or bucket fault can be induced live; the answers are held by the
   tests and the golden corpora.
 - **N/A · Bindings, migrations.** None.
