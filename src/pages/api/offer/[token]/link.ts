@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { z } from "astro/zod";
 import { agreementJson, issueAgreementLink } from "~/lib/agreement-access";
 import { canonicalAgreementRequest } from "~/lib/agreement-host";
+import { logUnexpected } from "~/server/failure";
+import { raisedByJsonGuard } from "~/server/guarded-save";
 import { linkSettings } from "~/server/rules/agreement-link";
 import {
 	nativeAgreementRoute,
@@ -51,6 +53,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			request,
 			input.data,
 			params.token,
+			raisedByJsonGuard,
 		);
 
 		if (
@@ -69,10 +72,14 @@ const post: APIRoute = async ({ request, locals, params }) => {
 		}
 
 		return response;
-	} catch {
+	} catch (error) {
+		// A read, an allowance, the link batch, the clean-up or the update that failed, or an offer whose terms are not JSON,
+		// is a fault of the site: the fixed sentence as a 500, logged once without what was sent (the archive link's answer).
+		logUnexpected("Agreement link", error);
+
 		return agreementJson(
 			{ ok: false, error: "Agreement sign-in is temporarily unavailable." },
-			503,
+			500,
 		);
 	}
 };

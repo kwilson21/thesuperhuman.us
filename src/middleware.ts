@@ -7,6 +7,7 @@ import { defineMiddleware } from "astro:middleware";
 import { mainSitePath, rewritePathForHost } from "~/lib/host-routing";
 import { verifyOwnerAccess } from "~/lib/owner-access";
 import { withSecurityHeaders } from "~/lib/security-headers";
+import { fromThisSite } from "~/lib/same-origin";
 
 const ownerPrivateHeaders = {
 	"cache-control": "private, no-store",
@@ -88,7 +89,7 @@ async function handle(
 		!context.isPrerendered &&
 		ownerApi &&
 		!["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-		request.headers.get("origin") !== url.origin
+		!fromThisSite(request, url.origin)
 	) {
 		return new Response(
 			`Cross-site ${request.method} owner actions are forbidden`,
@@ -100,7 +101,7 @@ async function handle(
 		!context.isPrerendered &&
 		studioApi &&
 		!["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-		request.headers.get("origin") !== url.origin
+		!fromThisSite(request, url.origin)
 	) {
 		return new Response("Cross-site studio actions are forbidden", {
 			status: 403,
@@ -136,7 +137,7 @@ async function handle(
 				"text/plain",
 			].some((formType) => type.toLowerCase().includes(formType));
 
-		if (formLike && request.headers.get("origin") !== url.origin) {
+		if (formLike && !fromThisSite(request, url.origin)) {
 			return new Response(
 				`Cross-site ${request.method} form submissions are forbidden`,
 				{ status: 403 },

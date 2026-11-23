@@ -59,7 +59,7 @@ stateDiagram-v2
 
 Be exact about the strength of each check:
 
-- **CI, every run:** `quint run` random simulation. The invoice-events model (audio and software) runs 100,000 random executions of up to 20 steps with a fixed seed, and the discount-offers model 10,000 of up to 50 steps for each of its two modules (its steps cost about three times as much, and a send or a decline takes three of them); every property must hold in every state of every execution. This is strong evidence, not a proof: a rare interleaving can be missed. The mutants (below) are what show it finds real bugs.
+- **CI, every run:** `quint run` random simulation. The invoice-events model (audio and software) runs 100,000 random executions of up to 20 steps with a fixed seed, and the discount-offers model 10,000 of up to 80 steps for each of its two runs that must pass (the code and its equivalent mutant) and up to 20,000 of up to 50 steps for each mutant check (its steps cost about three times as much, and a send or a decline takes three of them); every property must hold in every state of every execution. This is strong evidence, not a proof: a rare interleaving can be missed. The mutants (below) are what show it finds real bugs.
 - **By hand, before changing the rule:** `pnpm run verify:quint:exhaustive` runs Apalache, which searches every order of events and steps up to a step bound, with 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. It needs Java 17 or newer, downloads Apalache on first use, and is slow (minutes at a shallow bound, hours past about 9 steps), so CI does not run it. Run it before changing a modelled rule, and say the bound and the result in the PR. Its bound is shallower than the random runs reach, so it complements them; it does not replace them. Recorded results are in "Exhaustive runs" below.
 - **LemmaScript and Dafny, every CI run:** a proof, for every input, of the contracts on the invoice event decision, on the discount money rule and on the offers area's deposit decision (see "Verified modules").
 
@@ -454,11 +454,11 @@ Limits that remain, stated so they are not mistaken for properties:
 - **Cookies blocked.** A browser that blocks cookies never holds the pending cookie and gets the refusal sentence that tells it to enter the code in the browser where it asked for it.
 - **Two tabs.** Two code requests from one browser at once for the same address each get a code and an email, and only one of them works in that browser: if the browser sent a cookie the later write replaces the earlier row under the same key, and if it sent none each request gets its own value and the later response's cookie wins. For two addresses both work. The email allowance bounds the mail.
 - **Timing.** Issuing and entering a code make the same round trips with the same statements for every address and code state, so the number of database calls does not show whether an address has a project or what state its code is in. The work inside a statement still depends on the rows it touches, and the email is sent after the response, so response time is not claimed to be constant.
-- **Retired table.** `audio_client_codes` is no longer read or written by sign-in. Until a later migration (0028, [issue 271](https://github.com/kwilson21/thesuperhuman.us/issues/271)) drops it, retention, owner health and access closure still clear it (`tests/architecture/retired-sign-in-codes.test.ts` keeps the application from using it for anything else).
+- **Retired table.** `audio_client_codes` is no longer read or written by sign-in. Until a later migration ([issue 271](https://github.com/kwilson21/thesuperhuman.us/issues/271)) drops it, retention, owner health and access closure still clear it (`tests/architecture/retired-sign-in-codes.test.ts` keeps the application from using it for anything else).
 
 ## The discount-offers model
 
-File: `verification/discount-offers.qnt`, written before the code from the design in `docs/plans/2026-11-discount-flow.md` (owner decisions of 2026-11-13), and extended for the offers conversion from `docs/plans/2026-11-offers-conversion.md`, section 7 (2026-11-15). One software request whose offer carries a discount per milestone, while the owner drafts, edits, sends, revokes, reissues and declines and the client reviews and signs, with invoices reserved before and after a revision, the offer link, the 20-second sending window and the emails on a clock. One module must keep every property, `discount`, with 2 offer versions: the code, with F10's fix (section 5 of that plan). The owner accepted the plan's recommendations on 2026-11-15 ("Do the fixes"); F10's was to fix it if this model confirmed it, which it did (below), and the fix landed in a behaviour-fix PR of its own (#331, "F10, fixed" below). Until then the model had two such modules, `discount` (the code before the fix, checked against a weakened `declinedHasNoOffer`) and `discountF10Fix` (the fix), told apart by a constant `F10_FIX`; the fix's PR removed `discountF10Fix`, the constant and the weakened form.
+File: `verification/discount-offers.qnt`, written before the code from the design in `docs/plans/2026-11-discount-flow.md` (owner decisions of 2026-11-13), and extended for the offers conversion from `docs/plans/2026-11-offers-conversion.md`, section 7 (2026-11-15). One software request whose offer carries a discount per milestone, while the owner drafts, edits, sends, revokes, reissues and declines and the client reviews and signs, with invoices reserved before and after a revision, the offer link, the 20-second sending window and the emails on a clock. One module must keep every property, `discount`, with 2 offer versions: the code, with F10's fix (section 5 of that plan). The owner accepted the plan's recommendations on 2026-11-15 ("Do the fixes"); F10's was to fix it if this model confirmed it, which it did (below), and the fix landed in a behaviour-fix PR of its own (#331, "F10, fixed" below). Until then the model had two such modules, `discount` (the code before the fix, checked against a weakened `declinedHasNoOffer`) and `discountF10Fix` (the fix), told apart by a constant `F10_FIX`; the fix's PR removed `discountF10Fix`, the constant and the weakened form. Extended again for the signing conversion from `docs/plans/2026-11-signing-conversion.md`, section 7 (2026-11-23): the emailed signing link and its session, the signing setting, review and sign each as a read and a batch, the owner's countersign and abandon, and a website start that needs an executed agreement ("The signing extension" below).
 
 The extension went into this model rather than a module beside it: send and decline were already modelled here as one step each, with the deposits, signing and invoices they guard, and section 7 asks for those same actions split into the route's steps. A second model would have kept a one-step send and decline that no longer describe the code, and the five existing properties now hold over the split steps too.
 
@@ -495,9 +495,9 @@ The extension went into this model rather than a module beside it: send and decl
 
 `discountTodaySecondBatch` is the second batch as it was before F10's fix, as `discountTodayDepositGuard` keeps the old deposit guard, so CI reproduces F10 on every run. `discountFirstBatchKeepsLink` now breaks the property directly: the link from before the decline stays live, the second batch finds no draft or sent offer and resolves the request, and the link is still live. (Against the weakened form it had to show that a link from before the decline was refused too, so each first batch cleared the ghost record of what was made during a decline's email.) `discountNoLiveCheck` needs the link to close while an accepted send's email is in flight: in this model every step that closes a link (revoke, decline, a newer send) waits 20 seconds after the link was made, and an accepted email with its copy can take 20 seconds, so it happens only at that boundary (the counterexample revokes at exactly two ticks). In code the agreement preflight before the batch widens it (see "What it does not cover").
 
-**Equivalent mutants.** `discountAcceptedOnlyCheck` (the live-link check before F9's fix) keeps every property because the model never reaches a link closed during a failed email (see "What it does not cover"). `discountSecondBatchNoSendingGuard` (the decline's second batch without G5) keeps every property since F10's fix, and the driver checks that it does (`equivalents` in `scripts/lib/quint-mutants.mjs`: 10,000 runs of 50 steps). G5 refuses a live link made less than 20 seconds ago, and a live link always has a sent offer: only a send or a reissue makes a link live, both with a sent offer, and every step that ends the sent offer either sends another (whose link replaces the row) or revokes the link (decline's first batch). The fix's check refuses any sent offer, so G5 in the second batch refuses nothing it does not. The code keeps G5 there as a second line of defence; a link still sending is answered OfferStillSending by the lookups after the refusal, whichever check refused.
+**Equivalent mutants.** `discountAcceptedOnlyCheck` (the live-link check before F9's fix) kept every property until the signing extension, because the model never reached a link closed during a failed email (see "What it does not cover"); the extension's abandon closes a link with no sending window, so it is now a mutant of `sendLinkLive` ("The signing extension" below). `discountSecondBatchNoSendingGuard` (the decline's second batch without G5) keeps every property since F10's fix, and the driver checks that it does (`equivalents` in `scripts/lib/quint-mutants.mjs`: 10,000 runs, of 80 steps since the signing extension and of 50 before it). G5 refuses a live link made less than 20 seconds ago, and a live link always has a sent offer: only a send or a reissue makes a link live, both with a sent offer, and every step that ends the sent offer either sends another (whose link replaces the row) or revokes the link (decline's first batch). The fix's check refuses any sent offer, so G5 in the second batch refuses nothing it does not. The code keeps G5 there as a second line of defence; a link still sending is answered OfferStillSending by the lookups after the refusal, whichever check refused.
 
-The random runs make 50 steps for this model, not 20 (`steps` in `scripts/lib/quint-mutants.mjs`). A send and a decline each take three steps and the sending window two ticks, so the deepest mutant, `discountTodayDepositGuard` (a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced), needs at least 17 steps (at 20 steps 100,000 runs did not find it), and the pass run's deepest witness, `neverStandardPaidAfterSentRevision` (below), about 25. With seed 0x1 and 10,000 runs, the pass run reaches that witness's state at 50 steps (in about 320 runs since F10's fix, about 150 before it; seed 0x2 also about 150 before it), only just at 40 (about 9,300 runs; seeds 0x2 and 0x3 also about 9,300) and not at 30 (not in 100,000 runs). At 50 steps the deposit-guard mutant is found in about 2,700 runs on seed 0x1 and about 200 on 0x2 and 0x3, within the 20,000 each mutant check allows; each run that must pass makes 10,000. The cost, from `pnpm run verify:quint:all` on the 4-core container with the same model: 225 s at 30 steps and 262 s at 50, with the two discount pass runs taking 46 s and 53 s at 30 and 91 s and 109 s at 50 (single runs on a shared machine; an earlier run at 30 steps took 281 s).
+Until the signing extension every random run of this model made 50 steps, not 20 (`steps` in `scripts/lib/quint-mutants.mjs`); since then the mutant checks still make 50 and the runs that must pass, the pass run and the equivalent mutant, make 80 (`passSteps`, "The signing extension" below). The rest of this paragraph is the measurement made at 50 before the extension. A send and a decline each take three steps and the sending window two ticks, so the deepest mutant, `discountTodayDepositGuard` (a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced), needs at least 17 steps (at 20 steps 100,000 runs did not find it), and the pass run's deepest witness, `neverStandardPaidAfterSentRevision` (below), about 25. With seed 0x1 and 10,000 runs, the pass run reaches that witness's state at 50 steps (in about 320 runs since F10's fix, about 150 before it; seed 0x2 also about 150 before it), only just at 40 (about 9,300 runs; seeds 0x2 and 0x3 also about 9,300) and not at 30 (not in 100,000 runs). At 50 steps the deposit-guard mutant is found in about 2,700 runs on seed 0x1 and about 200 on 0x2 and 0x3, within the 20,000 each mutant check allows; each run that must pass makes 10,000. The cost, from `pnpm run verify:quint:all` on the 4-core container with the same model: 225 s at 30 steps and 262 s at 50, with the two discount pass runs taking 46 s and 53 s at 30 and 91 s and 109 s at 50 (single runs on a shared machine; an earlier run at 30 steps took 281 s).
 
 **Found by the model.** Send must refuse while any other version has an open or paid first deposit. The code's guard counted only the sent offer, so after a decline with a paid deposit and a reopen, new terms could be sent and a second deposit invoiced (`discountTodayDepositGuard`, the old guard). It was reproduced against the real handlers (the golden case "a deposit paid, then the request declined, reopened, redrafted and sent" in `owner-request-software-offer-send`) and fixed in `depositOfferBlock` and `depositOfferGuard` (PR 2 of the plan), so `discount` now describes the code on that path.
 
@@ -512,13 +512,15 @@ The random runs show more within that same boundary case, because the second bat
 
 In the model, `discount` has the fix: the `noOffers` condition of `declineSecond`, one step for the read and its guard, since nothing in the model writes between them. `discountF10Fix`, the constant `F10_FIX`, the weakened form of `declinedHasNoOffer` and the four ghost fields only that form read were removed, so every mutant is now the fixed code with one change. `discountTodaySecondBatch` breaks `declinedHasNoOffer` in about 2 runs at the CI setting, `discountFirstBatchKeepsLink` in about 140, and `discountSecondBatchNoSendingGuard` is the equivalent mutant above. The other mutants are still found; the deepest, `discountTodayDepositGuard`, in about 1,300 runs on seed 0x1 (about 2,700 before), within the 20,000 each mutant check allows. `pnpm run verify:quint:all` passed, 98 checks, in 212 s on the 4-core container (one run; the discount pass run 86 s, the equivalent mutant 85 s). The Apalache runs are under "Exhaustive" below.
 
-**Witnesses.** The pass run alone does not show that deep states are reached, so negated witnesses are run by hand at the CI setting (`quint run verification/discount-offers.qnt --main discount --invariant <witness> --max-steps 50 --max-samples 10000 --seed 0x1`). The invariant does not change which runs are made (a run checking `allProperties` and `neverDeclinedWithLiveOffer` together stopped at the same 18-step trace as the witness alone), so each witness's state is one the CI pass run of `discount` reaches, at the run named. Each is violated as it should be: `neverFullyPaidAfterRevision` (a project from the second version, discounted, every installment paid, on invoice terms; the first run), `neverStandardPaidAfterSentRevision` (the same on standard terms after the first version was sent and superseded; about run 150 before F10's fix, about run 320 since), and F10's two: `neverDeclinedWithDraft` (about run 2) and `neverDeclinedWithLiveOffer` (about run 370, the 18-step trace above). F10's witnesses ran on `discount` before the fix; since the fix they follow from `declinedHasNoOffer`, so they hold on `discount`, and they are run on `discountTodaySecondBatch`, where they are violated at the same runs. The shortest F10 cases above are Apalache runs of the same witnesses, on `discount` before the fix: `quint verify verification/discount-offers.qnt --main discount --init init --step stepOrEnd --invariant neverDeclinedWithDraft --max-steps 4` (violated, 18 s; at 3, no violation, 27 s) and `--invariant neverDeclinedWithLiveOffer --max-steps 7` (violated, 31 s; at 6, no violation, 24 s). Since the fix, with `--main discountTodaySecondBatch`: `neverDeclinedWithDraft` violated at 4 steps (15 s; at 3, no violation, 15 s) and `neverDeclinedWithLiveOffer` at 7 (26 s; at 6, no violation, 21 s).
+**Witnesses.** The pass run alone does not show that deep states are reached, so negated witnesses are run by hand at the pass run's CI setting (`quint run verification/discount-offers.qnt --main discount --invariant <witness> --max-steps 80 --max-samples 10000 --seed 0x1`; `--max-steps 50` until the signing extension, which is what the runs named in this paragraph were measured at). The invariant does not change which runs are made (a run checking `allProperties` and `neverDeclinedWithLiveOffer` together stopped at the same 18-step trace as the witness alone), so each witness's state is one the CI pass run of `discount` reaches, at the run named. Each is violated as it should be: `neverFullyPaidAfterRevision` (a project from the second version, discounted, every installment paid, on invoice terms; the first run), `neverStandardPaidAfterSentRevision` (the same on standard terms after the first version was sent and superseded; about run 150 before F10's fix, about run 320 since), and F10's two: `neverDeclinedWithDraft` (about run 2) and `neverDeclinedWithLiveOffer` (about run 370, the 18-step trace above). F10's witnesses ran on `discount` before the fix; since the fix they follow from `declinedHasNoOffer`, so they hold on `discount`, and they are run on `discountTodaySecondBatch`, where they are violated at the same runs. The shortest F10 cases above are Apalache runs of the same witnesses, on `discount` before the fix: `quint verify verification/discount-offers.qnt --main discount --init init --step stepOrEnd --invariant neverDeclinedWithDraft --max-steps 4` (violated, 18 s; at 3, no violation, 27 s) and `--invariant neverDeclinedWithLiveOffer --max-steps 7` (violated, 31 s; at 6, no violation, 24 s). Since the fix, with `--main discountTodaySecondBatch`: `neverDeclinedWithDraft` violated at 4 steps (15 s; at 3, no violation, 15 s) and `neverDeclinedWithLiveOffer` at 7 (26 s; at 6, no violation, 21 s).
+
+Since the signing extension a project needs a website signing (a link, its redeem, a review, a signature and a countersign, ten steps more), so the pass run makes 80 steps and the runs at which these witnesses are reached moved; the figures at 80 are under "The signing extension" below.
 
 **What it does not cover.** Refunds; the order of milestones and delivery gating (once the project starts, any installment of the plan may be invoiced); a third milestone; three or more offer versions; retention; Stripe event order and redelivery (the invoice-events model); the amounts and copy on pages and in the SOW (tests). An invoice slot holds one live row, which is what the reservation's guards give, not something this model checks. From the extension:
 
 - At most one send and one decline in flight at a time. G5 keeps a second send's batch 20 seconds after the first send's `now`, but that `now` is taken before the first send's reads and agreement preflight (`software.ts:148, 628-740`), so in code a second send's batch can land during the first send's email by up to the preflight's time. No property depends on it: the first send's check compares its own token (831-846), so it answers 409 if its email was accepted, as it does for a revoke. A second decline during the first's email is possible in code (the status is still new or reviewed); its first batch writes `updated_at`, so the first decline's second batch would be refused by G1.
 - The question and fit actions (they write `updated_at`, so they can only make a decline's second batch refuse by G1, which holds trivially here; see "The clock"); G6 (an audio project, which only refuses more); and the status route's withdraw and resolve (reopen is modelled). Those two revoke the link, and resolve does so without G5, so in code a link can also close during an accepted send's email, which its live-link check answers with 409 as it answers a revoke; the check's `status<>'withdrawn'` goes with them.
-- The time between a send's `now` and its batch. The link's `created_at` is the send's `now`, read after its request read and before its other reads and the agreement preflight; the model makes `now` and the batch the same tick. For the send's own link this makes the code wider than the model: G5 counts from `now`, so a revoke, a decline or a newer send can come during the send's email when the preflight took time, and a link can close during a send whose client email failed (F9; golden "the link is revoked while an email that fails is sent"; also through the status route's resolve, above), which this model cannot reach, since a failed email ends within 10 seconds and every closing step it models waits 20. So `discountAcceptedOnlyCheck`, the live-link check as it was before F9's fix (it counted only for an accepted email), is an equivalent mutant here; the golden case and `tests/api/software-offers-outages.test.ts` pin F9 in the code. For F10 it is the other way: what binds there is how late `created_at` comes after the decline's first batch, and in code it comes later than in the model (see F10 above), so the code's window is narrower.
+- The time between a send's `now` and its batch. The link's `created_at` is the send's `now`, read after its request read and before its other reads and the agreement preflight; the model makes `now` and the batch the same tick. For the send's own link this makes the code wider than the model: G5 counts from `now`, so a revoke, a decline or a newer send can come during the send's email when the preflight took time, and a link can close during a send whose client email failed (F9; golden "the link is revoked while an email that fails is sent"; also through the status route's resolve, above), which this model could not reach before the signing extension, since a failed email ends within 10 seconds and every closing step it modelled waited 20. So `discountAcceptedOnlyCheck`, the live-link check as it was before F9's fix (it counted only for an accepted email), was an equivalent mutant here; the abandon the signing extension adds waits for nothing, and the model now reaches it that way ("The signing extension" below); the golden case and `tests/api/software-offers-outages.test.ts` pin F9 in the code. For F10 it is the other way: what binds there is how late `created_at` comes after the decline's first batch, and in code it comes later than in the model (see F10 above), so the code's window is narrower.
 - One link row with one token at a time, as `software_offer_links` has; the revoke's G10 (the page's `created_at` still live) is "the link is live".
 
 **Exhaustive.** `discount` is in the exhaustive list (`discountF10Fix` was too, until F10's fix removed it). Before the extension: run once at 3 steps (2026-11-13, Apalache 0.62.4): no violation, 15 seconds; before the deposit guard of decision 9 changed (2026-11-15): no violation at 3, 5, 7, 10 and 12 steps (12 took 36 minutes), and the old-guard mutant `discountTodayDepositGuard` violated a property at step 11 of a 12-step run.
@@ -570,6 +572,226 @@ After F10's fix (2026-11-15, the same way: Apalache 0.62.4, the 4-core container
 | `discountSecondBatchNoSendingGuard` | `allProperties` | 7 | no violation | 65 s |
 
 The fixed `discount` keeps every property up to 9 steps; the old second batch (`discountTodaySecondBatch`) still breaks `declinedHasNoOffer` at 4 steps, the draft case, and its witnesses at 4 and 7 as before; `discountFirstBatchKeepsLink` breaks the property directly at 7 steps, as it broke the weakened form; and the equivalent mutant keeps every property up to 7 steps. `pnpm run verify:quint:exhaustive` (7 steps, the six exhaustive modules) passed on the same machine in 358 s, with nothing else running.
+
+### The signing extension
+
+Section 7 of the signing conversion design (`docs/plans/2026-11-signing-conversion.md`) asks for the area's moves to be
+modelled with the offer they depend on before the area is converted (2026-11-23; nothing under `src/` changed). The
+guards are named A1 to A12 as in section 1 there. Each guard and step below was checked against the code at `585619c1`.
+
+**State it adds.** The signing setting (on at the start: the migration stores it off, and nothing can be signed until
+the owner turns it on); the emailed signing links, two of them (each with its offer version, the offer link it was
+issued under, the tick it was issued and whether it is used) and the session each one's redeem made (made, revoked); the
+offer's agreement documents as one record (the version, the terms its text was rendered from, the status review,
+client_signed, executed or abandoned, the session that reviewed it, and whether `executed_at` is set), which replaces the
+old review and signature; the versions whose client-signed agreement the owner abandoned; the versions with a client
+signature (its rows are immutable and stay); one request of each kind
+between its read and its batch (a link request, a redeem, a review, a sign, a countersign, an abandon, each with what it
+read); and two ghost facts, whether a redeem batch made a session while its offer was not signable and whether a
+countersign batch wrote while its agreement was not client_signed, its offer not sent, the request not open or signing
+off. The properties' "signed offer" is the agreement while it is client_signed or executed, G3's statuses.
+
+**Actions it adds**, in any order with the others:
+
+- `switchSigning`: the owner's setting (`src/pages/api/owner/agreements.ts:149-162`, one update that retires nothing).
+  Turning it off is offered only while a signing request is between its read and its batch or a signing link is
+  unredeemed; at any other moment it only makes the signing reads refuse, which a run gets by not taking them (the bias
+  the audio models give their closing steps).
+- `linkRead`, `linkBatch`: the signing link (`issueAgreementLink`, `src/lib/agreement-access.ts:112-315`). The reads:
+  signing on, `getLinkedOffer` (the offer link live, the offer sent, the request open) and `at`; the allowances and
+  Turnstile are not modelled. The batch: A4 (no link of the recipient and the offer issued in the 30 seconds before
+  `at`, three ticks) and A1 (`liveSigningGuard`, 317-327: the offer sent, its offer link the one read and live, the
+  request open, no project of the offer, signing on); then the link. The email and what follows it are not modelled: the
+  visitor holds the link as soon as it is stored.
+- `redeemRead`, `redeemBatch`: the verify page's POST (`completeAgreementLink`, 329-441): the link read by its key,
+  unused; then the batch with A1 and A5 (the link still unused), which uses the link and makes the session. The page's
+  GET runs A1 as a read and writes nothing, so it is not a step.
+- `reviewRead`, `reviewBatch`: the review POST (`src/pages/api/offer/[token]/review.ts:53-107`). The read is the
+  visitor's checks (`getLinkedOffer`, `agreementSession`: the session unrevoked and its offer still sent through the live
+  offer link it names, the request open; signing on), the draft batch (A1 A2 A3, `src/lib/agreement-draft.ts:53-81`; the
+  draft itself is not modelled) and `reviewAgreements`' reads (no agreement of the offer client_signed or executed); the
+  text is rendered from the offer's terms as read. The batch (`src/lib/software-agreements.ts:307-371`): A1, A2 (the
+  session unexpired and unrevoked) and A3; the offer's review rows replaced, under this session.
+- `signRead`, `signBatch`: the sign POST. The read is the same checks and `signAgreements`' reads (405-458: the offer's
+  documents that are not executed are the ones named, still in review; the read compares the documents, not the session
+  that reviewed them, which only A9 checks, and the model's read does the same). The batch (460-542): A1, A2 and A9 (each
+  document still in review under this review session); the documents client_signed. A7 (the draft) and A8 (a reused MSA)
+  are not modelled.
+- `countersignRead`, `countersignBatch`: the owner's countersign (`src/pages/api/owner/requests/[id]/agreement.ts:60-82`;
+  `countersignAgreements`, `software-agreements.ts:644-733`). The reads: the request's sent offer, signing on, its
+  client_signed documents. The batch: A10 (the offer sent, the request open, signing on; it does not look at the offer
+  link, so the owner can countersign after revoking it) and A11 (each document still client_signed with its hash); the
+  documents executed.
+- `abandonRead`, `abandonBatch`: the owner's abandon (`agreement.ts:119-194`). The reads: the sent offer, its
+  client_signed documents and its first deposit (A12's condition, read first). The batch: A12 (no first deposit of the
+  offer counts: open or paid here, refunds not being modelled) and A11 (each document still client_signed, of this
+  request and offer); the documents abandoned, the offer superseded while it is sent, the offer link revoked, the offer's
+  sessions revoked and its signing links used.
+- The retirement every send, reissue, revoke and decline runs (`retireSigning`, `src/server/offers-store.ts:235-261`,
+  from 931, 525 and 462) abandons the agreement in review, revokes every session and uses every signing link, in place of
+  the old review's "revoked" flag.
+- `start` needs the offer's agreement executed (`executedOfferAgreement`,
+  `src/pages/api/owner/requests/[id]/project.ts:139-153`; its packet and its two delivered copies are not modelled) and
+  retires nothing: the route retires links and sessions only for an outside signature (270-279), which is not modelled.
+  So a link issued before a website start stays unused and a session stays open, and only A1 refuses them afterwards.
+
+**Properties 8 to 13** (`allProperties`; the seven above still hold over the split steps):
+
+8. `reviewOfSentOffer`: an agreement in review was rendered from the version that is sent now, with its terms. A send,
+   a reissue, a revoke or a decline abandons the review it overtakes, and the review batch re-checks its offer and its
+   session, so a resend during a review leaves no review of the old version.
+9. `noSessionForDeadOffer`: no session is made while its offer is not signable (not sent, its offer link revoked or
+   replaced, the request closed, a project, or signing off). The flag is set from the same expression as A1, as
+   `sendLinkLive`'s is from the check's; what the property adds is its mutant, which shows that the model reaches a
+   redeem that A5 alone lets through.
+10. `executedStays`: an executed agreement is never abandoned, and its offer stays sent until the project starts
+    (stored state: `executed_at` stays set when a status changes).
+11. `executedOnlyWhenSigned`: countersign executes only a client_signed agreement of the sent offer, with the request
+    open and signing on (the flag is set from the state at the write, as `badSign` is).
+12. `abandonedHasNoDeposit`: a version whose signing the owner abandoned has no open or paid first deposit.
+13. `signedStaysSigned`: once a version's documents are client_signed they never return to review; they move only to
+    executed or abandoned (stored state: the client signature rows stay). A review read before the signature cannot
+    replace the signed documents with a new review, because the review batch refuses while an agreement of the offer is
+    client_signed or executed (A3).
+
+`supersededInert` (property 5) now covers the split sign, and its "a signed offer stays the sent one" means client_signed
+or executed: an abandon supersedes the offer and abandons its signature in the same batch.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `discountReviewNoGuards` | The review batch without A1 and A2 (A3 kept). Counterexample (seed `0x1`, about 47 runs, 39 states): the client opens a review of the first version, the owner revokes the link and then declines, and the review batch saves a review of the withdrawn version | `reviewOfSentOffer` |
+| `discountSignGuardsAtRead` | The sign's guards (A1, A2, A9) judged at the read, not in the batch. About 75 runs, 37 states: the client reads to sign, the owner declines (the review abandoned, the session revoked, the offer withdrawn), and the batch signs the withdrawn offer | `supersededInert` |
+| `discountNoSignGuards` (restated for the split) | Neither the sign's read nor its batch checks the offer, the session or the review's status, so the client signs the review it holds whatever happened since, as the one-step sign without its guard did. About 26 runs | `supersededInert` |
+| `discountRedeemNoLiveGuard` | The redeem batch without A1 (A5 kept). The first run, 31 states: a link is issued, its redeem reads it, the owner switches signing off, and the batch makes a session | `noSessionForDeadOffer` |
+| `discountAbandonNoStatusGuard` | The abandon batch without A11 (A12 kept). About 264 runs, 48 states: the owner reads to abandon a client_signed agreement, revokes the link, countersigns (A10 does not look at the link), and the abandon batch abandons the executed agreement and supersedes its offer | `executedStays` |
+| `discountCountersignNoGuards` | The countersign batch without A10 and A11. About 26 runs, 39 states: the owner reads to countersign, switches signing off, and the batch executes | `executedOnlyWhenSigned` |
+| `discountAbandonDepositAtRead` | The abandon's deposit condition judged at the read only (A12 gone from the batch). About 955 runs, 38 states: the owner reads to abandon with no deposit, a deposit invoice for the offer is reserved and written, and the batch abandons the version with its deposit open | `abandonedHasNoDeposit` |
+| `discountReviewNoSignedGuard` | The review batch without A3 (A1 and A2 kept; see below for the index). About 27 runs, 35 states: a review is saved, the client opens the review again (read), signs the saved one, and the stale review batch replaces the client_signed documents with a new review | `signedStaysSigned` |
+| `discountAcceptedOnlyCheck` (equivalent until this extension) | The live-link check before F9's fix. About 9,700 runs, 35 states (below) | `sendLinkLive` |
+
+**A3 and the one-live-SOW index.** A3 is the review batch's guard (`src/lib/software-agreements.ts:310-314`; the draft
+batch, which runs first, has the same guard, `src/lib/agreement-draft.ts:63-67`, and `reviewAgreements` reads the same
+fact before both and refuses "A signature is already saved. These documents cannot change.", 179-184). In code it is
+not alone: the review batch deletes only the offer's rows in review and then inserts a new SOW, and the unique index
+`software_agreements_sow_offer` (`migrations/music/0023_software_signing.sql:13`, one SOW of an offer that is not
+abandoned) refuses that insert while a client_signed or executed SOW exists. Every signature includes the SOW, so the
+index refuses exactly when A3 does, and dropping A3 alone would be an equivalent mutant of the code (the batch would
+fail on the index, still a 409). The model holds the agreement as one record, so A3 and the index are one condition
+there, and `ReviewNoSignedGuard` removes both; a test of the conversion's store, not this model, is what can tell the
+two apart.
+
+**A2 beside A1.** In the model A2 (the session unrevoked) refuses nothing A1 does not: every step that revokes a session
+also changes something A1 checks (a send or a reissue replaces the offer link, a revoke and an abandon revoke it, a
+decline withdraws the offer and revokes the link), and a session's expiry, which A2 also checks in code, is not
+modelled. So the review and sign mutants drop A1 and A2 together, and no mutant drops A2 alone.
+
+**`RedeemNoLiveGuard`: two ways to catch it.** As the design expected, every other way an offer stops being signable
+also uses its links (the retirement, the abandon), so A5 refuses the redeem without A1; the mutant is caught through the
+signing switch (the CI counterexample above) or through a website start, which retires nothing. The second was checked
+by hand on a scratch copy of the model with `switchSigning` taken out of `step` (the mutant, 50 steps, seed `0x1`): found
+in about 26,500 runs, 49 states. The client redeems a first link, reviews and signs, a second link is issued, the owner
+countersigns and starts the project, and the second link's redeem makes a session for the started project. So the
+mutant is not equivalent, and the model's start must not retire links for it to be caught that way.
+
+**`AcceptedOnlyCheck` is no longer equivalent.** The abandon revokes the offer link with no sending window
+(`agreement.ts:176-180`), and the coarse clock lets steps that are milliseconds apart in code share a tick, so the model
+fits a whole signing between a failed send's email and its live-link check. The counterexample sends the first version
+at tick 1; its client email fails at tick 2; before the check, the client asks for a signing link, redeems it, reviews
+and signs, and the owner abandons; the check, counting only an accepted email, answers 200 with the link revoked. In
+code the client would have to sign the newly sent version, whose link only that send's failed email carries, while the
+send is still answering, so the preflight delay stays the way F9 is reached in practice ("What it does not cover"
+above); the check since F9's fix answers 409 either way. The mutant now breaks `sendLinkLive` and is listed with the
+mutants. It is killed only through that over-approximation: the model lets the visitor use an offer link that only the
+failed email carried, so a model that tracked who holds which link could make it equivalent again.
+`discountSecondBatchNoSendingGuard` is still equivalent (10,000 runs that keep every property): the abandon revokes the
+link in the batch that supersedes the offer, so a live link still always has a sent offer.
+
+**Steps and runs.** Each new mutant was run at 20, 30, 40 and 50 steps (20,000 runs, seed `0x1`). At 20 only
+`RedeemNoLiveGuard` (about 7 runs) and `ReviewNoGuards` (about 1,100) are found; at 30 all are, `AbandonNoStatusGuard`
+in about 10,900 runs and `AbandonDepositAtRead` in about 6,350; at 40 all within about 5,450; at 50, the mutant checks'
+CI setting, all within about 955. `ReviewNoSignedGuard`, added after review, is found in about 2,070 runs at 20 steps,
+290 at 30, 240 at 40 and 27 at 50. So `steps` stays 50 for the mutant checks, and so do the budgets (20,000 runs per
+mutant check, 10,000 per run that must pass). The rarest mutant at that setting is now `AcceptedOnlyCheck` (about 9,700
+runs, half its budget); `TodayDepositGuard` takes about 1,600 (about 1,300 before); every other earlier mutant at most
+about 165 (`LatestTerms`, `StartCopiesNewest` and `StartDropsDiscount` about 160 each, now that a signing and a
+countersign come before the start). At 50 steps the pass run made its 10,000 runs in 90 to 96 s on the 4-core container,
+three runs at a time, against 71 s for the model before the extension measured the same way (see "CI"); it now makes 80
+(below).
+
+**Witnesses after the extension** (by hand, as under "Witnesses" above, including the three the extension adds to the
+model). At 50 steps, the setting of every run until `passSteps`: `neverExecuted` (an agreement executed) about run 160;
+`neverSessionAfterStart` (a session of the started project still open, which only A1 refuses from then on) about run
+200; `neverSignedAfterAbandon` (a signing the owner abandoned, then a version signed again) about run 2,950;
+`neverFullyPaidAfterRevision` about run 490 (the first run before). At 80 steps, the pass run's CI setting since
+`passSteps` (10,000 runs, seed `0x1`): `neverExecuted` about run 80, `neverSessionAfterStart` about 250,
+`neverSignedAfterAbandon` about 1,050, and `neverFullyPaidAfterRevision` and `neverStandardPaidAfterSentRevision` both
+about 710 (one 74-state trace reaches both). `neverStandardPaidAfterSentRevision` now needs at least 33 steps (two
+sends, a website signing and its countersign, the start, and four installments invoiced and paid) and is not reached at
+50 steps in 10,000 runs, nor at 60 or 70 steps in 20,000; at 80 steps it is reached in about 710 runs (11.7 s at 61 runs
+a second, seed 0x1). So the model's runs that must pass now take 80 steps (`passSteps` in
+`scripts/lib/quint-mutants.mjs`, which `scripts/verify-quint.mjs` uses for the pass run and the equivalent mutant),
+while its mutant checks keep 50, where every mutant is found within its budget. At 80 steps, three runs at a time on the
+4-core container, the pass run kept every property in its 10,000 runs in 167 s (60 runs a second), and so did
+`discountSecondBatchNoSendingGuard` (167 s), against 90 to 96 s for the pass run at 50.
+
+**Checked against the code.** Where the design summarises, the code was followed:
+
+- The redeem's POST reads the link by its key and runs A1 only in its batch; A1 as a read is the page's GET
+  (`agreement-access.ts:364-379`), which writes nothing.
+- A1 refuses a project of the offer (`p.offer_id=o.id`), while `currentSigningNotification`, the notices' A19 and A20,
+  refuses a project of the request (`p.request_id=a.request_id`). With one request and one sent offer at a time they are
+  the same here.
+
+**What the extension does not cover.** The allowances, Turnstile and the link's email (a refused email deletes the link
+and its sessions, an accepted one consumes the older links, A6: both only remove links, and `agreement-link.qnt` checks
+that batch for the archive link); expiry (a link lives an hour and a session two, past any run); the recipient (the same
+in every version); the draft (A7) and a reused MSA (A8); the packet, the copies and the notices (the copies and the
+notices are the `copy` and `signing` kinds of `audio-project-notices.qnt`); the draft route, and the draft batch's own
+A3 (`agreement-draft.ts:63-67`), which the model folds into the review's read: it runs before the review's reads, so a
+review read before the signature passes it, and `signedStaysSigned` rests on the review batch's A3 alone; an outside
+signature's start and a request closed by the status route (both retire signing); refunds, and so the clause of A12 that
+looks at `refunded_at` only for a paid invoice (`agreement.ts:34-35`; the design's LemmaScript contract for
+`abandonBlocked` holds it); the agreement pin of a send with signing off (J2), which leaves that version unsignable on
+the website, where the model lets it be signed; two countersigns at once (A11 alone would refuse the second; the mutant
+drops A10 and A11 together) and, in general, more than one request of each kind in flight; more than two signing links
+in a run, a bound of the model.
+
+**Exhaustive, after the signing extension** (2026-11-23, Apalache 0.62.4, the 4-core container, one run at a time,
+each `quint verify verification/discount-offers.qnt --main <module> --init init --step stepOrEnd --invariant
+allProperties --max-steps N`; wall-clock times):
+
+| Module | Steps | Result | Time |
+|---|---|---|---|
+| `discount` | 7 | no violation | 89 s |
+| `discount` | 9 | no violation | 6 minutes |
+| `discountRedeemNoLiveGuard` | 5, 6, 7 | none at 5 or 6; violation at 7 | 32 s, 46 s, 79 s |
+| `discountSecondBatchNoSendingGuard` | 7 | no violation | 81 s |
+| `discountTodaySecondBatch` | 3, 4 | none at 3; violation at 4 | 23 s, 25 s |
+| `discountFirstBatchKeepsLink` | 6, 7 | none at 6; violation at 7 | 44 s, 65 s |
+| `discountNoLiveCheck` | 6, 7 | none at 6; violation at 7 | 45 s, 63 s |
+
+After the review fixes (the A3 property and mutant, the sign read without the session) `discount` was run again: no
+violation at 7 steps (96 s) or 9 (6 minutes). `ReviewNoSignedGuard` needs 12 steps (a draft sent, a link issued and
+redeemed, a review saved, a second review read, the signature, the stale review batch), past what Apalache finishes
+here.
+
+So the extension keeps the depths of the earlier mutants and of the equivalent one, and the search reaches
+`RedeemNoLiveGuard`, the shortest new mutant (a draft, its send, the link's read and batch, the redeem's read, the switch
+and the redeem's batch: 7 steps). The shortest counterexamples of the other new mutants are 11 steps (a review read before a decline, which
+waits two ticks after the send) to 15 (an abandon or a countersign after a signing), beyond any bound Apalache finishes
+here, so they are found by the random runs only, as `discountTodayDepositGuard` is.
+`pnpm run verify:quint:exhaustive` printed "keeps every property in every order up to 7 steps" for `audioExhaustive`,
+`softwareExhaustive`, `discount`, `music` and `board`; the next module, `offerBoard` (which this change does not touch,
+and which had been run by hand only to 5 steps), was still running after 36 minutes and was stopped. The modules after it were run by hand at
+7 steps: `allowance` (run by hand only to 6 steps before) was stopped after 10 minutes, and `pricing` (58 s),
+`publication` (16 s) and `agreementLink` (27 s) found no violation.
+
+The notices model has no `stepOrEnd` and is not in the exhaustive list; its agreements kinds were run by hand the same
+way with `--step step` (`verification/audio-project-notices.qnt`): `projectNoticesCopy` and `projectNoticesSigning` keep
+every property up to 7 steps (49 s, 52 s; `projectNoticesSigning` again with `noSendingAfterCountersign`, 78 s);
+`projectNoticesCopyClaimNoState` and `projectNoticesNoticeClaimNoState` find no violation at 2 steps and one at 3 (a
+read, the close and the claim; about 10 s each), and so does `projectNoticesNoObsolete` (a read, the claim and the
+close; 35 s and 32 s with other runs alongside).
 
 ## The music-playback model
 
@@ -826,7 +1048,7 @@ File: `verification/agreement-link.qnt`, written for the conversion of the agree
 
 **Exhaustive run.** `agreementLink` has `stepOrEnd`, so `pnpm run verify:quint:exhaustive` (Apalache) runs it with the other exhaustive modules: six modules (`audioExhaustive`, `softwareExhaustive`, `discount`, `music`, `publication`, `agreementLink`) from five model files (seven until F10's fix removed `discountF10Fix`); `signin` has no exhaustive run. Run at the default 7 steps it prints "agreementLink keeps every property in every order up to 7 steps" in about twelve seconds. Seven steps is shallow for this model: of the mutants, only `NoLookup` and `NoCas` are reachable that fast. Two stored links need at least 10 steps, `RetryNewCool` about 10 and `RetryNewAt` about 16, so the exhaustive run does not reach the cases properties 1, 3, 4, 6 and 7 guard against; the random runs (20,000 runs of 20 steps, seeds 0x1 to 0x7) cover them. The bound was not raised: 9 steps took about 112 seconds and found no violation, and each further step costs several times more.
 
-**What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (which is another area's), and the verify page's cookie.
+**What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (whose batch is this one's without the cooldown, with A1 added; whether a link or a session is made for a dead offer is checked with the offer's state in `discount-offers.qnt`, `noSessionForDeadOffer`), and the verify page's cookie.
 
 ## The audio project models
 
@@ -848,16 +1070,77 @@ bias the random runs rarely reach the races.
   published final in the model, so dropping only the file check is an equivalent mutant; the completion keeps both conditions
   as today's statement has them. The revoke's
   stage reset is decided from the read and written under a guard with a retry (`RevokeStaleReset` removes both).
-- `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update notice,
-  which have different claim and outcome conditions): the four states and the three statements. 5 properties, 8 mutants
-  (seven of the invitation, one of the update notice; the owner's retry is a read and a guarded write). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
-  confirmation is the owner's judgment and not a property.
+- `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update
+  notice, which have different claim and outcome conditions, and `projectNoticesCopy` and `projectNoticesSigning` for
+  the agreements area, added for the signing conversion, below): the four states and the three statements. 8 properties,
+  11 mutants (seven of the invitation, one of the update notice, one of a copy and two of a signing notice; the owner's
+  retry is a read and a guarded write). Its model of the owner's confirmation is truthful on purpose (the email did not
+  go out); the confirmation is the owner's judgment and not a property.
 
 Every property reads stored rows and stamps (one counter standing for the order D1 serializes statements in), never a
 flag set at the write from the condition the guard checks.
 
-None has an Apalache run. Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
+None is in the exhaustive list; the notices model's agreements kinds were run through Apalache by hand ("Exhaustive, after the signing extension", under the discount-offers model). Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
 run as `projectMessages` or `projectFiles`.
+
+**The agreements' kinds in the notices model (2026-11-23).** Section 7 of the signing conversion design adds two kinds to
+`audio-project-notices.qnt`, because the conversion turns the owner's reset, one statement that decides in SQL today
+(`src/pages/api/owner/requests/[id]/agreement.ts:211-231`), into a read, a rule and a compare-and-set, the shape this
+model checks for the audio notices. `open` stands for the condition each kind's claim compares, and `closes` for what
+ends it. Each was checked against the code at `585619c1`:
+
+- `copy`, a signed copy (`deliverAgreementCopies`, `src/lib/agreement-artifacts.ts:357-447`). The claim (A18, 394-399)
+  needs the copy pending, its agreement executed and its archive open, and returns the address, so no recipient read
+  follows; the outcome is written by attempt while `sending`, with no other condition (417-445). The copy's row is
+  inserted by the countersign batch that executes the agreement (`src/lib/software-agreements.ts:717-729`) and no
+  statement moves an executed agreement elsewhere, so the executed half of A18 holds whenever a copy exists, and what
+  closes is the archive: retention (`src/lib/agreement-retention.ts:336-339`), whose `eligible` (37-46) refuses while a
+  copy of the agreement is `sending`, which the model's close keeps.
+- `signing`, the client's signature receipt or the owner's countersign notice (`deliverAgreementNotifications`, 470-523,
+  inserted by the sign batch, `software-agreements.ts:529-541`). The claim (A19, 485-489) needs it pending and current
+  (`currentSigningNotification`, 467-468: the agreement client_signed, its archive open, no project of the request) and
+  returns the address; the outcome by attempt while `sending` (510-521). What closes is a countersign or an abandon, and
+  the same batch fails the notice if it is `sending` (A21, `closeObsoleteAgreementNotifications`,
+  `software-agreements.ts:615-642`). While the agreement is client_signed its archive is open (retention closes only an
+  executed or abandoned agreement) and there is no project (a website start needs it executed, and an outside one
+  refuses a client_signed agreement of the offer, `src/pages/api/owner/requests/[id]/project.ts:124-137, 233-237`), so
+  `open` is "client_signed".
+- The reset of both is A20 (`agreement.ts:211-231`): from `failed`, or from `sending` when the owner confirms and the
+  attempt is a minute old (the attempt the read saw stands in for the cutoff, as for the audio kinds); never from
+  `pending`, where the audio queue moves a pending notice too (`queueRead`); a signing notice must also be current, a copy
+  needs nothing more (the audio queue needs the project open). Unlike the audio queue it keeps `attempted_at`.
+
+Two properties, each with its mutant: `copyOnlyWhenExecuted` (a copy is claimed only while its agreement is executed and
+its archive open: no stored attempt after the archive closed) and `noticeOnlyBeforeCountersign` (a signing notice is
+claimed only while its agreement is client_signed: no stored attempt after the countersign or the abandon). Mutant
+`CopyClaimNoState`, the copy's claim without A18's state condition (seed `0x1`, the first run, 12 states): a copy's email
+is refused, the owner resets it, a delivery reads it pending, retention closes the archive, and the claim takes it.
+Mutant `NoticeClaimNoState`, the notice's claim without `currentSigningNotification` (about 9 runs, 6 states): two
+deliveries read the notice pending, the owner countersigns, and one claims it. `oneEmailInTotal` and `sentMeansMailed`
+hold for both kinds. `failedMeansNotMailed` holds for copies as it is; a signing notice made obsolete while its email was
+in flight ends `failed` whether or not the email went out, by design (the comment at `software-agreements.ts:615`), so
+for that kind the property says that a failed notice's email went out only once the agreement left client_signed. The
+witness `neverObsoleteAfterMail` (by hand on `projectNoticesSigning`) is violated in about 7 runs, 7 states: a notice is
+claimed, the owner countersigns, and the email goes out. Each new pass run makes 8,000 runs in about 1.5 seconds.
+
+A21 has its own property, added after review: `noSendingAfterCountersign` (a signing notice is never `sending` once its
+agreement left client_signed). It is true of the code: the countersign batch (`software-agreements.ts:703`) and the
+abandon batch (`agreement.ts:163-169`) are the only statements that move an agreement out of client_signed, and both
+run A21 for every document, the SOW that holds the notices included; the in-flight delivery's outcome is written only
+by its attempt while the notice is still `sending` (`agreement-artifacts.ts:510-521`), so it leaves a failed notice as
+it is; and neither the claim nor the A20 reset takes a notice that is not current. Without A21 such a notice would stay
+`sending` once its delivery's answer was uncertain, with nothing left to move it, and retention, whose `eligible`
+refuses an agreement with a notice `sending` (`agreement-retention.ts:37-46`), would never close its archive. Mutant
+`NoObsolete`, the countersign or abandon without A21 (the first run, 5 states): a delivery claims the notice, and the
+owner countersigns while its email is about to go.
+
+Left out for these kinds: the outcome write's attempt condition (`attempt_id=?`). With the owner's confirmation
+truthful, no delivery is still working when a `sending` row is reset, and a `failed` row with a delivery still working
+is one that A21 failed, which is never reset, so the condition never refuses here. Resend's idempotency key
+(`agreement-artifacts.ts:405, 495`) is a second protection outside the model. The packet (a copy is claimed only once its
+packet is ready), the two roles of a copy and the two kinds of notice (each is one row here), and the owner's recorded
+alternate delivery. A notice's reset with its own `currentSigningNotification` dropped would keep every property, since
+the claim refuses such a notice anyway; no mutant names it.
 
 ## The brief-copy model
 
@@ -975,3 +1258,5 @@ The Quint runs are independent, so the driver runs them in one pool, up to the n
 Why one pool: with the discount model added, two separate steps took 76 s and 125 s on the runner (3 minutes 21 seconds). The second step started the three equivalent mutants (each a full 100,000-run pass) last, so three cores ran long after the rest had finished. One pool removes that tail. Measured since: the Quint step took 151 to 341 s over the last nine successful Validate runs on main on 2026-11-15, which is above the budget of 2 minutes 30 seconds, and 212 to 422 s on the audio pull requests' successful runs on 2026-11-15. The CPU time of `verify:quint:all` (its user time, run locally, which varies by about 20 s between runs) is about 416 to 431 s without the three audio models and about 475 to 512 s with them (both measured before the brief-copy model joined the pool). The audio models make 44 checks (6 pass runs, 3 equivalent mutants and 35 mutants); the sum of their check times (each check's own wall time as the driver prints it, not CPU time) is about 131 s locally for the 44 checks (128 s measured for the first 43, plus 3.4 s for `QueueStatusOnly`); the sum fell from 88 s to 54 s for the 34 checks of that time, after the mutants that need particular starting points began from the one or two their race needs and no others: `PublishNoStage` from `finalAndReview`, `PublishStaleSupersede` and `RevokeNoFirstStatus` from `twoReviews`, `CompleteNoStage` from `final` and `finalPlus`; `InsertNoState`, `AbortNoCas` and `PartNoStateGuard` from `fresh`; `QueueStatusOnly` from a notice stuck in `sending`; the added pass runs that start only from `finalAndReview` and from `finalPlus` take about 4 s each, and the longest audio check is 4.6 s where the longest check on main is 55 s. Each `quint run` costs about 1.5 CPU-seconds of startup (parsing and checking the model) before it makes any random run, so 44 audio checks cost about 66 CPU-seconds in the pool, which is the floor while every property keeps a mutant. The budget is 2 minutes 30 seconds on a 4-core runner.
 
 The discount model's extension (2026-11-15) added time. Measured with `pnpm run verify:quint:all` on a 4-core cloud container, main and the extension one after the other with nothing else running: 232 s on main (94 checks) and 281 s with the extension (98 checks), 21% more. The discount model's own runs went from about 87 CPU-seconds (its pass run 45 s) to about 203 (`discount` 55 s and `discountF10Fix` 66 s at 30 steps, `discountTodayDepositGuard` 27 s, the other twelve mutants 4 to 7 s each). After the review raised the model to 50 steps and added a mutant, the same command took 262 s (99 checks; the discount pass runs 91 s and 109 s), and 338 s in a later run of the same (the machine is shared, so these are rough), against 225 s for the same model at 30 steps in a run just before (see "The discount-offers model" for why 50). On the runner the Quint step had taken 3.5 to 4.5 minutes and `pnpm test` 7 to 9, and two runs were cancelled at the job's 15-minute limit, so the Validate job's `timeout-minutes` was raised (to 30, by #318). F10's fix removed one pass run (`discountF10Fix`) and turned a mutant check into a pass run (`discountSecondBatchNoSendingGuard`, which now makes all 10,000 runs instead of stopping at a violation): 98 checks in 212 s in one run on the same container.
+
+The signing extension (2026-11-23) added time to the two models it changed. Measured on the 4-core container with three runs at a time (`QUINT_JOBS=3`) and an Apalache run on the fourth core, the same way on `main` and on the extension, as the sum of the checks' own times: the discount model's checks went from 16 in 258 s (the pass run 71 s, two equivalent mutants 71 s and 69 s, thirteen mutants 47 s) to 22 in 396 s (the pass run 90 s and the equivalent mutant 101 s, both at 50 steps before `passSteps`; at 80 each takes about 167 s, `discountAcceptedOnlyCheck`, now a mutant found in about 9,700 runs, 102 s, the six new mutants 34 s, the thirteen others 69 s), and the notices model's from 10 in 22 s to 14 in 36 s. In that run `pnpm run verify:quint` (23 pass runs) took 185 s and `pnpm run verify:quint:mutants` (192 checks) 371 s, and every check passed. After the review fixes (`passSteps` at 80, two more mutants), with four runs at a time and nothing else running: 256 s (the discount pass run 173 s) and 319 s (194 checks; the equivalent mutant 217 s, `discountAcceptedOnlyCheck` 111 s), every check passing.

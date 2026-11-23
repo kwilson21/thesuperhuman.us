@@ -10,3 +10,24 @@ export class ReaderMessage extends Error {}
  * `reviewAgreements`): a lost race, which a route answers with 409 and its own sentence. A route never shows its message.
  */
 export class LostRace extends Error {}
+
+/**
+ * A database call that rejected, marked where it was made so a route can tell it from a refusal the code threw (see
+ * `signAgreements`), as `PreflightReadFailed` marks the preflight's reads. `failure` is the rejection itself: a route
+ * sorts it with `classifyFailure` (a guard or a unique index is a lost race; anything else is a fault of the site, which
+ * the route logs once and answers with its fixed 500).
+ */
+export class StoreRejected<Failure> extends Error {
+	readonly failure: Failure;
+
+	constructor(failure: Failure) {
+		super("A database call was rejected.");
+		this.failure = failure;
+	}
+}
+
+/** The work's result; when it rejects, a StoreRejected carrying the rejection. */
+export const stored = <T>(work: Promise<T>): Promise<T> =>
+	work.catch((failure) => {
+		throw new StoreRejected(failure);
+	});

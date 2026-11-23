@@ -38,9 +38,11 @@ import {
 //
 //   403 {ok:false}                               a visitor, a signed-in client is not the owner (the cases of the wire file add more)
 //   503 "Retention storage identity is not configured."   no AUDIO bucket, no binding id, an empty id, neither
+//   400 "Check required fields and limits."     an empty JSON object (no action)
+//   400 "Invalid JSON"                           a body that is not JSON
 //   200 {ok:true, manifest}                      empty archive (marker written), every eligible and ineligible agreement shape,
 //                                                objects, attachments, unattached attachments, orphans, markers
-//   409 {ok:false, error: <message>}             any throw: a database or bucket outage, a malformed stored manifest
+//   500 "The agreement could not be saved."     any throw, logged: a database or bucket outage, a malformed stored manifest
 //   eligibility (the `eligible` SQL)             status executed or abandoned, ended_at, retain_until (at the instant, one
 //                                                millisecond after), legal hold, rendering artifact, sending delivery or
 //                                                notification, a live project of the agreement or its offer, a reusing offer

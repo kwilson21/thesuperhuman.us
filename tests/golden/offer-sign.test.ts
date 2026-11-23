@@ -70,9 +70,12 @@ import type { JsonValue } from "../helpers/json";
 //                                         wrong, 0 or 3 documents, bad id or hash, consent not literally true  (input)
 //   403 "Reload and try again."           csrf_nonce differs from the session's             (csrf)
 //   200 {ok:true,receipt_id} / 303        signing succeeds; a form gets a 303 to /offer/<token>/sign  (signed)
-//   409 "The reviewed agreement changed"  any error thrown by signAgreements              (refused)
-//   rejected                              a database error outside the try: the offer or session lookup, the signing
-//                                         setting. This is the route today; see the report.   (outage outside)
+//   409 "The reviewed agreement changed"  any refusal signAgreements throws: a ReaderMessage, refused stored values, a
+//                                         guard or a unique index, a foreign key failure (the documents deleted since the
+//                                         read)                                             (refused)
+//   500 "Your signature could not be saved. Try again in a moment."  a read or the signing batch failing for no
+//                                         reason a request explains (the offer or session lookup, the signing setting,
+//                                         signAgreements' reads and batch), logged once ("Agreement signing")  (outage, B1, B2)
 //
 //   signAgreements
 //   hash or id mismatch, one document, the wrong one, an extra one, all executed, an abandoned MSA
@@ -84,9 +87,10 @@ import type { JsonValue } from "../helpers/json";
 //   a reused MSA: signs only the SOW (the SOW-only intent text); the MSA terminated, missing or not executed
 //   the batch guards under a race (session revoked, offer superseded, request withdrawn, link revoked, signing off,
 //   a project created, a document changed or abandoned or signed first)
-//   an outage at each statement, the batch, and the read after the batch (409 with the signatures committed)
+//   an outage at each statement and the batch (500), and the read after the batch (200 with the receipt, the notices not
+//   sent: the read is part of the notices step since B6)
 //
-//   deliverAgreementNotifications (after a signature, errors swallowed)
+//   deliverAgreementNotifications (after a signature, errors swallowed, the read of the agreements before it included)
 //   Resend: success; 4xx (failed); 5xx, network down, timeout (stay "sending"); no key or no sender (nothing sent)
 //   a repeat of the same request, a repeat after an uncertain send, notifications already sent, a request resolved
 //   in between
@@ -1262,6 +1266,7 @@ const races: Case[] = [
 		"a signature row for the MSA appears before the batch",
 		`INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES('s-x','${MSA_ID}','client','x','x','x','v','t','t','h','e','t','m','i','[]','r','','')`,
 	),
+	// The notice row's insert fails its foreign key before a document guard runs: a lost race, 409 (signingBatchRejected).
 	race(
 		"the agreements are deleted before the batch",
 		"DELETE FROM software_agreements",

@@ -407,6 +407,53 @@ export default {
 						images: [{ file, caption: title }],
 					});
 				}
+
+				// A failure on the site's side: the links table is renamed for this one capture, so the page's read of the
+				// link fails as a database outage would, and the page answers 500 with its failure page. The table gets its
+				// name back whether or not the capture succeeds (SQLite then writes the name quoted in the schema's text,
+				// which changes nothing that reads it). A GET, because the page's Continue form cannot reach the consume
+				// batch from a browser: under the page's no-referrer policy the form posts Origin: null, which the
+				// middleware refuses.
+				const failure = "This link could not be opened.";
+				sql(
+					"ALTER TABLE software_agreement_links RENAME TO screenshot_links_offline;",
+				);
+
+				const file = await capture({
+					file: `software-signing-${archive ? "archive-" : ""}link-failed-${viewport}.png`,
+					path: `${route}?key=${`${archive ? "a" : "s"}f${viewport === "desktop" ? "d" : "p"}`.padEnd(43, "x")}`,
+					viewport,
+					status: 500,
+					prepare: async (page) => {
+						await page
+							.getByRole("heading", { name: failure, exact: true })
+							.waitFor();
+
+						if (
+							!(await page
+								.getByText(
+									"Something went wrong on my side. Try the link again in a few minutes.",
+									{ exact: true },
+								)
+								.isVisible())
+						)
+							throw new Error("Missing link failure copy.");
+					},
+				}).finally(() =>
+					sql(
+						"ALTER TABLE screenshot_links_offline RENAME TO software_agreement_links;",
+					),
+				);
+
+				steps.push({
+					title: `${failure}, ${viewport}`,
+					images: [
+						{
+							file,
+							caption: `${failure} Shown during a simulated database outage`,
+						},
+					],
+				});
 			}
 		}
 

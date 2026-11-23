@@ -181,7 +181,7 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(7);
+		expect(properties.length).toBeGreaterThanOrEqual(13);
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
@@ -199,12 +199,11 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		);
 	});
 
-	it("checks the code, with F10's and F9's fixes, keeping every property, with two equivalent mutants", () => {
+	it("checks the code, with F10's and F9's fixes, keeping every property, with one equivalent mutant", () => {
 		expect(models[1].current).toEqual(["discount"]);
 		expect(models[1].exhaustive).toEqual(["discount"]);
 		expect(models[1].equivalents).toEqual([
 			"discountSecondBatchNoSendingGuard",
-			"discountAcceptedOnlyCheck",
 		]);
 		expect(Object.keys(discountMutants)).not.toContain(
 			"discountSecondBatchNoSendingGuard",
@@ -213,6 +212,38 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		expect(discountMutants.discountTodaySecondBatch).toEqual({
 			property: "declinedHasNoOffer",
 		});
+		// The live-link check before F9's fix: equivalent until the signing extension, whose abandon closes a link with
+		// no sending window.
+		expect(discountMutants.discountAcceptedOnlyCheck).toEqual({
+			property: "sendLinkLive",
+		});
+	});
+
+	it("checks the signing extension: each new property has its own mutant, and the sign batch's guards are needed at write time", () => {
+		expect(discountMutants.discountReviewNoGuards).toEqual({
+			property: "reviewOfSentOffer",
+		});
+		expect(discountMutants.discountRedeemNoLiveGuard).toEqual({
+			property: "noSessionForDeadOffer",
+		});
+		expect(discountMutants.discountAbandonNoStatusGuard).toEqual({
+			property: "executedStays",
+		});
+		expect(discountMutants.discountCountersignNoGuards).toEqual({
+			property: "executedOnlyWhenSigned",
+		});
+		expect(discountMutants.discountAbandonDepositAtRead).toEqual({
+			property: "abandonedHasNoDeposit",
+		});
+		expect(discountMutants.discountReviewNoSignedGuard).toEqual({
+			property: "signedStaysSigned",
+		});
+
+		for (const mutant of [
+			"discountNoSignGuards",
+			"discountSignGuardsAtRead",
+		] as const)
+			expect(discountMutants[mutant]).toEqual({ property: "supersededInert" });
 	});
 
 	it("every mutant property is one of allProperties", () => {
@@ -627,7 +658,7 @@ describe("the audio project notices model", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties).toHaveLength(5);
+		expect(properties).toHaveLength(8);
 		expect(
 			propertiesWithoutMutant(properties, audioProjectNoticesMutants),
 		).toEqual([]);
@@ -640,13 +671,31 @@ describe("the audio project notices model", () => {
 			),
 		].map((match) => match[1]);
 
+		expect(models[14].current).toEqual([
+			"projectNotices",
+			"projectNoticesUpdate",
+			"projectNoticesCopy",
+			"projectNoticesSigning",
+		]);
 		expect([...modules].sort()).toEqual(
 			[
 				...Object.keys(audioProjectNoticesMutants),
-				"projectNotices",
-				"projectNoticesUpdate",
+				...models[14].current,
 			].sort(),
 		);
+	});
+
+	it("checks the agreements' kinds: a copy and a signing notice each have their claim's mutant", () => {
+		expect(audioProjectNoticesMutants.projectNoticesCopyClaimNoState).toEqual({
+			property: "copyOnlyWhenExecuted",
+		});
+		expect(audioProjectNoticesMutants.projectNoticesNoticeClaimNoState).toEqual(
+			{ property: "noticeOnlyBeforeCountersign" },
+		);
+		// A21: a countersign or an abandon fails a signing notice that is sending.
+		expect(audioProjectNoticesMutants.projectNoticesNoObsolete).toEqual({
+			property: "noSendingAfterCountersign",
+		});
 	});
 
 	it("every mutant property is one of allProperties", () => {
@@ -733,11 +782,14 @@ describe("the models the driver runs", () => {
 	});
 
 	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {
-		models.forEach((model: { steps?: string }) =>
-			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/),
-		);
+		models.forEach((model: { steps?: string; passSteps?: string }) => {
+			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/);
+			expect(model.passSteps ?? model.steps ?? "20").toMatch(/^[1-9]\d*$/);
+		});
 
-		// The discount model's send and decline are three steps each, so its deepest witness needs about 50.
+		// The discount model's send and decline are three steps each, so its deepest mutant needs about 17 and is found at
+		// 50; its deepest witness, a website start after a revision, needs at least 33 and is reached at 80.
 		expect(models[1].steps).toBe("50");
+		expect(models[1].passSteps).toBe("80");
 	});
 });

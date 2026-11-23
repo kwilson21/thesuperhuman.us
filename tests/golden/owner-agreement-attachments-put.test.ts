@@ -40,13 +40,18 @@ import {
 //   413 "Keep each PDF under 10 MiB."    one byte over the limit
 //   400 "The file must be a PDF."        an empty body, a text body, bytes that do not start with %PDF-
 //   400 "The PDF has no pages."          pdf-lib loads it and counts zero pages
-//   503 "The PDF could not be validated..."  starts with %PDF- but pdf-lib cannot load it
+//   400 "The PDF could not be validated..."  starts with %PDF- but pdf-lib cannot read it (bad input, behaviour fix B4; 503 stays
+//                                        for pdf-lib that cannot be loaded)
 //   200 {ok:true, attachment}            a PDF, 3 pages, exactly 10 MiB, unicode, markup and trimmed names, a duplicate query key (last wins),
 //                                        extra query keys, a date on Feb 29 of a leap year, another owner email
-//   503 "The attachment could not be saved."   the bucket put fails, the batch fails (the object is deleted), the guard fails (unknown request,
-//                                        a service request, withdrawn, resolved; the object is deleted), the batch and the check fail (the
-//                                        object is kept), the batch fails and the bucket delete fails (swallowed)
-//   rejected                             the signing-setting read fails (it is outside the try), a missing id param
+//   404 {ok:false}                       the guard fails and the request read after it is unknown or not a software request (an unknown
+//                                        request, a service request, an id that looks like SQL), or the id param is missing (B3: no read);
+//                                        the object is put, then deleted (B4)
+//   409 "The attachment could not be saved."   the guard fails and the request read after it is withdrawn or resolved, also when it was
+//                                        withdrawn just before the batch; the object is deleted (B4)
+//   500 "The attachment could not be saved."   a store failure: the signing-setting read, the bucket put, the batch (the object is
+//                                        deleted), the batch and the check (the object is kept), the batch and the bucket delete (swallowed);
+//                                        logged once as "Owner attachment upload failed unexpectedly" (behaviour fixes B1 and B2)
 //   sequences                            upload twice, upload then download then withdraw then download, two requests
 
 const SIGNING_ON =
