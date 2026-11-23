@@ -686,10 +686,10 @@ revokes the link in the batch that supersedes the offer, so a live link still al
 about 10,900 runs and `AbandonDepositAtRead` in about 6,350; at 40 all within about 5,450; at 50, the CI setting, all
 within about 955. So `steps` stays 50, and so do the budgets (20,000 runs per mutant check, 10,000 per run that must
 pass). The rarest mutant at the CI setting is now `AcceptedOnlyCheck` (about 9,700 runs, half its budget);
-`TodayDepositGuard` takes about 1,600 (about 1,300 before); the other mutants of the offers extension at most about 165
-(`LatestTerms`, `StartCopiesNewest` and `StartDropsDiscount` about 160 each, now that a signing and a countersign come
-before the start). The pass run made its 10,000 runs in about 96 s on the 4-core container (three runs at a time; 86 to
-109 s before).
+`TodayDepositGuard` takes about 1,600 (about 1,300 before); every other earlier mutant at most about 165 (`LatestTerms`,
+`StartCopiesNewest` and `StartDropsDiscount` about 160 each, now that a signing and a countersign come before the
+start). The pass run made its 10,000 runs in 90 to 96 s on the 4-core container, three runs at a time, against
+71 s for the model before the extension measured the same way (see "CI").
 
 **Witnesses after the extension** (by hand at the CI setting, as under "Witnesses" above, including the three the
 extension adds to the model): `neverExecuted` (an agreement executed) about run 160; `neverSessionAfterStart` (a session
@@ -719,6 +719,36 @@ a paid invoice (`agreement.ts:34-35`; the design's LemmaScript contract for `aba
 of a send with signing off (J2), which leaves that version unsignable on the website, where the model lets it be signed;
 two countersigns at once (A11 alone would refuse the second; the mutant drops A10 and A11 together) and, in general,
 more than one request of each kind in flight; more than two signing links in a run, a bound of the model.
+
+**Exhaustive, after the signing extension** (2026-11-23, Apalache 0.62.4, the 4-core container, one run at a time,
+each `quint verify verification/discount-offers.qnt --main <module> --init init --step stepOrEnd --invariant
+allProperties --max-steps N`; wall-clock times):
+
+| Module | Steps | Result | Time |
+|---|---|---|---|
+| `discount` | 7 | no violation | 89 s |
+| `discount` | 9 | no violation | 6 minutes |
+| `discountRedeemNoLiveGuard` | 5, 6, 7 | none at 5 or 6; violation at 7 | 32 s, 46 s, 79 s |
+| `discountSecondBatchNoSendingGuard` | 7 | no violation | 81 s |
+| `discountTodaySecondBatch` | 3, 4 | none at 3; violation at 4 | 23 s, 25 s |
+| `discountFirstBatchKeepsLink` | 6, 7 | none at 6; violation at 7 | 44 s, 65 s |
+| `discountNoLiveCheck` | 6, 7 | none at 6; violation at 7 | 45 s, 63 s |
+
+So the extension keeps the depths of the earlier mutants and of the equivalent one, and the search reaches
+`RedeemNoLiveGuard`, the shortest new mutant (a draft, its send, the link's read and batch, the redeem's read, the switch
+and the redeem's batch: 7 steps). The shortest counterexamples of the other new mutants are 11 steps (a review read before a decline, which
+waits two ticks after the send) to 15 (an abandon or a countersign after a signing), beyond any bound Apalache finishes
+here, so they are found by the random runs only, as `discountTodayDepositGuard` is.
+`pnpm run verify:quint:exhaustive` printed "keeps every property in every order up to 7 steps" for `audioExhaustive`,
+`softwareExhaustive`, `discount`, `music` and `board`; the next module, `offerBoard` (which this change does not touch,
+and which had been run by hand only to 5 steps), was still running after 36 minutes and was stopped. The modules after it were run by hand at
+7 steps: `allowance` (run by hand only to 6 steps before) was stopped after 10 minutes, and `pricing` (58 s),
+`publication` (16 s) and `agreementLink` (27 s) found no violation.
+
+The notices model has no `stepOrEnd` and is not in the exhaustive list; its agreements kinds were run by hand the same
+way with `--step step` (`verification/audio-project-notices.qnt`): `projectNoticesCopy` and `projectNoticesSigning` keep
+every property up to 7 steps (49 s, 52 s); `projectNoticesCopyClaimNoState` and `projectNoticesNoticeClaimNoState` find
+no violation at 2 steps and one at 3 (a read, the close and the claim; about 10 s each).
 
 ## The music-playback model
 
@@ -1007,7 +1037,7 @@ bias the random runs rarely reach the races.
 Every property reads stored rows and stamps (one counter standing for the order D1 serializes statements in), never a
 flag set at the write from the condition the guard checks.
 
-None has an Apalache run. Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
+None is in the exhaustive list; the notices model's agreements kinds were run through Apalache by hand ("Exhaustive, after the signing extension", under the discount-offers model). Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
 run as `projectMessages` or `projectFiles`.
 
 **The agreements' kinds in the notices model (2026-11-23).** Section 7 of the signing conversion design adds two kinds to
@@ -1160,3 +1190,5 @@ The Quint runs are independent, so the driver runs them in one pool, up to the n
 Why one pool: with the discount model added, two separate steps took 76 s and 125 s on the runner (3 minutes 21 seconds). The second step started the three equivalent mutants (each a full 100,000-run pass) last, so three cores ran long after the rest had finished. One pool removes that tail. Measured since: the Quint step took 151 to 341 s over the last nine successful Validate runs on main on 2026-11-15, which is above the budget of 2 minutes 30 seconds, and 212 to 422 s on the audio pull requests' successful runs on 2026-11-15. The CPU time of `verify:quint:all` (its user time, run locally, which varies by about 20 s between runs) is about 416 to 431 s without the three audio models and about 475 to 512 s with them (both measured before the brief-copy model joined the pool). The audio models make 44 checks (6 pass runs, 3 equivalent mutants and 35 mutants); the sum of their check times (each check's own wall time as the driver prints it, not CPU time) is about 131 s locally for the 44 checks (128 s measured for the first 43, plus 3.4 s for `QueueStatusOnly`); the sum fell from 88 s to 54 s for the 34 checks of that time, after the mutants that need particular starting points began from the one or two their race needs and no others: `PublishNoStage` from `finalAndReview`, `PublishStaleSupersede` and `RevokeNoFirstStatus` from `twoReviews`, `CompleteNoStage` from `final` and `finalPlus`; `InsertNoState`, `AbortNoCas` and `PartNoStateGuard` from `fresh`; `QueueStatusOnly` from a notice stuck in `sending`; the added pass runs that start only from `finalAndReview` and from `finalPlus` take about 4 s each, and the longest audio check is 4.6 s where the longest check on main is 55 s. Each `quint run` costs about 1.5 CPU-seconds of startup (parsing and checking the model) before it makes any random run, so 44 audio checks cost about 66 CPU-seconds in the pool, which is the floor while every property keeps a mutant. The budget is 2 minutes 30 seconds on a 4-core runner.
 
 The discount model's extension (2026-11-15) added time. Measured with `pnpm run verify:quint:all` on a 4-core cloud container, main and the extension one after the other with nothing else running: 232 s on main (94 checks) and 281 s with the extension (98 checks), 21% more. The discount model's own runs went from about 87 CPU-seconds (its pass run 45 s) to about 203 (`discount` 55 s and `discountF10Fix` 66 s at 30 steps, `discountTodayDepositGuard` 27 s, the other twelve mutants 4 to 7 s each). After the review raised the model to 50 steps and added a mutant, the same command took 262 s (99 checks; the discount pass runs 91 s and 109 s), and 338 s in a later run of the same (the machine is shared, so these are rough), against 225 s for the same model at 30 steps in a run just before (see "The discount-offers model" for why 50). On the runner the Quint step had taken 3.5 to 4.5 minutes and `pnpm test` 7 to 9, and two runs were cancelled at the job's 15-minute limit, so the Validate job's `timeout-minutes` was raised (to 30, by #318). F10's fix removed one pass run (`discountF10Fix`) and turned a mutant check into a pass run (`discountSecondBatchNoSendingGuard`, which now makes all 10,000 runs instead of stopping at a violation): 98 checks in 212 s in one run on the same container.
+
+The signing extension (2026-11-23) added time to the two models it changed. Measured on the 4-core container with three runs at a time (`QUINT_JOBS=3`) and an Apalache run on the fourth core, the same way on `main` and on the extension, as the sum of the checks' own times: the discount model's checks went from 16 in 258 s (the pass run 71 s, two equivalent mutants 71 s and 69 s, thirteen mutants 47 s) to 22 in 396 s (the pass run 90 s, the equivalent mutant 101 s, `discountAcceptedOnlyCheck`, now a mutant found in about 9,700 runs, 102 s, the six new mutants 34 s, the thirteen others 69 s), and the notices model's from 10 in 22 s to 14 in 36 s. In that run `pnpm run verify:quint` (23 pass runs) took 185 s and `pnpm run verify:quint:mutants` (192 checks) 371 s, and every check passed.
