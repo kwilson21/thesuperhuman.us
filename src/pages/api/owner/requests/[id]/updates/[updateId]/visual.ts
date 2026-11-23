@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { imageSize } from "~/lib/image-structure";
 import { clientPortalEnabled } from "~/lib/client-portal";
 import { readBodyWithin } from "~/lib/audio-project-uploads";
 import { openSoftwareGuard } from "~/lib/software-projects";
@@ -118,6 +119,9 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 		);
 	const key = `software/${id}/${updateId}/${crypto.randomUUID()}.${ext}`;
 
+	// Both are NULL when the size is not certain; the page then renders the image with no width or height.
+	const size = imageSize(new Uint8Array(bytes), type);
+
 	const at = new Date(
 		Math.max(Date.now(), Date.parse(draft.updated_at) + 1),
 	).toISOString();
@@ -140,9 +144,16 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 				),
 				db
 					.prepare(
-						"UPDATE software_project_updates SET visual_key=?,visual_media_type=?,updated_at=? WHERE id=?",
+						"UPDATE software_project_updates SET visual_key=?,visual_media_type=?,visual_width=?,visual_height=?,updated_at=? WHERE id=?",
 					)
-					.bind(key, type, at, updateId),
+					.bind(
+						key,
+						type,
+						size?.width ?? null,
+						size?.height ?? null,
+						at,
+						updateId,
+					),
 				softwareAudit(db, id, "visual-replaced", locals.owner.email, at),
 			]);
 		} catch {

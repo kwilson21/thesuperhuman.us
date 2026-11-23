@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi, type Mock } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { setupSoftwareComposer } from "~/scripts/software-composer";
 
 /** The event a fake form passes to its submit listener. */
@@ -32,6 +32,7 @@ type FakeElement = {
 	dataset: { accepted: string; paymentBlocked: string };
 	classList: { toggle: Mock };
 	getAttribute: (name: string) => string | null;
+	setAttribute: (name: string, value: string) => void;
 	removeAttribute: Mock;
 };
 
@@ -42,6 +43,9 @@ function fixture(
 	paymentBlocked = "[false]",
 	currentMilestone = 0,
 	savedMilestone = 0,
+	savedSize: { width: string; height: string } | null = savedVisual
+		? { width: "640", height: "480" }
+		: null,
 ) {
 	const handlers = new Map<string, FakeHandler>();
 	const fields: Record<string, FakeField> = {};
@@ -102,6 +106,21 @@ function fixture(
 
 		if (existing) return existing;
 
+		// A real attribute store, so a test reads the result of what the script did.
+		const attributes = new Map<string, string>(
+			selector === "[data-preview-image]"
+				? [
+						...(savedVisual ? [["src", savedVisual] as const] : []),
+						...(savedSize
+							? ([
+									["width", savedSize.width],
+									["height", savedSize.height],
+								] as const)
+							: []),
+					]
+				: [],
+		);
+
 		const created: FakeElement = {
 			hidden: false,
 			textContent: "",
@@ -111,9 +130,13 @@ function fixture(
 			querySelectorAll: () => [],
 			dataset: { accepted: "[true]", paymentBlocked },
 			classList: { toggle: vi.fn() },
-			getAttribute: () =>
-				selector === "[data-preview-image]" ? savedVisual : null,
-			removeAttribute: vi.fn(),
+			getAttribute: (name: string) => attributes.get(name) ?? null,
+			setAttribute: (name: string, value: string) => {
+				attributes.set(name, value);
+			},
+			removeAttribute: vi.fn((name: string) => {
+				attributes.delete(name);
+			}),
 		};
 
 		elements.set(selector, created);
@@ -286,6 +309,61 @@ it.each(["", "/saved-visual"])(
 	},
 );
 
+describe("preview image size attributes", () => {
+	const choose = (
+		page: ReturnType<typeof fixture>,
+		name: string,
+		type: string,
+	) => {
+		page.fields.visual.files = [{ name, size: 100, type }];
+		page.fileChange();
+	};
+
+	it("removes both when a new file replaces the saved image", () => {
+		const create = vi
+			.spyOn(URL, "createObjectURL")
+			.mockReturnValue("blob:next");
+
+		const page = fixture(true, "/saved-visual");
+		const image = page.elements.get("[data-preview-image]")!;
+		choose(page, "next.png", "image/png");
+		expect(image.src).toBe("blob:next");
+		expect(image.getAttribute("width")).toBeNull();
+		expect(image.getAttribute("height")).toBeNull();
+		create.mockRestore();
+	});
+
+	it("puts both back when a later file is rejected", () => {
+		const create = vi
+			.spyOn(URL, "createObjectURL")
+			.mockReturnValue("blob:next");
+
+		const page = fixture(true, "/saved-visual");
+		const image = page.elements.get("[data-preview-image]")!;
+		choose(page, "next.png", "image/png");
+		choose(page, "rejected.pdf", "application/pdf");
+		expect(image.src).toBe("/saved-visual");
+		expect(image.getAttribute("width")).toBe("640");
+		expect(image.getAttribute("height")).toBe("480");
+		create.mockRestore();
+	});
+
+	it("leaves none after a restore when the saved image had none", () => {
+		const create = vi
+			.spyOn(URL, "createObjectURL")
+			.mockReturnValue("blob:next");
+
+		const page = fixture(true, "/saved-visual", "[false]", 0, 0, null);
+		const image = page.elements.get("[data-preview-image]")!;
+		choose(page, "next.png", "image/png");
+		choose(page, "rejected.pdf", "application/pdf");
+		expect(image.src).toBe("/saved-visual");
+		expect(image.getAttribute("width")).toBeNull();
+		expect(image.getAttribute("height")).toBeNull();
+		create.mockRestore();
+	});
+});
+
 it("restores the saved endpoint after uploading and then rejecting another replacement", async () => {
 	vi.stubGlobal("confirm", () => true);
 	vi.stubGlobal(
@@ -348,6 +426,63 @@ it("restores the saved endpoint after uploading and then rejecting another repla
 	expect(page.elements.get("[data-preview-figure]")!.hidden).toBe(false);
 	expect(revoke).toHaveBeenCalledWith("blob:first");
 	expect(revoke).toHaveBeenCalledWith("blob:second");
+	revoke.mockRestore();
+	create.mockRestore();
+});
+
+it("puts no saved size on the uploaded image when a later file is rejected", async () => {
+	vi.stubGlobal("confirm", () => true);
+	vi.stubGlobal(
+		"FormData",
+		class {
+			getAll() {
+				return [];
+			}
+			has() {
+				return false;
+			}
+			*[Symbol.iterator]() {
+				yield ["title", "Title"];
+			}
+		},
+	);
+	vi.stubGlobal("location", { assign: vi.fn() });
+	vi.stubGlobal(
+		"fetch",
+		vi.fn().mockImplementation(async () =>
+			Response.json({
+				id: "draft",
+				updatedAt: "now",
+				projectUpdatedAt: "project-saved",
+			}),
+		),
+	);
+	const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+	const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:next");
+
+	const page = fixture(true, "/saved-visual");
+	const image = page.elements.get("[data-preview-image]")!;
+	expect(image.getAttribute("width")).toBe("640");
+	page.fields.visual_alt.value = "A visual";
+	Object.defineProperty(page.fields.visual, "value", {
+		set: () => {
+			page.fields.visual.files = [];
+		},
+		get: () => "",
+	});
+	page.fields.visual.files = [
+		{ name: "next.png", size: 100, type: "image/png" },
+	];
+	page.fileChange();
+	page.submit();
+	await vi.waitFor(() => expect(location.assign).toHaveBeenCalled());
+	page.fields.visual.files = [
+		{ name: "rejected.pdf", size: 100, type: "application/pdf" },
+	];
+	page.fileChange();
+	expect(image.src).toBe("/api/owner/requests/r/updates/draft/visual");
+	expect(image.getAttribute("width")).toBeNull();
+	expect(image.getAttribute("height")).toBeNull();
 	revoke.mockRestore();
 	create.mockRestore();
 });

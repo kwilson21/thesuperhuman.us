@@ -5,6 +5,7 @@ import {
 	deliveredIndexes,
 	softwareVersionNumber,
 	softwareVersionLabel,
+	visualSize,
 } from "~/lib/software-projects";
 import { safeHttpsUrl, safeReferences } from "~/lib/link-check";
 import { evidenceTypes, softwareDate } from "~/lib/software-project-display";
@@ -57,7 +58,7 @@ const deliveryReferences = update.kind === "delivery_review" ? references : [];
     {!hideTitle && <h2>{update.title || 'Untitled update'}</h2>}
     {showExplanation && update.what_changed && <p>{update.what_changed}</p>}
     {showExplanation && update.client_request && <p>I need from you: {update.client_request}</p>}
-    {visualUrl ? <figure><img src={visualUrl} alt={update.visual_alt} /></figure> : <div class="work-frame">{projectName}</div>}
+    {visualUrl ? <figure><img src={visualUrl} alt={update.visual_alt} {...visualSize(update)} /></figure> : <div class="work-frame">{projectName}</div>}
     {update.evidence_type==='concept' && <p class="access-note">Sketch, not built yet</p>}
     {previewHref && <p><a class="studio-button" href={previewHref} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗</a></p>}
     {partialDelivery && <p>This version doesn't include everything we agreed yet.</p>}
@@ -73,7 +74,7 @@ const deliveryReferences = update.kind === "delivery_review" ? references : [];
   {!preview && update.evidence_type==='concept' && <p class="access-note">Sketch, not built yet</p>}
   <h2 data-preview-title class:list={{"rail-muted": !update.title}}>{update.title || 'Untitled update'}</h2>
   <figure data-preview-figure hidden={!visualUrl}>
-    <img src={visualUrl} alt={update.visual_alt} data-preview-image loading={preview ? 'eager' : 'lazy'} />
+    <img src={visualUrl} alt={update.visual_alt} {...visualSize(update)} data-preview-image loading={preview ? 'eager' : 'lazy'} />
     <figcaption data-preview-caption>{preview ? update.evidence_type === 'concept' ? 'Illustrative concept' : update.artifact_version : historyLabel}</figcaption>
   </figure>
   <p hidden={!previewHref} data-preview-link-row><a href={previewHref ?? undefined} data-preview-link target="_blank" rel="noopener noreferrer">{preview ? 'Open preview ↗' : `Open ${softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗`}</a></p>

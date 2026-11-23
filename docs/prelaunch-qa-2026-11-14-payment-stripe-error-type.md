@@ -15,15 +15,15 @@ Live since deployment: `wrangler.jsonc` sets `STRIPE_PAYMENTS_ENABLED` to `"true
 
 | Stripe refusal or failure | Before | After |
 | --- | --- | --- |
-| Bad request (400) whose message does not say "Stripe" | 409 | 502 |
+| Bad request (400) whose message does not say "Stripe" (seen with a local stand-in and once against Stripe test mode in the second run) | 409 | 502 |
 | Bad request (400) whose message says "Stripe" | 502 | 502 |
 | Wrong API key (401) | 409 | 502 |
-| Rate limited (429) | 409 | 502 |
+| Rate limited (429) (seen with a local stand-in in the second run) | 409 | 502 |
 | Idempotency conflict | 409 | 502 |
-| Stripe server error (500) whose message does not say "Stripe" | 409 | 502 |
+| Stripe server error (500) whose message does not say "Stripe" (seen with a local stand-in in the second run) | 409 | 502 |
 | Stripe server error (500) whose message says "Stripe" (from reading the code, not a recorded case) | 502 | 502 |
 | Stripe unreachable (connection dropped) | 502 | 502 |
-| Request timeout (from reading the SDK, not a recorded case) | 409 | 502 |
+| Request timeout (seen with a local stand-in in the second run; not a recorded case before) | 409 | 502 |
 | Invoice returned as a draft, or with no or a non-https link | 502 | 502 |
 | Stripe payments off or not configured | 503 | 503 |
 | Stripe sent the invoice but saving it failed | 503 | 503 |
@@ -37,6 +37,7 @@ Two things for the owner to know. An idempotency conflict and an invalid request
 
 - The owner approved building this fix (approval relayed to the pull request author, 2026-11-14), and, after being shown the table above, approved merging once the checks were clean (2026-11-15).
 - The owner approved a Stripe test-mode run of this route and supplied a test-mode key for it (2026-11-22).
+- The owner approved a second run of the rows the first run did not reach, and the cleanup of the sandbox afterwards, and supplied a test-mode key again (2026-11-22).
 
 ## Evidence and limits
 
@@ -46,8 +47,8 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - Golden corpus: `tests/golden/fixtures/owner-request-payment.json.gz` was re-recorded in its own commit. 21 of 221 cases change, each only in the first step's response status, 409 to 502; bodies, headers, database statements, outgoing requests, logs and rows are unchanged. The commit message and the pull request list the cases. No other fixture changed. After `main` re-recorded its fixtures in a newer format, `main` was merged in, its fixture taken, and the same change re-recorded on top in a commit of its own: again 21 of 221 cases, each only the first step's status.
 - Top of this branch, after merging `main` at `6c30c5d7`, run without a build: `oxlint --deny-warnings` exit 0; `biome format .` no fixes; `astro check` 0 errors; the full test suite passed except one test, `tests/scripts/publication-journal-trace.test.ts`, which starts an external model run and fails the same way in every scratch checkout used here, including one with documentation changes only, while passing in a normal checkout of `main`. It is treated as a local setup limit; `validate` in CI is the check. Before that merge, the build, the full suite and the built-bundle tests passed on this branch.
 - One independent review round for correctness and security and one for repository rules: no blocker or should-fix item. The correctness review enumerated every error that can reach the changed line and found the only status change is the intended one, apart from the lowercase case noted above.
-- `validate` and all six test lanes passed on the final head, and Codex found nothing. The one test that failed in the scratch checkout was not looked up individually in the CI logs. UNVERIFIED: the built Worker bundle was not inspected for the Stripe error class check; the server code already relies on the same check elsewhere. The 2026-11-22 Stripe test-mode run observed the built Worker answering 502 in two cases set up to make Stripe refuse (the refusal types are inferred, not logged), and the bundle itself was still not inspected.
-- UNVERIFIED, apart from the four cases in "Stripe test-mode run" (2026-11-22, local build of `main`): the other statuses come from tests with a stand-in for Stripe and from the recorded corpus.
+- `validate` and all six test lanes passed on the final head, and Codex found nothing. The one test that failed in the scratch checkout was not looked up individually in the CI logs. UNVERIFIED: the built Worker bundle was not inspected for the Stripe error class check; the server code already relies on the same check elsewhere. The two Stripe test-mode runs of 2026-11-22 (see "Stripe test-mode run" and "Second run") observed the built Worker answering 502 in the refusal cases set up on purpose. In the first run the refusal types are inferred, not logged. In the second run one refusal was read from the Worker's outbound call, and the others were answered by a local stand-in. The bundle itself was still not inspected.
+- UNVERIFIED, apart from the four cases in "Stripe test-mode run" and the one real-Stripe case in "Second run" (both 2026-11-22, local builds of `main`): the other statuses come from tests with a stand-in for Stripe, from the recorded corpus, and from the second run's stand-in rows, which are not observed against Stripe.
 
 ## Checklist
 
@@ -71,7 +72,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 ### 5. Forms and sensitive flows
 
 - N/A, 5.1 Server validation, origin, auth, abuse protection and rate limits: unchanged; the route's owner check and input reading are untouched and their existing tests pass.
-- PASS (local tests only), 5.2 Server statuses for Stripe failures, including rate limit and server error: see the table. In the local Stripe test-mode run of 2026-11-22, a made-up key and a reused idempotency key each answered 502 (Stripe's error type inferred, not logged). UNVERIFIED, 5.2 timeout (read from the SDK, not run), the pending button, retry and duplicate submit in a browser.
+- PASS (local tests only), 5.2 Server statuses for Stripe failures, including rate limit and server error: see the table. In the local Stripe test-mode run of 2026-11-22, a made-up key and a reused idempotency key each answered 502 (Stripe's error type inferred, not logged). In the second run of the same day, the rate limit, server error, bad request and timeout answers were observed through a local stand-in for Stripe, not against Stripe itself, and a missing-customer refusal was observed from Stripe test mode. UNVERIFIED, 5.2 a real rate limit, server error or timeout from Stripe itself, and the pending button, retry and duplicate submit in a browser.
 - N/A, 5.3, 5.4 and 5.6: no page, delivery or confirmation changed.
 - PASS (local tests only), 5.5 Approval-gated flows intact.
 
@@ -87,7 +88,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed; not observed live.
 - PASS (tried without committing), 7.4 Rollback: a git revert of the merge commit `85cf0d39` applies to the code, tests and fixture; see "Merge and deployment". Production before the three merges was `6c30c5d7`.
 - UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
-- PASS, 7.6 Implemented: yes. Verified locally: yes, including four cases in Stripe test mode on 2026-11-22 (see "Stripe test-mode run"). Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
+- PASS, 7.6 Implemented: yes. Verified locally: yes, including four cases in Stripe test mode on 2026-11-22 (see "Stripe test-mode run") and the rows of the second run the same day (see "Second run"). Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
 
 ### Software agreement signing
 
@@ -98,7 +99,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - N/A, 8.1, 8.3 to 8.8 and 8.10: no Access, migration, analytics, retention or studio code changed.
 - PASS (local, by reading the code), 8.2 Owner response headers: the changed line keeps the route's `cache-control: private, no-store` headers, and the middleware's `x-robots-tag` is untouched.
 - N/A, 8.9 Launch scope with payments off: the flag's handling is unchanged; with payments off the route still answers 503 before any Stripe call.
-- UNVERIFIED, 8.11 Keep payments off until the Stripe test-mode lifecycle passes: `wrangler.jsonc` has the flag set to `"true"` already. A test-mode booking invoice was created on a local build on 2026-11-22, but no booking and balance lifecycle (payment, webhooks, balance invoice) was run.
+- UNVERIFIED, 8.11 Keep payments off until the Stripe test-mode lifecycle passes: `wrangler.jsonc` has the flag set to `"true"` already. Test-mode booking invoices were created on local builds on 2026-11-22 in both runs, and locally signed "invoice voided" webhooks were posted in the second run (in the stand-in replace setup and in the real Stripe case). No other webhook kind was run. No booking and balance lifecycle was run in either run: no payment through Stripe and no balance invoice.
 - UNVERIFIED, 8.14 Rollback procedures and 8.15 `owner:health` on the target: not run.
 - PASS (local tests only), 8.12 Repeated invoice actions create no duplicate invoice: the reservation and idempotency behaviour is unchanged and the recorded "stuck reservation" sequence differs only in its first status. In Stripe test mode on a local build (2026-11-22), a retry after a failed creation answered 409 and nothing was recorded (case 2); after the provoked conflict in case 4, Stripe created no new customer or invoice. A repeat with a valid key was not run: UNVERIFIED in Stripe test mode.
 - PASS (local, by review), 8.13 No Stripe secret or customer identifier in responses: every body on the changed path is `{"ok": false}`.
@@ -107,7 +108,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 - Merged 2026-11-16 at about 01:22 UTC (the evening of 2026-11-15, US Eastern) as merge commit `85cf0d39`, whose first parent is `6822a848`.
 - Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
-- This is the one behaviour change of the three: from this deployment the owner payment route answers 502 for the Stripe refusals listed in the table. No invoice action was exercised live and no Stripe test-mode run was made at the merge, so the new statuses were unobserved in production at that point. A later local test-mode run is described in the Stripe test-mode run section.
+- This is the one behaviour change of the three: from this deployment the owner payment route answers 502 for the Stripe refusals listed in the table. No invoice action was exercised live and no Stripe test-mode run was made at the merge, so the new statuses were unobserved in production at that point. Later local test-mode runs are described in the Stripe test-mode run and Second run sections.
 - Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
 - Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
 - Rollback: `git revert -m 1 85cf0d39` undoes only this change. Tried without committing after this record update: the route, the library, the tests and the fixture revert cleanly, and the revert stops only on this record, which was edited since and is kept by hand. The reverted state was not built or tested.
@@ -129,14 +130,52 @@ Case 4 was provoked on purpose, with local test data that production cannot prod
 
 Not exercised:
 
-- A bad request (400) whose message does not say "Stripe". The route call for it never reached Stripe (its setup did create a customer and invoice; see Sandbox state). It needed a paid booking first. A manual payment cannot be recorded on an installment that already has a Stripe invoice (409), so the balance action stopped at the site's own "booking must be paid" check (409). Paying the booking through Stripe would also need a signed webhook; webhooks were not run.
-- Rate limited (429), Stripe server error (500) and timeout. Not run.
-- Replace actions, webhooks and the balance invoice.
+- A bad request (400) whose message does not say "Stripe". The route call for it never reached Stripe (its setup did create a customer and invoice; see Sandbox state). It needed a paid booking first. A manual payment cannot be recorded on an installment that already has a Stripe invoice (409), so the balance action stopped at the site's own "booking must be paid" check (409). Paying the booking through Stripe would also need a signed webhook; webhooks were not run. (Exercised later the same day, in the replace action against Stripe test mode; see "Second run".)
+- Rate limited (429), Stripe server error (500) and timeout. Not run. (Exercised later the same day through a local stand-in for Stripe, not against Stripe itself; see "Second run".)
+- Replace actions, webhooks and the balance invoice. (Later the same day the replace action and locally signed "invoice voided" webhooks were run; the balance invoice was not; see "Second run".)
 
 What it shows: two cases set up to make Stripe refuse (a made-up key and a reused idempotency key) answered 502, and the success case answered 200, so the built Worker behaved as the Stripe error check predicts. Neither refusal type was logged, so both are inferred. The bundle itself was not inspected. Production is unchanged by this run: the new statuses are still not observed live.
 
-Sandbox state: the run left 3 test customers and 4 open test invoices in the sandbox, and deleted 1 test customer: one customer and invoice from case 3; one from the setup of the 400 attempt (its customer is the one deleted; its invoice stays open); and one each from two earlier attempts at case 3 that stopped on a local cleanup error after Stripe had created them. Every client email was at `example.com`. All objects are in test mode; no live-mode object was created and no money moved. No Stripe object id is recorded here.
+Sandbox state: the run left 3 test customers and 4 open test invoices in the sandbox, and deleted 1 test customer: one customer and invoice from case 3; one from the setup of the 400 attempt (its customer is the one deleted; its invoice stays open); and one each from two earlier attempts at case 3 that stopped on a local cleanup error after Stripe had created them. Every client email was at `example.com`. All objects are in test mode; no live-mode object was created and no money moved. No Stripe object id is recorded here. Later the same day these objects were voided or deleted; the state after the second run is in "Second run".
+
+## Second run (added 2026-11-22)
+
+Later on 2026-11-22 some of the rows that the first run did not reach were run. The build was the production build of `main` at `98e9404a`, which contains this change. It was bundled as for deployment and run locally in the Workers runtime (Miniflare), with local in-memory D1 only and all migrations applied. This serves the build differently from the first run, which used `wrangler dev --local`. Owner sign-in went through the site's real Access check, unmodified, with a locally made test identity. Every client email was at `example.com`. Production was not touched. No repository file was changed for the run.
+
+The route's Stripe host is fixed in the code, and Stripe's test mode cannot be made to answer 429, 500 or hang on demand. So for those rows the Worker's outbound calls to Stripe were answered by a local stand-in outside the code. The stand-in recorded each call and what it answered during the run; the logs were not retained. Those rows are not observed against Stripe. One row was run against real Stripe test mode.
+
+The owner approved exercising these rows and cleaning up the sandbox, and supplied a test-mode key again (2026-11-22). The key was never stored in the repository or printed, and it was deleted after the run.
+
+Create the booking invoice, with the local stand-in in place of Stripe:
+
+| Stand-in answered | Before (per the table in Scope) | Observed route status | Outbound attempts | Time |
+| --- | --- | --- | --- | --- |
+| Rate limited (429), message without "Stripe" | 409 | 502 | 1 (the SDK did not retry) | about 7 ms |
+| Server error (500), message without "Stripe" | 409 | 502 | 3 | about 1 second |
+| Never answered (timeout) | 409 | 502 | 3, about 80 seconds apart | about 241 seconds in all |
+| Bad request (400, "No such customer"), message without "Stripe" | 409 | 502 | 1 | about 5 ms |
+| Control: stand-in answers success | not applicable | 200, invoice recorded as open | 5 | not applicable |
+
+Every failure answer had body `{"ok": false}` and header `cache-control: private, no-store`. After each, no invoice was recorded and the creation reservation stayed set. The local Workers runtime (Miniflare) did not cut off the request. The control shows the stand-in was in the path.
+
+Replace the booking invoice, with the same stand-in. The booking invoice was set up by creating an invoice through the stand-in, then posting a locally signed "invoice voided" webhook, which answered 200. The replace reused the stored customer and failed at invoice creation.
+
+| Stand-in answered | Observed route status | Outbound attempts |
+| --- | --- | --- |
+| Rate limited (429) | 502 | 1 |
+| Server error (500) | 502 | 3, about 1 second |
+| Bad request (400) | 502 | 1 |
+
+Each answer had the same body and header. After each, the invoice cleared, status was not created, and the reservation stayed set.
+
+Real Stripe test mode, one case: a booking invoice was created for real. The route answered 200, and Stripe answered 200 to each of the five calls. A locally signed "invoice voided" webhook was then posted (200), and the booking became void locally. That test customer was then deleted in Stripe, and the replace action was run. The Worker sent one request to Stripe, an invoice creation with the stored customer. Stripe answered 400, an invalid-request error for a missing resource ("No such customer"). This was read from the Worker's outbound call as it passed through, so this refusal is observed, not inferred. The route answered 502, body `{"ok": false}`, header `cache-control: private, no-store`, in about 100 ms. Afterwards, locally: no invoice, status not created, reservation set. The refusal answered 409 before this change, per the table in Scope (the row "Bad request (400) whose message does not say "Stripe"").
+
+Existing behaviour: in the local run, when the stand-in did not answer, the owner's request stayed open about four minutes (three attempts of about 80 seconds) before the 502. This change altered only the status, not the waiting. Production behaviour was not observed.
+
+Still not exercised: a real 429, 500 or timeout from Stripe itself (stand-in only); the balance invoice; a booking paid through Stripe; webhook kinds other than locally signed "invoice voided" webhooks; a 500 or 400 whose message says "Stripe"; the pending button, retry and duplicate submit in a browser; anything in production. The built bundle was still not inspected. The new statuses are still not observed live.
+
+Sandbox state after the second run: the second run created 1 more test customer and 1 more test invoice. Afterwards all 5 open test invoices from the two runs were voided, and the 3 remaining test customers from them were deleted. The second run's own customer had been deleted as part of its case. Checked afterwards by listing the sandbox: no customer from either run remains, and the 5 invoices show as void. Older test objects from before these runs were left untouched. All in test mode; no money moved. No Stripe object id is recorded here.
 
 ## Delivery status
 
-Current state: Implemented: yes. Verified locally: yes, including four cases in Stripe test mode on 2026-11-22 (see "Stripe test-mode run"). Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
+Current state: Implemented: yes. Verified locally: yes, including four cases in Stripe test mode on 2026-11-22 (see "Stripe test-mode run") and the rows of the second run the same day (see "Second run"). Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.

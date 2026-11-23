@@ -231,7 +231,7 @@ it("reports attention when the request audit trigger is missing", async () => {
 	);
 });
 
-it("detects incomplete schemas and passes only after 0027", async () => {
+it("detects incomplete schemas and passes only after 0028", async () => {
 	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 	const db = new DatabaseSync(":memory:");
 
@@ -365,8 +365,57 @@ it("detects incomplete schemas and passes only after 0027", async () => {
 			"utf8",
 		),
 	);
+	// 0028 adds the update image size columns that `sharedSoftwareUpdates` (client project page,
+	// owner update page, owner request project panel) and the owner image upload name.
+	expect((await ownerHealth(fixture)).checks).toContainEqual(
+		expect.objectContaining({ id: "schema", status: "attention" }),
+	);
+	db.exec(
+		readFileSync(
+			new URL(
+				"../../migrations/music/0028_software_update_visual_size.sql",
+				import.meta.url,
+			),
+			"utf8",
+		),
+	);
 	expect((await ownerHealth(fixture)).checks).toContainEqual(
 		expect.objectContaining({ id: "schema", status: "pass" }),
+	);
+	db.close();
+});
+
+it("reports the update image size migration missing on a database migrated only through 0027", async () => {
+	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+	const db = new DatabaseSync(":memory:");
+
+	const migrations = readdirSync(
+		new URL("../../migrations/music/", import.meta.url),
+	)
+		.filter((name) => name.endsWith(".sql"))
+		.sort();
+
+	for (const name of migrations.filter((name) => name < "0028"))
+		db.exec(
+			readFileSync(
+				new URL(`../../migrations/music/${name}`, import.meta.url),
+				"utf8",
+			),
+		);
+	const fixture = healthyFixture();
+	const baseQuery = fixture.query;
+	fixture.query = (sql) =>
+		sql.includes("sqlite_master") || sql.includes("pragma_table_info")
+			? Promise.resolve(nameRows(db, sql))
+			: baseQuery(sql);
+	expect((await ownerHealth(fixture)).checks).toContainEqual(
+		expect.objectContaining({
+			id: "schema",
+			status: "attention",
+			summary: expect.stringContaining(
+				"software_project_updates.visual_width (migration 0028)",
+			),
+		}),
 	);
 	db.close();
 });
