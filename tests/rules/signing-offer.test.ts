@@ -20,7 +20,7 @@ import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 // `openForSigning` to the live signing guard A1 (`liveSigningGuard`, imported from src/lib/agreement-access.ts), and
 // `linkedOffer` to `getLinkedOffer`'s filters (imported from src/lib/software-offers.ts). The facts are read with the
 // statements the store will read them with, copied here: A1's facts with the read today's link route makes after a
-// guard raised (`signingRefusal`, src/lib/agreement-access.ts), the linked offer's rows unfiltered by the token's hash.
+// guard raised (`signingRefusal`, src/lib/agreement-access.ts), the linked offer's rows filtered by the token's hash alone.
 
 type Said = { refused: string; say: string } | { wrote: unknown };
 

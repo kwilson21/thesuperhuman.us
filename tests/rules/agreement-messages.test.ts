@@ -15,11 +15,13 @@ import { next } from "../../src/server/machines/next";
 import {
 	type CopyClaimFacts,
 	copyClaimable,
+	copySigned,
 	MESSAGE_STALE_MS,
 	type MessageAgreement,
 	messageOutcome,
 	messagesToReset,
 	type NoticeClaimFacts,
+	noticeAgreementFound,
 	noticeClaimable,
 	type ResetFacts,
 	type StoredCopy,
@@ -98,6 +100,18 @@ describe("claiming a party's copy", () => {
 		expect(claimCopy({ signature: null })).toEqual({ nothing: true });
 	});
 
+	it("decides the signature before any attempt is drawn, as today's delivery does", () => {
+		// Today `deliverAgreementCopies` reads the party's signature and `continue`s before `crypto.randomUUID()`, so the
+		// flow asks `copySigned` with no attempt and draws one only for a party that signed (golden retry-copy "the client
+		// signature row is missing" records the contractor's attempt as the next id).
+		expect(said(copySigned.decide(null, { signature: null }))).toEqual({
+			nothing: true,
+		});
+		expect(
+			said(copySigned.decide(null, { signature: { receipt_id: "receipt" } })),
+		).toEqual({ wrote: { receipt_id: "receipt" } });
+	});
+
 	it("skips a copy that is not pending, or missing", () => {
 		for (const status of ["sending", "sent", "failed"] as const)
 			expect(claimCopy({ copy: copy({ status }) })).toEqual({ nothing: true });
@@ -135,6 +149,20 @@ const claimNotice = (over: Partial<NoticeClaimFacts> = {}) =>
 	);
 
 describe("claiming a signing notice", () => {
+	it("draws nothing when the agreement is gone, as today's delivery returns before any attempt", () => {
+		expect(said(noticeAgreementFound.decide(null, null))).toEqual({
+			nothing: true,
+		});
+		expect(
+			said(
+				noticeAgreementFound.decide(null, {
+					request_id: "request",
+					receipt_id: null,
+				}),
+			),
+		).toEqual({ wrote: { request_id: "request", receipt_id: null } });
+	});
+
 	it("claims a pending notice while its agreement awaits the countersignature, open and with no project", () => {
 		expect(claimNotice()).toEqual(sending);
 		expect(
