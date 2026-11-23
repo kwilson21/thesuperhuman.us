@@ -16,7 +16,10 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { currentSigningNotification } from "../lib/agreement-artifacts";
 import { agreementEvent } from "../lib/agreement-events";
-import type { AgreementTemplate } from "../lib/agreement-templates";
+import type {
+	AgreementKind,
+	AgreementTemplate,
+} from "../lib/agreement-templates";
 import { softwareGuard } from "../lib/software-guard";
 import type { SoftwareOffer } from "../lib/software-offers";
 import {
@@ -47,6 +50,7 @@ import {
 } from "./machines/agreement-packet";
 import { type MachineContext, next } from "./machines/next";
 import { OFFER_MOVES, OFFER_STATUSES } from "./machines/offer-version";
+import { readCurrentTemplate as readOffersTemplate } from "./offers-store";
 import type { AbandonWrite, OfferInvoiceRow } from "./rules/agreement-abandon";
 import type {
 	AttachmentFacts,
@@ -60,6 +64,7 @@ import type {
 } from "./rules/agreement-countersign";
 import type {
 	DownloadAgreement,
+	OwnerCopyAgreement,
 	StoredSignedCopy,
 	StudioProject,
 } from "./rules/agreement-download";
@@ -86,11 +91,22 @@ import type {
 	RecordAgreementRow,
 	ReusingOfferRow,
 } from "./rules/agreement-record";
+import type { AccessRows } from "./rules/agreement-retention";
 import type {
 	SigningOfferRow,
 	StoredAgreementSession,
 	StoredStudioSession,
 } from "./rules/agreement-session";
+import type {
+	ContractorSave,
+	NewestContractorConfig,
+	TemplatePublication,
+	TemplateRow,
+} from "./rules/agreement-templates";
+import type {
+	AttachmentRow,
+	StoredUploadRequest,
+} from "./rules/agreement-upload";
 import type {
 	DraftSaveFacts,
 	DraftWrite,
@@ -2638,3 +2654,317 @@ export const resetCopies = (id: string, decided: MessageReset) =>
 /** The owner's reset of the agreement's current notices (A20). */
 export const resetNotices = (id: string, decided: MessageReset) =>
 	resetMessageTable(MESSAGE_SQL.resetNotices, id, decided);
+
+// ---- templates, settings, access cleanup, uploads and the owner's downloads ----
+//
+// POST /api/owner/agreements (preview, publish, template-version, config, setting, access-cleanup), the owner's PUT and
+// GET of agreement attachments, and the owner's signed-copy download (docs/plans/2026-11-signing-conversion.md, section
+// 4, "Templates and settings" and "Upload and downloads"). Each statement keeps the text today's code runs
+// (src/lib/agreement-templates.ts, src/pages/api/owner/agreements.ts, `cleanupAgreementAccess` in
+// src/lib/agreement-access.ts, src/pages/api/owner/requests/[id]/agreement-attachments.ts), and each batch its statements
+// in today's order, so the golden hooks pick the same statements. Three reads are new, each made just before the write
+// that re-checks it: the newest contractor config (A23), every session and link for the clean-up (its DELETEs keep the
+// cutoff as their filter), and the upload's request (A24), whose read also replaces today's read of its kind after A24
+// raised. The owner's signed copy reads the agreement's plain status and archive, which `ownerCopy` judges, in place of
+// today's filtered read, and its copy row through `readSignedCopy` above. A template row is read as the review's
+// `TemplateColumns`, and the upload reads the signing setting with `readSigningEnabled`.
+// tests/server/agreement-store-templates.test.ts holds every kept text to the fixtures, each changed one to the hooks its
+// old text matched, and each new one to none.
+
+/** A row a read only counts: `SELECT 1` answers a column the reader does not need. */
+const Exists = Schema.Struct({});
+
+const ConfigVersionRow = Schema.Struct({ version: Schema.Number });
+
+const AccessSessionRow = Schema.Struct({
+	token_hash: text,
+	link_id: text,
+	expires_at: text,
+	revoked_at: maybeText,
+});
+
+const AccessLinkRow = Schema.Struct({ id: text, expires_at: text });
+
+const UploadRequestRow = Schema.Struct({ kind: text, status: text });
+
+const OwnerAttachmentRow = Schema.Struct({ object_key: text });
+
+const OwnerCopyRow = Schema.Struct({
+	status: text,
+	archive_closed_at: maybeText,
+});
+
+/**
+ * The label index (`software_agreement_templates_label`, one label per kind) refused the publish's insert, as SQLite words
+ * it. The label's use is `LabelUsed`'s fact, so the publish reads and decides again.
+ */
+const LABEL_TAKEN = /UNIQUE constraint failed.*version_label/;
+
+/** The contractor config's primary key (its version) refused the insert: another save took the version first. */
+const CONFIG_VERSION_TAKEN =
+	/UNIQUE constraint failed.*software_contractor_config\.version/;
+
+/**
+ * Plain read: the newest published template of a kind, or null. The offers store's read is today's `currentTemplate`
+ * (the same SQL, the row as stored), so it is used as it is; its failure is this store's, with the same cause, so a
+ * signing route maps one tag.
+ */
+export const readCurrentTemplate = (kind: AgreementKind) =>
+	readOffersTemplate(kind).pipe(
+		Effect.catchTag("OffersStoreFailed", (failed) =>
+			Effect.fail(new AgreementStoreFailed({ failure: failed.failure })),
+		),
+	);
+
+/** Plain read: the stored version of a kind with this number, or null (today's `templateVersion`). */
+export const readTemplateVersion = (kind: AgreementKind, version: number) =>
+	readAll(TemplateColumns, (db) =>
+		db
+			.prepare(
+				"SELECT * FROM software_agreement_templates WHERE kind=? AND version=?",
+			)
+			.bind(kind, version),
+	).pipe(Effect.map((rows): TemplateRow | null => rows[0] ?? null));
+
+/** Plain read: whether any version of the kind has this label (today's check in `publishTemplate`). */
+export const readLabelUse = (kind: AgreementKind, versionLabel: string) =>
+	readAll(Exists, (db) =>
+		db
+			.prepare(
+				"SELECT 1 FROM software_agreement_templates WHERE kind=? AND version_label=? LIMIT 1",
+			)
+			.bind(kind, versionLabel),
+	).pipe(Effect.map((rows) => rows.length > 0));
+
+/**
+ * Publishes the version `publishTemplate` decided: one batch, today's, of A22 (the kind's newest version is still the one
+ * expected), the insert and the template-published event, whose id `agreementEvent` draws as its statement is built, as
+ * today. A raised guard is `GuardRefused`. The label index refusing the insert is `ChangedSinceRead`: another publish took
+ * the label after it was read, so `decideAndSave` reads again and the rule answers `LabelUsed`. Anything else is an
+ * `AgreementStoreFailed`.
+ */
+export const publishBatch = (publication: TemplatePublication) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+		const { row, expectedVersion, event } = publication;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(
+							`SELECT CASE WHEN COALESCE((SELECT max(version) FROM software_agreement_templates WHERE kind=?),0)=? THEN 1 ELSE json_extract('Template changed','$') END`,
+						)
+						.bind(row.kind, expectedVersion),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by,version_label,source_revision) VALUES(?,?,?,?,?,?,?,?,?)",
+						)
+						.bind(
+							row.id,
+							row.kind,
+							row.version,
+							row.text,
+							row.sha256,
+							row.published_at,
+							row.published_by,
+							row.version_label,
+							row.source_revision,
+						),
+					agreementEvent(db, event.action, event.actor, event.at),
+				]),
+			catch: (cause) =>
+				cause instanceof Error && chainMatches(cause, LABEL_TAKEN)
+					? new ChangedSinceRead()
+					: refusedBatch(cause),
+		});
+	});
+
+/** Plain read: the newest contractor config's version, or null when none is stored. Read just before A23 re-checks it. */
+export const readNewestContractorConfig = () =>
+	readAll(ConfigVersionRow, (db) =>
+		db.prepare(
+			"SELECT version FROM software_contractor_config ORDER BY version DESC LIMIT 1",
+		),
+	).pipe(Effect.map((rows): NewestContractorConfig => rows[0] ?? null));
+
+/**
+ * Saves the contractor's details as `saveContractor` decided: one batch, today's, of A23 (the newest config version is
+ * still the one expected) and the insert. A raised guard, or the version's primary key taken by another save, is
+ * `GuardRefused`, never retried (today's 409); anything else is an `AgreementStoreFailed`.
+ */
+export const saveContractorBatch = (save: ContractorSave) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(
+							`SELECT CASE WHEN COALESCE((SELECT max(version) FROM software_contractor_config),0)=? THEN 1 ELSE json_extract('Config changed','$') END`,
+						)
+						.bind(save.expectedVersion),
+					db
+						.prepare("INSERT INTO software_contractor_config VALUES(?,?,?,?)")
+						.bind(
+							save.row.version,
+							save.row.values_json,
+							save.row.created_at,
+							save.row.created_by,
+						),
+				]),
+			catch: (cause) =>
+				cause instanceof Error && chainMatches(cause, CONFIG_VERSION_TAKEN)
+					? new GuardRefused()
+					: refusedBatch(cause),
+		});
+	});
+
+/** The owner switching website signing on or off, at a time, as the owner. */
+export type SigningSettingChange = {
+	readonly enabled: boolean;
+	readonly at: string;
+	readonly actor: string;
+};
+
+/** Sets the signing switch: today's one UPDATE, which changes nothing when the settings row is missing. */
+export const saveSetting = (change: SigningSettingChange) =>
+	asked((db) =>
+		db
+			.prepare(
+				"UPDATE software_signing_settings SET software_signing_enabled=?,updated_at=?,updated_by=? WHERE id=1",
+			)
+			.bind(change.enabled ? 1 : 0, change.at, change.actor)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** Plain reads, in one batch (one snapshot): every signing and archive session, and every link, for `accessCleanup`. */
+export const readAccessRows = () =>
+	asked((db) =>
+		db.batch([
+			db.prepare(
+				"SELECT token_hash,link_id,expires_at,revoked_at FROM software_agreement_sessions",
+			),
+			db.prepare("SELECT id,expires_at FROM software_agreement_links"),
+		]),
+	).pipe(
+		Effect.flatMap(([sessions, links]) =>
+			Effect.all({
+				sessions: rowsOf(AccessSessionRow, sessions?.results ?? []),
+				links: rowsOf(AccessLinkRow, links?.results ?? []),
+			}),
+		),
+		Effect.map((rows): AccessRows => rows),
+	);
+
+/**
+ * The clean-up `accessCleanup` decided: today's two DELETEs in one batch, bound with the rule's cutoff, which they keep
+ * as their filter, so they delete the rows the rule chose from the same rows (the sessions first, then the links no kept
+ * session points at). Both always run, as today, even when the rule chose none. There is no guard; a failure is an
+ * `AgreementStoreFailed`.
+ */
+export const cleanupBatch = (cleanup: { readonly before: string }) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(
+					"DELETE FROM software_agreement_sessions WHERE expires_at<? OR revoked_at<?",
+				)
+				.bind(cleanup.before, cleanup.before),
+			db
+				.prepare(
+					"DELETE FROM software_agreement_links WHERE expires_at<? AND NOT EXISTS(SELECT 1 FROM software_agreement_sessions s WHERE s.link_id=software_agreement_links.id)",
+				)
+				.bind(cleanup.before),
+		]),
+	).pipe(Effect.asVoid);
+
+/**
+ * Plain read: the request an upload names, or null. Read after the object is put, just before the batch A24 re-checks,
+ * and again after A24 raised, where today's `refusedUpload` read the request's kind.
+ */
+export const readUploadRequest = (requestId: string) =>
+	readAll(UploadRequestRow, (db) =>
+		db
+			.prepare("SELECT kind,status FROM owner_requests WHERE id=?")
+			.bind(requestId),
+	).pipe(Effect.map((rows): StoredUploadRequest | null => rows[0] ?? null));
+
+/**
+ * Saves the attachment's row `acceptAttachment` decided: one batch, today's, of A24 (the request is a software request
+ * neither withdrawn nor resolved) and the insert. A raised guard is `GuardRefused`, never retried; anything else is an
+ * `AgreementStoreFailed`.
+ */
+export const insertAttachment = (row: AttachmentRow) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					softwareGuard(
+						db,
+						"SELECT 1 FROM owner_requests WHERE id=? AND kind='software' AND status NOT IN ('withdrawn','resolved')",
+						[row.request_id],
+					),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)",
+						)
+						.bind(
+							row.id,
+							row.request_id,
+							row.filename,
+							row.version,
+							row.document_date,
+							row.object_key,
+							row.sha256,
+							row.bytes,
+							row.created_at,
+							row.created_by,
+						),
+				]),
+			catch: refusedBatch,
+		});
+	});
+
+/** Plain read, after an upload's batch failed: whether its row was saved, so the object it put is kept. */
+export const readAttachmentSaved = (id: string) =>
+	readAll(Exists, (db) =>
+		db
+			.prepare("SELECT 1 FROM software_agreement_attachments WHERE id=?")
+			.bind(id),
+	).pipe(Effect.map((rows) => rows.length > 0));
+
+/** The object an attachment's row names. */
+export type OwnerAttachment = { readonly object_key: string };
+
+/**
+ * Plain read: the attachment with this id on this request, or null. Either id may be missing (no query value, no route
+ * parameter), which no row has.
+ */
+export const readOwnerAttachment = (
+	attachmentId: string | null,
+	requestId: string | null,
+) =>
+	readAll(OwnerAttachmentRow, (db) =>
+		db
+			.prepare(
+				"SELECT object_key FROM software_agreement_attachments WHERE id=? AND request_id=?",
+			)
+			.bind(attachmentId, requestId),
+	).pipe(Effect.map((rows): OwnerAttachment | null => rows[0] ?? null));
+
+/**
+ * Plain read, the owner's signed-copy download's first: the agreement with this id and its client, whatever its status
+ * and archive, which `ownerCopy` judges (today's read filtered them in SQL), or null. The copy row is `readSignedCopy`.
+ */
+export const readOwnerCopy = (id: string) =>
+	readAll(OwnerCopyRow, (db) =>
+		db
+			.prepare(
+				"SELECT a.status,a.archive_closed_at FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=?",
+			)
+			.bind(id),
+	).pipe(Effect.map((rows): OwnerCopyAgreement | null => rows[0] ?? null));
