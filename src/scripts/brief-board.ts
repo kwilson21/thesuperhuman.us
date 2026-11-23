@@ -505,6 +505,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			}
 
 			cardNode(backId)?.querySelector<HTMLElement>("button")?.focus();
+			revealCard(backId);
 
 			if (back) announce(`Brought back “${back.text}”${endAfter(back.text)}`);
 		}
@@ -555,6 +556,13 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (!byMouse) element.scrollIntoView({ block: "nearest" });
 	};
 
+	/**
+	 * Brings a card the visitor just added or brought back into view inside its scrolling list, so it is never added out
+	 * of sight. Never smooth: the list jumps, which is also what reduced motion asks for.
+	 */
+	const revealCard = (id: string) =>
+		cardNode(id)?.scrollIntoView({ block: "nearest", behavior: "instant" });
+
 	form.addEventListener("pointerdown", (event) => {
 		lastPointer = event.pointerType;
 	});
@@ -573,6 +581,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 					return;
 				}
+			}
+
+			if (save && parts.input.value.trim()) {
+				// addNote puts the note at the end of the lane's cards.
+				const added = core
+					.board()
+					.cards.filter((card) => card.lane === lane)
+					.at(-1);
+
+				if (added) revealCard(added.id);
 			}
 
 			parts.input.value = "";

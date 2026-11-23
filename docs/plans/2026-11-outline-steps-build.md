@@ -1,10 +1,13 @@
 # The outline as its own steps: build plan
 
+Status: built. The design now lives in sections 1, 2 (rule 6) and 4 of `docs/plans/2026-11-living-brief.md`; this plan is
+kept as the record of how it was built.
+
 **Goal:** move the living brief's outline from a board beside the answer box to four lane screens inside the
 step-by-step brief at `/software/start`, and remove two wordy explanations.
 
-**Spec:** `docs/plans/2026-11-living-brief.md`, section 10 (approved by the owner on November 22, 2026). Sections 1 to 9
-describe what exists today. Read both before any task.
+**Spec:** `docs/plans/2026-11-living-brief.md`, sections 1, 2 (rule 6) and 4 (approved by the owner on November 22,
+2026), which replaced the board beside the answer box that this plan started from.
 
 **Approach:** the formal model changes first, then the pure library that mirrors it, then the page. One pull request,
 one commit per task. The route, the model call, the limits and what is stored on the server do not change.

@@ -99,13 +99,21 @@ async function open(page) {
 	return state;
 }
 
+/**
+ * Puts the caret at the end of a text box and focuses it. A click can land mid-text on a phone, and the End shortcut is not
+ * the same key on every platform, so the caret is set directly: what is typed next is appended.
+ */
+const toEnd = (box) =>
+	box.evaluate((node) => {
+		node.focus();
+		node.setSelectionRange(node.value.length, node.value.length);
+	});
+
 /** Types `text` into the first question and waits for the reply it asks for. */
 async function write(page, state, text, replies = 1) {
 	const box = page.locator('[data-step="1"] textarea');
 
-	await box.click();
-	// A tap on a phone can land mid-text; the visitor adds to the end.
-	await box.press("Control+End");
+	await toEnd(box);
 	await box.pressSequentially(text, { delay: 2 });
 	await until(page, `reply ${replies}`, async () => state.replies >= replies);
 	await page.waitForTimeout(300);
@@ -296,6 +304,30 @@ export default {
 									.isVisible())
 							)
 								throw new Error("The set-aside list did not appear");
+
+							// The note just added is inside the list's visible box, not scrolled out of sight.
+							await page.waitForTimeout(100);
+
+							const inView = await page.evaluate(() => {
+								const region = document.querySelector(
+									'[data-lane-screen="parts"] [data-lane-region]',
+								);
+
+								const note = [
+									...document.querySelectorAll(
+										'[data-lane-screen="parts"] .board-card',
+									),
+								].find((node) => node.textContent?.includes("Press kit"));
+
+								if (!region || !note) return false;
+								const a = region.getBoundingClientRect();
+								const b = note.getBoundingClientRect();
+
+								return b.top >= a.top - 1 && b.bottom <= a.bottom + 1;
+							});
+
+							if (!inView)
+								throw new Error("The note the visitor added is out of sight");
 						}
 
 						// Move the pointer off the controls, so no hover style is captured.
@@ -345,8 +377,7 @@ export default {
 					state.gate = new Promise((resolve) => (release = resolve));
 					const box = page.locator('[data-step="1"] textarea');
 
-					await box.click();
-					await box.press("Control+End");
+					await toEnd(box);
 					await box.pressSequentially(MORE, { delay: 2 });
 					// The request goes out from the first lane screen, and the visitor is past every lane before it is answered.
 					await next(page);
@@ -438,9 +469,10 @@ export default {
 						await page.route("**/api/software/brief/board", (route) =>
 							held.push(route),
 						);
-						await page
-							.locator('[data-step="1"] textarea')
-							.pressSequentially(MORE, { delay: 2 });
+						const first = page.locator('[data-step="1"] textarea');
+
+						await toEnd(first);
+						await first.pressSequentially(MORE, { delay: 2 });
 						await next(page, 3);
 						await until(
 							page,

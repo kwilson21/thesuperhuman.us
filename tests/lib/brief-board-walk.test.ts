@@ -2,7 +2,7 @@
 // visitor's writing and actions (Keep, Edit, Answer, Not this, Bring back, notes, Undo, Pause) with requests that are
 // answered late, out of order and overlapping, by an adversarial model: any idea, any claim that it was read from the
 // answers, passages that are not there, refs to owned or set-aside cards. The visitor also moves between the lane screens
-// and the written questions, so replies arrive while a lane is on screen. After every step the eight properties must hold.
+// and the written questions, so replies arrive while a lane is on screen. After every step the nine properties must hold.
 import { describe, expect, it } from "vitest";
 import {
 	type Board,
@@ -87,6 +87,7 @@ function walk(seed: number, steps: number) {
 		heldReplies: 0,
 		heldChangesApplied: 0,
 		heldDropped: 0,
+		leaveAdded: 0,
 	};
 
 	const fail = (step: number, what: string) =>
@@ -151,11 +152,60 @@ function walk(seed: number, steps: number) {
 						);
 				}
 
-				if (left.cards.some((c) => !board.cards.some((b) => b.id === c.id)))
-					fail(step, `leaving ${screen} added a card`);
+				// Leaving adds what the delivery could not (a full lane): new open cards of that lane only, from a reply
+				// that was applied, never when it is dropped.
+				const addedOnLeave = left.cards.filter(
+					(c) => !board.cards.some((b) => b.id === c.id),
+				);
 
-				if (left.applied !== board.applied || left.nextId !== board.nextId)
+				for (const c of addedOnLeave)
+					if (c.lane !== screen || c.status !== "proposed")
+						fail(
+							step,
+							`leaving ${screen} added ${c.id} outside the lane or owned`,
+						);
+
+				if (left.applied !== board.applied || left.nextId < board.nextId)
 					fail(step, `leaving ${screen} changed the request numbers`);
+
+				const dropped = !held || paused || held.n < board.applied;
+
+				if (dropped && addedOnLeave.length)
+					fail(step, `leaving ${screen} added a card from a dropped reply`);
+
+				// 9. leaveKeepsReply: with room left in the lane, every idea the held reply names that is supported by
+				// the answers is on the lane after it is left (as an off-screen delivery would have left it).
+				if (
+					held &&
+					!dropped &&
+					left.cards.filter(
+						(c) => c.lane === screen && c.status !== "dismissed",
+					).length < laneLimits[screen]
+				)
+					for (const item of held.reply) {
+						const named = item.ref
+							? board.cards.some((c) => c.id === item.ref)
+							: false;
+
+						if (
+							item.lane !== screen ||
+							named ||
+							(item.basis === "said" && !quotedFrom(item.quote, answers()))
+						)
+							continue;
+
+						if (
+							!left.cards.some(
+								(c) => c.lane === screen && sameIdea(c.text, item.text),
+							)
+						)
+							fail(
+								step,
+								`leaving ${screen} left "${item.text}" of the held reply off the lane`,
+							);
+					}
+
+				if (addedOnLeave.length) seen.leaveAdded++;
 
 				const moved =
 					JSON.stringify(left.cards) !== JSON.stringify(board.cards);
@@ -407,7 +457,7 @@ describe("the board's properties on the real code", () => {
 		expect(walks.flatMap((w) => w.failures).slice(0, 5)).toEqual([]);
 	});
 
-	it("reach the cases they are for: older and paused replies, Undo in flight, set-aside and owned ideas named, false passages, replies held for the lane on screen and applied or dropped when it is left", () => {
+	it("reach the cases they are for: older and paused replies, Undo in flight, set-aside and owned ideas named, false passages, replies held for the lane on screen and applied (with the new cards a full lane refused) or dropped when it is left", () => {
 		const total = (key: keyof (typeof walks)[number]["seen"]) =>
 			walks.reduce((sum, w) => sum + w.seen[key], 0);
 

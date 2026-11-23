@@ -46,8 +46,9 @@
    a status line, the lane's cards, Add, its set-aside list and two controls. The cards sit in a box that scrolls inside, so
    however many arrive the screen never grows with them and Next stays where it is. */
 .software-intake .board-status{color:var(--muted);font-size:.875rem;line-height:1.5;min-height:1.5em;margin:.25rem 0 .5rem}
-/* Hairlines above and below, so a card cut off at either edge reads as scrolling and not as a clipped card. */
-.software-intake .board-scroll{overflow-y:auto;max-height:min(20rem,42vh);max-height:min(20rem,42dvh);padding:.5rem .375rem;margin-inline:-.375rem;border-block:1px solid var(--rule);overscroll-behavior:contain}
+/* The box is about three fifths of the screen's height, at most 34rem on a computer, so a 1280x800 screen shows four or five
+   cards. One neutral hairline below it; the first card's own border is the edge above. */
+.software-intake .board-scroll{overflow-y:auto;max-height:min(34rem,60vh);max-height:min(34rem,60dvh);padding:.5rem .375rem;margin-inline:-.375rem;border-bottom:1px solid var(--rule);overscroll-behavior:contain}
 .software-intake .board-controls{display:flex;flex-wrap:wrap;gap:0 1.25rem;margin-top:.5rem}
 .software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button,.software-intake .board-add{min-height:44px;min-width:44px;text-align:start;text-decoration:underline;text-underline-offset:.2em;cursor:pointer;font-size:.9rem}
 .software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:disabled,.software-intake .board-add:disabled{opacity:.5;cursor:not-allowed}

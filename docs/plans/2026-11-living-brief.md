@@ -34,7 +34,8 @@ sent. The lanes, named for the chosen path:
 | `questions` | Open questions | Open questions | Open questions |
 
 A lane screen has the lane's question as its heading (below), a one-line hint, a status line, the lane's cards in a list
-that scrolls inside a bounded box (however many cards arrive, the page does not grow), the lane's "Add" control, the
+that scrolls inside a bounded box, about three fifths of the screen's height and at most 34rem, with one hairline below it
+(however many cards arrive, the page does not grow; a card the visitor adds or brings back is scrolled into view), the lane's "Add" control, the
 lane's own "Set aside" list, Undo, and one link, "Skip these, no AI outline". The outline does not speak as the owner, so
 no heading says "I".
 
@@ -126,10 +127,16 @@ that it was too much at once.
    the visitor leaves the screen, by `leaveLane`, under rules 2, 4 and 5 and against the board as it is at that moment:
    owned cards are left alone, a card made unowned after the reply's request was sent is left alone, a passage is checked
    against the answers as they are then, and a held reply is dropped when the outline is paused or a newer reply has been
-   applied. A card the reply adds to the lane on screen is stamped like any other, so the same reply's held changes
+   applied. It also adds, to the lane being left only, the new cards the delivery could not add (a full lane, where the
+   reply rewords every open card, would otherwise be left empty): leaving a lane gives it what an off-screen delivery of
+   the same reply would have. A card the reply adds to the lane on screen is stamped like any other, so the same reply's held changes
    cannot touch it. Every other lane takes a reply in full when it arrives, and so does every lane while a written
    question or the review is showing. Each lane remembers the cards it listed (set-aside ones not counted) when the
-   visitor last left it, which is what the status line and "New since you last looked" are read from. Going back to edit
+   visitor last left it, which is what the status line and "New since you last looked" are read from. The visitor's own
+   actions on a lane (Keep, Edit, Answer, Not this, Bring back, Add, Remove, Undo) update that list too, so the status
+   line counts only what replies changed. A restored page numbers its next card above every id in the cards and in the
+   last-seen lists, and keeps each list up to the lane's limit plus the history's length (Undo can leave a lane over its
+   limit for a while), so a new card is never taken for one already seen. Going back to edit
    an answer therefore changes nothing the visitor is looking at: the steps are fixed, a kept, edited, answered or added
    card is never changed, a kept card whose passage was deleted is sent as kept without the passage, and an open card read
    from the answers is withdrawn when its passage goes. The held reply is kept in memory only: a saved draft keeps the
@@ -272,9 +279,11 @@ owner's request page and notice, and in the visitor's copy. Without an outline, 
 ## 9. Verification
 
 - `verification/brief-board.qnt`: the reconciliation in section 2 with an adversarial model (any reply, any order, any
-  overlap), visitor actions including Undo, pausing and moving between the lane screens and a written question, and eight
+  overlap), visitor actions including Undo, pausing and moving between the lane screens and a written question, and nine
   properties, each with a mutant that breaks it. The eighth, `onScreenStable`, says no card listed on the lane on screen
-  is changed or withdrawn by a delivery; its mutant applies the whole reply to that lane. The held reply is a single
+  is changed or withdrawn by a delivery; its mutant applies the whole reply to that lane. The ninth, `leaveKeepsReply`,
+  says leaving a lane gives it every idea the held reply names that the answers support, as an off-screen delivery of the
+  same reply would have; its mutant applies only the held changes and withdrawals. The held reply is a single
   slot, `deferred`, that `deliver` fills for the lane on screen and `moveScreen` applies to the lane being left.
 - Unit tests for the shared module (including `applyReply` with the lane on screen, `leaveLane`, the last-seen lists and
   the saved board), a seeded random walk of its properties on the real code (`tests/lib/brief-board-walk.test.ts`), route

@@ -8,6 +8,7 @@ import {
 } from "~/scripts/brief-board-core";
 import {
 	BOARD_STORAGE_KEY,
+	laneChanges,
 	laneFull,
 	laneLabels,
 	setAside,
@@ -2213,6 +2214,13 @@ it("shows what changed in a lane after the visitor went back and edited an answe
 	expect(core.statusLine("parts")).toBe(
 		"1 new, 1 removed since you edited your answer",
 	);
+
+	// The visitor's own actions are not what the edited answer changed: the line still counts only the reply's.
+	const open = core.board().cards.find((c) => c.lane === "parts");
+	expect(open).toBeDefined();
+	core.change(setAside(core.board(), open!.id));
+	expect(core.tryAddNote("parts", "Press kit")).toBe(true);
+	expect(laneChanges(core.board(), "parts")).toEqual({ added: 1, removed: 1 });
 });
 
 it("skips the outline from the third lane screen: Back reaches the last written question, the dots drop by four and nothing is asked", async () => {

@@ -112,6 +112,7 @@ export const boardMutants = {
 	boardNoNumberGuard: { property: "newestWins" },
 	boardApplyPaused: { property: "pausedHolds" },
 	boardApplyOnScreen: { property: "onScreenStable" },
+	boardLeaveNoAdd: { property: "leaveKeepsReply" },
 };
 
 // verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module

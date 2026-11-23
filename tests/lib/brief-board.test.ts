@@ -20,10 +20,12 @@ import {
 	LANE_HINT_EMPTY,
 	laneChanges,
 	laneChangesLine,
+	HISTORY_MAX,
 	laneLimits,
 	laneQuestions,
 	lastAction,
 	leaveLane,
+	ownChange,
 	quotedFrom,
 	readBoardAnswer,
 	readBriefOutline,
@@ -1701,6 +1703,44 @@ describe("the lane on screen", () => {
 		);
 	});
 
+	it("does not count the visitor's own actions as changes made by an edited answer", () => {
+		let board = leaveLane(listed(), "parts", ANSWERS);
+		const [sent, n] = sendRequest(board);
+
+		// A reply while the visitor was away: one card reworded (c1), c3 withdrawn, Lyrics added (c5).
+		board = applyReply(sent, reply, n, ANSWERS, false, null).board;
+		expect(laneChanges(board, "parts")).toEqual({ added: 1, removed: 1 });
+
+		const own = (next: Board) => ownChange(board, next);
+
+		// Not this on a card that was listed, then Bring back, a note, Remove and Undo: none changes the count.
+		let after = own(setAside(board, "c2"));
+		expect(laneChanges(after, "parts")).toEqual({ added: 1, removed: 1 });
+
+		board = after;
+		after = own(bringBack(board, "c2"));
+		expect(laneChanges(after, "parts")).toEqual({ added: 1, removed: 1 });
+
+		board = after;
+		after = own(addNote(board, "parts", "Press kit"));
+		expect(laneChanges(after, "parts")).toEqual({ added: 1, removed: 1 });
+
+		board = after;
+		after = own(undo(board));
+		expect(laneChanges(after, "parts")).toEqual({ added: 1, removed: 1 });
+
+		// A card the visitor removes that a reply added is no longer new.
+		board = after;
+		after = own(setAside(board, "c5"));
+		expect(laneChanges(after, "parts")).toEqual({ added: 0, removed: 1 });
+
+		// Nothing changed: the same board comes back, and a lane never visited is left alone.
+		expect(ownChange(board, board)).toBe(board);
+
+		const fresh = listed();
+		expect(ownChange(fresh, setAside(fresh, "c1")).seen).toEqual({});
+	});
+
 	it("keeps a later reply for the lane on screen, not the first one", () => {
 		let board = listed();
 		let n: number;
@@ -1757,6 +1797,38 @@ describe("the lane on screen", () => {
 		// c3 was made unowned again after request 2 was sent, so its reply leaves it.
 		expect(left.cards.find((c) => c.id === "c3")?.text).toBe("Contact");
 		expect(left.cards.find((c) => c.id === "c2")?.text).toBe("Gigs");
+	});
+
+	it("gives a full lane the reply's new cards when it is left, as an off-screen delivery would have", () => {
+		// Purpose holds two (its limit), both open, and is on screen; a reply rewords both without naming them.
+		const full = started(
+			suggested("purpose", "Sell tickets"),
+			suggested("purpose", "Grow the list"),
+		);
+
+		const wording = [
+			suggested("purpose", "Book more gigs"),
+			suggested("purpose", "Reach new fans"),
+		];
+
+		const [sent, n] = sendRequest(full);
+		const onScreen = applyReply(sent, wording, n, ANSWERS, false, "purpose");
+
+		// On screen the lane is full: nothing listed changes and the new cards are refused.
+		expect(texts(onScreen.board, "purpose")).toEqual([
+			"Sell tickets",
+			"Grow the list",
+		]);
+
+		const left = leaveLane(onScreen.board, "purpose", ANSWERS);
+		const offScreen = applyReply(sent, wording, n, ANSWERS, false, null).board;
+
+		expect(texts(left, "purpose")).toEqual([
+			"Book more gigs",
+			"Reach new fans",
+		]);
+		expect(texts(left, "purpose")).toEqual(texts(offScreen, "purpose"));
+		expect(left.seen.purpose).toEqual(left.cards.map((c) => c.id));
 	});
 
 	it("never changes a card the same reply added to the lane", () => {
@@ -2040,7 +2112,71 @@ describe("a board saved with its last-seen lists", () => {
 			},
 		}).boards.website;
 
-		expect(read?.seen).toEqual({ purpose: ["c1", "c2"] });
+		// Undo can leave a lane over its limit for a moment, so a list keeps what it held, up to the limit and the
+		// history's length.
+		expect(read?.seen).toEqual({ purpose: ["c1", "c2", "c3"] });
+	});
+
+	it("keeps a list that Undo left past its lane's limit, so no seen card comes back as new", () => {
+		const ids = Array.from(
+			{ length: laneLimits.purpose + 5 },
+			(_, i) => `c${i + 1}`,
+		);
+
+		const read = readSavedBoards({
+			boards: { website: { cards: [], seen: { purpose: ids } } },
+		}).boards.website;
+
+		expect(read?.seen.purpose).toEqual(ids);
+
+		const huge = Array.from({ length: 100 }, (_, i) => `c${i + 1}`);
+
+		const capped = readSavedBoards({
+			boards: { website: { cards: [], seen: { purpose: huge } } },
+		}).boards.website?.seen.purpose;
+
+		expect(capped).toHaveLength(laneLimits.purpose + HISTORY_MAX);
+		expect(capped?.[0]).toBe("c1");
+	});
+
+	it("numbers the next card above every id the page remembers, so a new card is never taken for a seen one", () => {
+		// c2 and c3 were listed when the visitor left the lane and have since gone (withdrawn): only c1 is saved.
+		const read = readSavedBoards({
+			boards: {
+				website: {
+					cards: [
+						{
+							id: "c1",
+							lane: "parts",
+							text: "Shows",
+							status: "kept",
+							basis: "suggested",
+							quote: "",
+							reason: "",
+							answer: "",
+						},
+					],
+					seen: { parts: ["c1", "c2", "c3"] },
+				},
+			},
+		}).boards.website!;
+
+		expect(read.nextId).toBe(4);
+
+		const [sent, n] = sendRequest(read);
+
+		const board = applyReply(
+			sent,
+			[suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			null,
+		).board;
+
+		expect(card(board, "Lyrics").id).toBe("c4");
+		expect(laneChanges(board, "parts")).toEqual({ added: 1, removed: 2 });
+		expect(unseenFromAnswers(board, ANSWERS)).toEqual([]);
 	});
 });
 

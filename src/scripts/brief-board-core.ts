@@ -32,6 +32,7 @@ import {
 	laneLimits,
 	lastAction,
 	leaveLane,
+	ownChange,
 	readBoardAnswer,
 	readReply,
 	readSavedBoards,
@@ -444,7 +445,8 @@ export function createBriefBoardCore(
 	/** Makes `next` the board after a change of the visitor's, and asks again once they have paused. */
 	function change(next: Board) {
 		if (next === board()) return;
-		boards[options.path()] = next;
+		// The visitor's own action is not a change a reply made: the status line must not count it.
+		boards[options.path()] = ownChange(board(), next);
 		persist();
 		render();
 		options.onChange?.();

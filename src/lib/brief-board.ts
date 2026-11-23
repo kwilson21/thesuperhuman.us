@@ -925,6 +925,9 @@ function reconcile(
 		added = 0;
 
 	for (const item of scope.add ? fresh : []) {
+		// A pass limited to one lane adds to that lane only: the others took the reply in full when it arrived.
+		if (scope.only !== null && item.lane !== scope.only) continue;
+
 		// A card reworded later in this reply may now say the new idea.
 		if (
 			kept.some(
@@ -1000,7 +1003,8 @@ export function applyReply(
 /**
  * The visitor leaves `lane`'s screen: the reply held for it is applied now, to that lane's cards only, as any reply is
  * (owned cards left alone, `since` respected, set-aside ideas not offered again, passages checked against `answers` as
- * they are now, rewording never into another card's idea). A held reply is dropped, not applied, when the board is
+ * they are now, rewording never into another card's idea), with the new cards the delivery could not add while the lane
+ * was full. Cards it did add are not touched again (their `since` is not before the reply). A held reply is dropped, not applied, when the board is
  * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
  * lists now.
  */
@@ -1021,7 +1025,7 @@ export function leaveLane(
 		deferred.n >= board.applied
 	)
 		next = reconcile(rest, deferred.reply, deferred.n, answers, deferred.refs, {
-			add: false,
+			add: true,
 			skip: null,
 			only: lane,
 		}).board;
@@ -1052,6 +1056,35 @@ export function laneChanges(board: Board, lane: Lane): LaneChanges {
 		added: now.filter((id) => !before.includes(id)).length,
 		removed: before.filter((id) => !now.includes(id)).length,
 	};
+}
+
+/**
+ * The visitor's own action (Keep, Edit, Answer, Not this, Bring back, Add, Remove, Undo) took the board from `before` to
+ * `after`: each visited lane's last-seen list takes up that action's changes to what the lane lists, so the lane's status
+ * line only ever counts what replies changed. A card the visitor put on the list is not "new" and one they took off is
+ * not "removed"; what replies changed before the action stays counted.
+ */
+export function ownChange(before: Board, after: Board): Board {
+	let seen = after.seen;
+
+	for (const lane of LANES) {
+		const last = seen[lane];
+
+		if (!last) continue;
+		const was = listed(before, lane);
+		const now = listed(after, lane);
+		const gone = was.filter((id) => !now.includes(id));
+		const put = now.filter((id) => !was.includes(id));
+
+		if (!gone.length && !put.length) continue;
+
+		seen = {
+			...seen,
+			[lane]: [...last.filter((id) => !gone.includes(id)), ...put],
+		};
+	}
+
+	return seen === after.seen ? after : { ...after, seen };
 }
 
 /** The line a lane shows under its hint after an answer changed: "" for no change, else its non-zero parts. */
@@ -1697,7 +1730,11 @@ export const savedBoards = (saved: SavedBoards) => ({
 	plain: saved.plain,
 });
 
-/** The last-seen lists read back: for each lane, at most its limit of distinct card ids; anything else is left out. */
+/**
+ * The last-seen lists read back: for each lane, its distinct card ids, at most the lane's limit plus the history's length
+ * (Undo can leave a lane over its limit for a while, one card per step). Cutting to the limit would make a seen card
+ * come back as new; the larger bound only stops a list that is not one this page saved.
+ */
 function readSeen(raw: RawValue): Board["seen"] {
 	const seen: Partial<Record<Lane, readonly string[]>> = {};
 
@@ -1712,7 +1749,7 @@ function readSeen(raw: RawValue): Board["seen"] {
 					(id): id is string => Predicate.isString(id) && /^c\d{1,6}$/.test(id),
 				),
 			),
-		].slice(0, laneLimits[lane]);
+		].slice(0, laneLimits[lane] + HISTORY_MAX);
 	}
 
 	return seen;
@@ -1773,16 +1810,25 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 			});
 		}
 
+		const seen = readSeen(
+			ownField(ownField(ownField(raw, "boards"), path), "seen"),
+		);
+
+		// The next id is above every id the page remembers: a withdrawn card's id can still be in a last-seen list, and a
+		// new card that took it would count as already seen.
 		const highest = Math.max(
 			0,
 			...cards.map((card) => Number(card.id.slice(1))),
+			...Object.values(seen).flatMap((ids) =>
+				(ids ?? []).map((id) => Number(id.slice(1))),
+			),
 		);
 
 		boards[path] = {
 			...emptyBoard(),
 			cards,
 			nextId: highest + 1,
-			seen: readSeen(ownField(ownField(ownField(raw, "boards"), path), "seen")),
+			seen,
 		};
 	}
 
