@@ -56,16 +56,18 @@ import {
 //                                        withdrawn, resolved or without email; no cookie, a malformed cookie, a cookie that matches no session,
 //                                        an archive session, an expired or revoked session, a session of another offer, a session whose link
 //                                        or recipient no longer matches the offer; signing switched off
-//   403 "Reload and try again."          csrf_nonce missing, wrong, not text, empty, another session's
+//   403 "Reload and try again."          csrf_nonce missing, wrong, not text, empty, another session's; a JSON null body, a list, text, a
+//                                        number or true (none carries a nonce; the null body threw before B5)
 //   400 "Check the highlighted details." values missing, null, a list, text, a number, an unknown field (strict), a field that is not text, a
 //                                        field over its limit (200 name fields, 100 state and country, 1000 address, 320 email fields), a control
 //                                        character or lone surrogate, a portfolio_choice outside private/anonymous/named/"" (errors map per field)
 //   200 {ok:true}                        a full draft, an empty object (every field defaults to ""), trimmed and NFC-normalised text, markup and
 //                                        unicode saved exactly, a state or business type outside the lists (drafts do not check the lists)
-//   409 "could not be saved"             the batch fails: a started project, a signed or executed agreement, a session revoked or expired between
-//                                        the read and the write, a revoked offer link, a withdrawn request, signing switched off, an offer
-//                                        superseded, a batch outage
-//   rejected (the handler throws)        a JSON null body (the csrf_nonce read on null, known today), a statement outside the batch throwing
+//   409 "could not be saved"             a guard of the batch raised: a started project, a signed or executed agreement, a session revoked or
+//                                        expired between the read and the write, a revoked offer link, a withdrawn request, signing switched
+//                                        off, an offer superseded
+//   500 "Try again in a moment."         "Your details could not be saved. Try again in a moment.", logged once ("Agreement draft"): the batch
+//                                        failing when no guard raised, a read before it throwing (B1, B2)
 //   sequences                            save and save again (the draft row is replaced), save then revoke then save, the whole sign-in flow
 //                                        (request a link, follow it, read the nonce, save)
 
@@ -377,6 +379,8 @@ const cases: Case[] = [
 		}),
 	}),
 	// the wire formats
+	// The name records the answer before B5 (docs/plans/2026-11-signing-conversion.md, section 5): the handler threw on the
+	// nonce read. It answers 403 "Reload and try again." now; the name stays so the fixture compares as the same case.
 	{
 		name: "a JSON null body (the handler throws today)",
 		...agreementWorld(),
