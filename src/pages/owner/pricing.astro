@@ -195,7 +195,7 @@ const updated = pricing.updatedAt
 </OwnerLayout>
 <style>
   .pricing-settings { display: grid; gap: 1.5rem; }
-  .pricing-settings > *, [data-pricing-research] { min-width: 0; }
+  .pricing-settings > *, [data-pricing-research], .pricing-refresh { min-width: 0; }
   .pricing-settings h2 { overflow-wrap: break-word; hyphens: auto; }
   /* On a phone the table scrolls sideways in its own box, headers kept, rather than the page. */
   .pricing-table-scroll { overflow-x: auto; margin: .75rem 0 1rem; }
@@ -218,8 +218,12 @@ const updated = pricing.updatedAt
   .pricing-settings details { font: .9rem/1.5 var(--font-sans); }
   .pricing-last-saved { font-family: var(--font-sans); }
   .pricing-refresh { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+  .pricing-refresh, .pricing-refresh [data-proposal] { display: grid; gap: .5rem; }
+  .pricing-refresh > *, .pricing-refresh [data-proposal] > * { min-width: 0; }
   .pricing-refresh h3 { font: 500 1rem/1.3 var(--font-sans); margin: 0 0 .5rem; }
+  .pricing-refresh .pricing-table { min-width: 0; }
   .pricing-refresh .pricing-table td:nth-child(2), .pricing-refresh .pricing-table td:nth-child(3) { white-space: normal; }
+  .pricing-refresh .pricing-table td:last-child { min-width: 0; }
   .pricing-caveats { padding-left: 1.1rem; }
   .pricing-caveats li, .pricing-sources li { overflow-wrap: anywhere; }
   .pricing-caveats li + li { margin-top: .5rem; }
