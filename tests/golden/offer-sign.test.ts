@@ -1310,16 +1310,16 @@ const outages: Case[] = [
 	),
 	fail(
 		"outage: the session lookup",
-		/SELECT \* FROM software_agreement_sessions/,
+		/FROM software_agreement_sessions WHERE token_hash=\? AND purpose=\?/,
 	),
 	fail(
 		"outage: the live offer check of the session",
-		/AND o.recipient_email_snapshot=\?$/,
+		/SELECT o\.status AS offer_status,l\.revoked_at AS link_revoked_at/,
 	),
 	fail("outage: the signing setting", /SELECT software_signing_enabled/),
 	fail(
 		"outage: the first read of the agreements",
-		/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+		/FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 	),
 	fail(
 		"outage: the saved receipt lookup",
@@ -1333,12 +1333,12 @@ const outages: Case[] = [
 	fail("outage: the signing batch", BATCH),
 	fail(
 		"outage: the second read of the agreements, after the signatures committed",
-		/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+		/FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 		{},
 		{
 			failures: [
 				{
-					on: /FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
+					on: /FROM software_agreements WHERE offer_id=\? ORDER BY kind/,
 					nth: 2,
 					message: "d1 unavailable",
 				},
