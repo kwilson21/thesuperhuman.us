@@ -77,18 +77,23 @@ export async function bundleAstro(entries: Record<string, string>) {
 		throw error;
 	}
 
+	/** An entry's compiled component, for a caller that renders it with a container of its own. */
+	const component = (name: string) => {
+		const found = components.get(name);
+
+		if (!found) throw new Error(`No compiled component named ${name}.`);
+
+		return found;
+	};
+
 	return {
+		component,
 		/** Renders an entry's component with these options (its props) to HTML. */
 		render: async (
 			name: string,
 			options: Parameters<AstroContainer["renderToString"]>[1],
-		) => {
-			const component = components.get(name);
-
-			if (!component) throw new Error(`No compiled component named ${name}.`);
-
-			return (await AstroContainer.create()).renderToString(component, options);
-		},
+		) =>
+			(await AstroContainer.create()).renderToString(component(name), options),
 		remove: () => rm(directory, { recursive: true, force: true }),
 	};
 }
