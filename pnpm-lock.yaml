@@ -201,7 +201,7 @@ importers:
         version: 4.3.5(vite@6.4.4(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.33.0)(yaml@2.9.0))
       '@xstate/effect':
         specifier: 1.0.0-alpha.12
-        version: 1.0.0-alpha.12(@oxlint/plugins@1.93.0)(effect@4.1.4)(xstate@6.0.0-beta.1)
+        version: 1.0.0-alpha.12(@oxlint/plugins@1.93.0)(effect@4.1.4)(xstate@6.0.0-beta.3)
       astro:
         specifier: ^5.1.0
         version: 5.18.1(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.33.0)(rollup@4.60.4)(supports-color@10.2.2)(typescript@6.0.3)(yaml@2.9.0)
@@ -230,8 +230,8 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       xstate:
-        specifier: 6.0.0-beta.1
-        version: 6.0.0-beta.1
+        specifier: 6.0.0-beta.3
+        version: 6.0.0-beta.3
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -4542,8 +4542,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  xstate@6.0.0-beta.1:
-    resolution: {integrity: sha512-HzG+CdBxkxcqBv91aUfbscjKhREhnu949en+Ype3kIZ0cUVmK7LsPWU06GMyu+O7z9bIq52eDPQfzlUM7AtJ9g==}
+  xstate@6.0.0-beta.3:
+    resolution: {integrity: sha512-b6C6SQ9cern6sD531uHcwOH94lBL+701Jd/VRSkzT8oAV1AKTT9oXFZtvC5DajUU4+8gmTLBTMHjZjd0VrsmAg==}
     hasBin: true
 
   xxhash-wasm@1.1.0:
@@ -6509,10 +6509,10 @@ snapshots:
 
   '@vscode/l10n@0.0.18': {}
 
-  '@xstate/effect@1.0.0-alpha.12(@oxlint/plugins@1.93.0)(effect@4.1.4)(xstate@6.0.0-beta.1)':
+  '@xstate/effect@1.0.0-alpha.12(@oxlint/plugins@1.93.0)(effect@4.1.4)(xstate@6.0.0-beta.3)':
     dependencies:
       effect: 4.1.4
-      xstate: 6.0.0-beta.1
+      xstate: 6.0.0-beta.3
     optionalDependencies:
       '@oxlint/plugins': 1.93.0
 
@@ -9029,7 +9029,7 @@ snapshots:
 
   ws@8.21.0: {}
 
-  xstate@6.0.0-beta.1: {}
+  xstate@6.0.0-beta.3: {}
 
   xxhash-wasm@1.1.0: {}
 
