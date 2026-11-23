@@ -22,11 +22,12 @@
 //     fails. The handler reads the body itself, and when the stream fails it answers the same status and headers with
 //     the bytes read so far followed by `streamBroke(name)`, a fixed line that names the error's class (its `name`,
 //     never its message). Workers render through the same Astro renderer (`isNode` is true on workerd with
-//     `nodejs_compat`), so where the body stops is where production's does. What a visitor gets then depends on that
-//     point: when some bytes came first, workerd sends the status, the headers and those bytes, and the body breaks;
-//     when the body fails before its first byte, workerd sends no response at all (no status line, no headers;
-//     checked with workerd 1.20261110.1 at the site's compatibility date, where a client sees an empty reply). The
-//     recording keeps the two apart: the marker alone, or bytes and then the marker.
+//     `nodejs_compat`). What a visitor gets depends on timing, which the recording does not model: workerd sends the
+//     status and headers once the turn that returned the Response ends, so a body that fails within that turn gets
+//     no response at all (a client sees an empty reply), and one that fails later (after an I/O wait or a timer) is
+//     a 200 that breaks partway, whether or not bytes came first. Checked with workerd 1.20261110.1 at the site's
+//     compatibility date, locally; through Cloudflare's network a visitor may see an error page instead of an empty
+//     reply. The recording keeps the status, the headers, the bytes read before the failure and the marker.
 //
 // The handler builds a new Response from what it read, with two changes to the headers: `X-Astro-Noop`, which Astro's
 // stand-in middleware adds when a site has none, is removed (the site has its own middleware, so it never sends it);

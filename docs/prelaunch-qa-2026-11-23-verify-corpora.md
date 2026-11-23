@@ -34,10 +34,13 @@ only.
   by `isNode`): `Object.prototype.toString.call(process)` is `[object process]` on the installed workerd 1.20261110.1
   (the version wrangler ships) at the site's compatibility date, 2026-05-14, with `nodejs_compat`. A throw in the
   frontmatter is recorded as `rejected` (a bare 500 in production). A throw while the template renders keeps the status
-  and headers and ends the recorded body with the harness's marker; in production, a body that fails after some bytes
-  is a 200 that breaks partway, and a body that fails before its first byte gets no response at all from workerd (no
-  status line, no headers; a client sees an empty reply), checked with that workerd. The one case of that kind, "terms
-  that are not JSON: the body fails before its first byte", is the second: its recorded body is the marker alone.
+  and headers and ends the recorded body with the harness's marker. In production what a visitor gets depends on
+  timing, which the recording does not model: workerd sends the status and headers once the turn that returned the
+  Response ends, so a body that fails within that turn gets no response at all (a client sees an empty reply), and one
+  that fails later is a 200 that breaks partway. The one case of that kind, "terms that are not JSON: the body fails
+  before its first byte", fails within that turn (the page does no I/O between the offer read and the parse), so
+  production sends nothing. Checked with that workerd, locally; through Cloudflare's network a visitor may see an error
+  page instead of an empty reply.
 - Cookies set with `Astro.cookies` are appended as `Set-Cookie` headers, as the adapter does; today's pages set none
   that way.
 - Limits: the container runs no middleware (as no corpus does), so two cases record the page alone. In production the
