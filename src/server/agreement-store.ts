@@ -15,14 +15,22 @@ import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { agreementEvent } from "../lib/agreement-events";
+import type { AgreementTemplate } from "../lib/agreement-templates";
 import { softwareGuard } from "../lib/software-guard";
+import type { SoftwareOffer } from "../lib/software-offers";
 import {
 	ChangedSinceRead,
 	chainMatches,
 	GuardRefused,
+	isUniqueViolation,
 	raisedByJsonGuard,
 } from "./guarded-save";
-import { AGREEMENT_SIGNED } from "./machines/agreement-document";
+import {
+	AGREEMENT_MOVES,
+	AGREEMENT_SIGNED,
+	AGREEMENT_STATUSES,
+	type AgreementStatus,
+} from "./machines/agreement-document";
 import { OFFER_STATUSES } from "./machines/offer-version";
 import type {
 	AttachmentFacts,
@@ -56,6 +64,23 @@ import type {
 	RedeemSession,
 	StoredAgreementLink,
 } from "./rules/signing-redeem";
+import {
+	type ClientKey,
+	clientChangedElsewhere,
+	type OfferAgreementRow,
+	type PendingMsaRow,
+	type ReusedMsaRow as ReviewReusedMsaRow,
+	type ReviewWrite,
+} from "./rules/signing-review";
+import type {
+	DraftRow,
+	SavedSignatureRow,
+	SigningDocumentRow,
+	SigningNotification,
+	ReusedMsaRow as SignReusedMsaRow,
+	SignWrite,
+	StillSignableFacts,
+} from "./rules/signing-sign";
 import { MusicDb } from "./services";
 
 /** A D1 call failed, or a row was not the shape its table has. The cause is for the route's log. */
@@ -196,6 +221,90 @@ const AttachedOfferColumns = Schema.Struct({
 	request_id: text,
 	agreement_details_json: maybeText,
 });
+
+// ---- what the signing groups share ----
+//
+// The status lists, guards and statements more than one signing group writes, each text for text as today's code
+// builds it. The status lists come from the agreement document machine.
+
+/** A status the agreement machine names, written into SQL as a literal; anything else is a bug, never a request's value. */
+function signingStatusLiteral(status: AgreementStatus) {
+	if (!AGREEMENT_STATUSES.includes(status))
+		throw new Error(`Not a status the agreement machine names: ${status}`);
+
+	return `'${status}'`;
+}
+
+/** `status='x'` for one status, `status IN ('x','y')` for several, in the order given (the machine's). */
+export function signingStatusIs(statuses: readonly AgreementStatus[]) {
+	const quoted = statuses.map(signingStatusLiteral);
+
+	if (quoted.length === 0)
+		throw new Error("A move with no status to move from.");
+
+	return quoted.length === 1
+		? `status=${quoted[0]}`
+		: `status IN (${quoted.join(",")})`;
+}
+
+/**
+ * A1, today's `liveSigningGuard` (src/lib/agreement-access.ts), text for text: the offer is sent, through the offer link
+ * with this token hash, to this recipient, its brief is neither resolved nor withdrawn, no project names the offer, and
+ * signing is on. `openForSigning` decides the same from `readSigningFacts`.
+ */
+const signingLiveGuard = (
+	db: D1Database,
+	offerId: string | null,
+	linkHash: string | null,
+	recipient: string,
+) =>
+	db
+		.prepare(
+			`SELECT CASE WHEN EXISTS(SELECT 1 FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND l.token_hash=? AND l.revoked_at IS NULL AND o.recipient_email_snapshot=? AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id) AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)) THEN 1 ELSE json_extract('Signing state changed','$') END`,
+		)
+		.bind(offerId, linkHash, recipient);
+
+/**
+ * A2, today's `sessionGuard` (src/lib/software-agreements.ts), text for text: the signing session is unexpired at `now`
+ * and unrevoked. Today's guard read its own clock as the batch was built; the flow reads it there and passes it in.
+ */
+const signingSessionGuard = (db: D1Database, tokenHash: string, now: string) =>
+	softwareGuard(
+		db,
+		"SELECT 1 FROM software_agreement_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+		[tokenHash, now],
+	);
+
+/** An event row as a rule wrote it, with the id the flow drew. */
+type EventRow = {
+	readonly id: string;
+	readonly agreement_id: string | null;
+	readonly offer_id: string | null;
+	readonly action: string;
+	readonly actor: string;
+	readonly occurred_at: string;
+	readonly reason: string | null;
+};
+
+/** One event: the statement `agreementEvent` (src/lib/agreement-events.ts) builds, binding the id it is given. */
+const signingEvent = (db: D1Database, event: EventRow) =>
+	db
+		.prepare(
+			"INSERT INTO software_agreement_events(id,agreement_id,offer_id,action,actor,occurred_at,reason) VALUES(?,?,?,?,?,?,?)",
+		)
+		.bind(
+			event.id,
+			event.agreement_id,
+			event.offer_id,
+			event.action,
+			event.actor,
+			event.occurred_at,
+			event.reason,
+		);
+
+/** Whether a rejection is a FOREIGN KEY failure, found down the cause chain. */
+const foreignKeyFailed = (cause: unknown) =>
+	cause instanceof Error && chainMatches(cause, /FOREIGN KEY/);
 
 // ---- the archive link ----
 
@@ -576,44 +685,11 @@ const AgreementStatusColumns = Schema.Struct({
 
 const ProjectOfferColumns = Schema.Struct({ offer_id: text });
 
-/**
- * A1, the live signing guard: the offer is sent, through the offer link with this token hash, to this recipient, its
- * brief is neither resolved nor withdrawn, no project names the offer, and signing is on. Today's `liveSigningGuard`
- * (src/lib/agreement-access.ts), text for text; `openForSigning` decides the same from `readSigningFacts`.
- */
-const liveSigningStatement = (
-	db: D1Database,
-	offerId: string | null,
-	linkHash: string | null,
-	recipient: string,
-) =>
-	db
-		.prepare(
-			`SELECT CASE WHEN EXISTS(SELECT 1 FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND l.token_hash=? AND l.revoked_at IS NULL AND o.recipient_email_snapshot=? AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id) AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)) THEN 1 ELSE json_extract('Signing state changed','$') END`,
-		)
-		.bind(offerId, linkHash, recipient);
-
-/**
- * A2: the signing session is unexpired at `now` and unrevoked. Today's `sessionGuard` (src/lib/software-agreements.ts),
- * text for text, with its clock reading passed in.
- */
-const openSessionStatement = (db: D1Database, tokenHash: string, now: string) =>
-	softwareGuard(
-		db,
-		"SELECT 1 FROM software_agreement_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
-		[tokenHash, now],
-	);
-
-/** The statuses A3 refuses, from the machine (`AGREEMENT_SIGNED`), in today's order: 'client_signed','executed'. */
-const SIGNED_STATUSES = AGREEMENT_SIGNED.map((status) => `'${status}'`).join(
-	",",
-);
-
 /** A3: no agreement of the offer is client-signed or executed. Today's draft guard (src/lib/agreement-draft.ts). */
 const unsignedStatement = (db: D1Database, offerId: string) =>
 	db
 		.prepare(
-			`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreements WHERE offer_id=? AND status IN (${SIGNED_STATUSES})) THEN 1 ELSE json_extract('Already signed','$') END`,
+			`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreements WHERE offer_id=? AND ${signingStatusIs(AGREEMENT_SIGNED)}) THEN 1 ELSE json_extract('Already signed','$') END`,
 		)
 		.bind(offerId);
 
@@ -729,7 +805,7 @@ export const storeSigningLink = (link: SigningLinkRow) =>
 							`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
 						)
 						.bind("agreement", link.recipient, link.offerId, link.since),
-					liveSigningStatement(db, link.offerId, link.linkHash, link.recipient),
+					signingLiveGuard(db, link.offerId, link.linkHash, link.recipient),
 					agreementEvent(
 						db,
 						"link-issued",
@@ -829,7 +905,7 @@ export const redeemLinkBatch = (input: {
 					...(session.live === null
 						? []
 						: [
-								liveSigningStatement(
+								signingLiveGuard(
 									db,
 									session.live.offerId,
 									session.live.linkHash,
@@ -922,13 +998,8 @@ export const saveDraftBatch = (write: DraftWrite, sessionNow: string) =>
 		yield* Effect.tryPromise({
 			try: () =>
 				db.batch([
-					liveSigningStatement(
-						db,
-						write.offerId,
-						write.linkHash,
-						write.recipient,
-					),
-					openSessionStatement(db, write.sessionHash, sessionNow),
+					signingLiveGuard(db, write.offerId, write.linkHash, write.recipient),
+					signingSessionGuard(db, write.sessionHash, sessionNow),
 					unsignedStatement(db, write.offerId),
 					db
 						.prepare(
@@ -942,5 +1013,491 @@ export const saveDraftBatch = (write: DraftWrite, sessionNow: string) =>
 						),
 				]),
 			catch: refusedBatch,
+		});
+	});
+
+// ---- the review and the signature ----
+//
+// The client's review and signature (docs/plans/2026-11-signing-conversion.md, section 4, the review half of "The draft
+// and review" and "Signing"): the reads the rules of src/server/rules/signing-review.ts and signing-sign.ts decide from,
+// and the two batches that store what those rules wrote, statement for statement as today's `reviewOnce` and
+// `signAgreements` build them (src/lib/software-agreements.ts). Where today's read decided in SQL (`offerAgreements`'
+// `status<>'abandoned'`, the reused MSA's six conditions, the pending MSA's kind, statuses and offer, and the client
+// evidence's `id<>?`), the read here gives the plain rows and the rule decides. The pending MSA's read keeps the start its
+// golden hook picks; the offer's agreements and the reused MSA cannot, so PR 4 re-points their hooks (offer-review and
+// offer-sign; tests/server/agreement-store-review.test.ts lists each). Every other text is today's, so the golden hooks
+// pick the same statements. Two reads are new, made just before the signing batch for `stillSignable`: the offer's
+// signing state (`readSigningFacts` above, the SQL of today's `signingRefusal`) and the MSA the offer reuses. Every id,
+// time and token is an input bound as given, the events' ids included, so no statement here draws one (`agreementEvent`
+// is not called). The status lists come from the agreement document machine.
+//
+// Failures. A rejected read is `AgreementStoreFailed`. The review batch: the pending-MSA index's UNIQUE, and a FOREIGN KEY
+// failure for which `clientChangedElsewhere` holds on the evidence read after it, are `ChangedSinceRead`, which the flow
+// reads and decides again (B7); any other UNIQUE, a raised guard and a raise-only trigger are `GuardRefused`; anything
+// else, a FOREIGN KEY failure without that evidence or whose evidence cannot be read included, is `AgreementStoreFailed`
+// with the batch's own failure, as today's code rethrew it. The signing batch: a raised guard or trigger, a UNIQUE (the
+// signature's and the notice's) and a FOREIGN KEY failure (a document or its client deleted since the read; every row the
+// batch names was read just before it) are `GuardRefused`, each today's 409; anything else is `AgreementStoreFailed`.
+
+/** Where a review leads: the documents it inserts start in review, as REVIEW leads (a test holds it to the machine). */
+export const REVIEWED: AgreementStatus = "review";
+
+const NOTIFICATION_KINDS: readonly SigningNotification["kind"][] = [
+	"signature-receipt",
+	"countersign-notice",
+];
+
+/** A signing notification's kind, written into SQL as a literal as today's two statements carry it. */
+function notificationKindLiteral(kind: SigningNotification["kind"]) {
+	if (!NOTIFICATION_KINDS.includes(kind))
+		throw new Error(`Not a signing notification kind: ${kind}`);
+
+	return `'${kind}'`;
+}
+
+/** The index of one pending MSA per client and template (`software_agreements_pending_msa`), as SQLite names it. */
+const PENDING_MSA_TAKEN =
+	/UNIQUE constraint failed: software_agreements\.client_id, software_agreements\.template_id/;
+
+const OfferAgreementColumns = Schema.Struct({
+	id: text,
+	kind: Schema.Literals(["msa", "sow"]),
+	status: Schema.Literals(AGREEMENT_STATUSES),
+	client_id: text,
+	canonical_text: text,
+	text_sha256: text,
+	values_json: text,
+	review_session_hash: text,
+});
+
+const ClientIdRow = Schema.Struct({ id: text });
+
+const ReviewReusedMsaColumns = Schema.Struct({
+	id: text,
+	kind: text,
+	status: text,
+	client_id: text,
+	template_id: text,
+	terminated_at: maybeText,
+	archive_closed_at: maybeText,
+	effective_on: text,
+	canonical_text: text,
+	text_sha256: text,
+	artifact_status: maybeText,
+});
+
+const TemplateColumns = Schema.Struct({
+	id: text,
+	kind: Schema.Literals(["msa", "sow"]),
+	version: Schema.Number,
+	text,
+	sha256: text,
+	version_label: maybeText,
+	source_revision: maybeText,
+	published_at: text,
+});
+
+const PendingMsaColumns = Schema.Struct({
+	id: text,
+	kind: text,
+	status: text,
+	offer_id: maybeText,
+	client_id: text,
+	template_id: text,
+});
+
+const SavedSignatureColumns = Schema.Struct({
+	receipt_id: text,
+	session_token_hash: maybeText,
+});
+
+const DraftColumns = Schema.Struct({ values_json: text });
+
+const SignReusedMsaColumns = Schema.Struct({
+	id: text,
+	kind: Schema.Literals(["msa", "sow"]),
+	status: Schema.Literals(AGREEMENT_STATUSES),
+	terminated_at: maybeText,
+});
+
+/**
+ * Plain read: every agreement of the offer, abandoned ones included, ordered by kind as today, with the columns the
+ * review's rules (`OfferAgreementRow`, the GET's and the POST's) and the signature's (`SigningDocumentRow`) read. The rules
+ * leave out the abandoned ones, as `offerAgreements`' `status<>'abandoned'` did.
+ */
+export const readOfferAgreements = (offerId: string) =>
+	readAll(OfferAgreementColumns, (db) =>
+		db
+			.prepare(
+				"SELECT id,kind,status,client_id,canonical_text,text_sha256,values_json,review_session_hash FROM software_agreements WHERE offer_id=? ORDER BY kind",
+			)
+			.bind(offerId),
+	).pipe(
+		Effect.map(
+			(rows): readonly (OfferAgreementRow & SigningDocumentRow)[] => rows,
+		),
+	);
+
+/** The clients with the natural key (the table's UNIQUE key, so at most one), as today's review reads it. */
+const clientsByKeyStatement = (db: D1Database, key: ClientKey) =>
+	db
+		.prepare(
+			"SELECT id FROM software_agreement_clients WHERE recipient_email=? AND legal_name_key=? AND entity_type=? AND jurisdiction=?",
+		)
+		.bind(
+			key.recipient_email,
+			key.legal_name_key,
+			key.entity_type,
+			key.jurisdiction,
+		);
+
+/** Plain read: the client the natural key names, or null (today's text). */
+export const readClientByKey = (key: ClientKey) =>
+	readAll(ClientIdRow, (db) => clientsByKeyStatement(db, key)).pipe(
+		Effect.map((rows): { readonly id: string } | null => rows[0] ?? null),
+	);
+
+/**
+ * Plain read: the MSA an offer reuses, by its id, with the status of its signed copy (null when it has none); null when no
+ * row has the id. Read only when the offer names one (a truthy id), as today; otherwise null with no statement. The rule
+ * (`reviewParty`) decides what today's six conditions decided.
+ */
+export const readReusedMsa = (id: string | null | undefined) =>
+	id
+		? readAll(ReviewReusedMsaColumns, (db) =>
+				db
+					.prepare(
+						"SELECT a.id,a.kind,a.status,a.client_id,a.template_id,a.terminated_at,a.archive_closed_at,a.effective_on,a.canonical_text,a.text_sha256,f.status AS artifact_status FROM software_agreements a LEFT JOIN software_agreement_artifacts f ON f.agreement_id=a.id WHERE a.id=?",
+					)
+					.bind(id),
+			).pipe(Effect.map((rows): ReviewReusedMsaRow | null => rows[0] ?? null))
+		: Effect.succeed<ReviewReusedMsaRow | null>(null);
+
+/** Plain read: the template with this id, or null; a null id is bound as it is and finds none, as today (today's text). */
+export const readTemplate = (id: string | null | undefined) =>
+	readAll(TemplateColumns, (db) =>
+		db
+			.prepare("SELECT * FROM software_agreement_templates WHERE id=?")
+			.bind(id ?? null),
+	).pipe(Effect.map((rows): AgreementTemplate | null => rows[0] ?? null));
+
+/**
+ * Plain read: every agreement of the client for the template, whatever its kind, status and offer; the rule
+ * (`reviewPendingMsa`) decides which is another offer's pending MSA. The text keeps today's start, which the golden hook
+ * of the pending MSA lookup picks.
+ */
+export const readPendingMsa = (clientId: string, templateId: string) =>
+	readAll(PendingMsaColumns, (db) =>
+		db
+			.prepare(
+				"SELECT * FROM software_agreements WHERE client_id=? AND template_id=?",
+			)
+			.bind(clientId, templateId),
+	).pipe(Effect.map((rows): readonly PendingMsaRow[] => rows));
+
+/**
+ * Plain read, after the review batch failed its FOREIGN KEY: for a client the key named before the batch, that client by
+ * its id; for a new client, the clients with its natural key. `clientChangedElsewhere` decides from the rows.
+ */
+export const readClientEvidence = (
+	write: Pick<ReviewWrite, "client" | "earlierClientId">,
+) =>
+	readAll(ClientIdRow, (db) =>
+		write.earlierClientId
+			? db
+					.prepare("SELECT id FROM software_agreement_clients WHERE id=?")
+					.bind(write.earlierClientId)
+			: clientsByKeyStatement(db, write.client),
+	).pipe(Effect.map((rows): readonly { readonly id: string }[] => rows));
+
+/** The review batch, in today's order: A1, A2, A3, the client, the documents in review replaced, the stale clients, the event. */
+const reviewStatements = (db: D1Database, write: ReviewWrite) => {
+	const client = write.client;
+
+	return [
+		signingLiveGuard(db, write.offerId, write.linkHash, write.recipientEmail),
+		signingSessionGuard(db, write.sessionTokenHash, write.sessionNow),
+		softwareGuard(
+			db,
+			`SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE offer_id=? AND ${signingStatusIs(AGREEMENT_SIGNED)})`,
+			[write.offerId],
+		),
+		db
+			.prepare(
+				"INSERT OR IGNORE INTO software_agreement_clients VALUES(?,?,?,?,?,?,?,?,?)",
+			)
+			.bind(
+				client.id,
+				client.recipient_email,
+				client.legal_name,
+				client.legal_name_key,
+				client.entity_type,
+				client.jurisdiction,
+				client.business_address,
+				client.notice_email,
+				client.created_at,
+			),
+		db
+			.prepare(
+				`DELETE FROM software_agreements WHERE offer_id=? AND ${signingStatusIs(AGREEMENT_MOVES.REVIEW)}`,
+			)
+			.bind(write.offerId),
+		...write.documents.map((document) =>
+			db
+				.prepare(
+					`INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,msa_id,sow_number,status,canonical_text,text_sha256,values_json,attachment_manifest_json,created_at,effective_on,review_session_hash) VALUES(?,?,?,?,?,?,?,?,${signingStatusLiteral(REVIEWED)},?,?,?,?,?,?,?)`,
+				)
+				.bind(
+					document.id,
+					document.kind,
+					document.offer_id,
+					document.request_id,
+					document.client_id,
+					document.template_id,
+					document.msa_id,
+					document.sow_number,
+					document.canonical_text,
+					document.text_sha256,
+					document.values_json,
+					document.attachment_manifest_json,
+					document.created_at,
+					document.effective_on,
+					document.review_session_hash,
+				),
+		),
+		// A write-time filter that refuses nothing: a replaced client goes only once no agreement or notice names it.
+		...(write.staleClientIds.length === 0
+			? []
+			: [
+					db
+						.prepare(
+							`DELETE FROM software_agreement_clients WHERE id IN (${write.staleClientIds.map(() => "?").join(",")})` +
+								"\n        AND NOT EXISTS(SELECT 1 FROM software_agreements WHERE client_id=software_agreement_clients.id)" +
+								"\n        AND NOT EXISTS(SELECT 1 FROM software_agreement_notices WHERE client_id=software_agreement_clients.id)",
+						)
+						.bind(...write.staleClientIds),
+				]),
+		signingEvent(db, write.event),
+	];
+};
+
+/** The review batch failed its FOREIGN KEY: whether another request changed the client is read next. */
+class ReviewClientMissing extends Data.TaggedError("ReviewClientMissing")<{
+	readonly failure: unknown;
+}> {}
+
+/** What a rejected review batch is, before any evidence is read (see the head of this group). */
+function reviewRefused(cause: unknown) {
+	if (cause instanceof Error && chainMatches(cause, PENDING_MSA_TAKEN))
+		return new ChangedSinceRead();
+
+	if (foreignKeyFailed(cause))
+		return new ReviewClientMissing({ failure: cause });
+
+	return isUniqueViolation(cause) ? new GuardRefused() : refusedBatch(cause);
+}
+
+/**
+ * Stores the review the rule wrote (`reviewDocuments`), binding its ids, times and event id. Fails with
+ * `ChangedSinceRead` when another request took the one pending MSA per client and template, or changed the client this
+ * review chose (`clientChangedElsewhere` on the evidence read after the FOREIGN KEY failure); `GuardRefused` for A1, A2,
+ * A3 or another UNIQUE; `AgreementStoreFailed` with the batch's failure otherwise.
+ */
+export const reviewBatch = (write: ReviewWrite) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () => db.batch(reviewStatements(db, write)),
+			catch: reviewRefused,
+		});
+	}).pipe(
+		Effect.catchTag("ReviewClientMissing", (missing) =>
+			readClientEvidence(write).pipe(
+				// Evidence that cannot be read is no evidence: the batch's own failure stands, as today.
+				Effect.catchTag("AgreementStoreFailed", () =>
+					Effect.succeed<readonly { readonly id: string }[] | null>(null),
+				),
+				Effect.flatMap((found) =>
+					Effect.fail(
+						found !== null && clientChangedElsewhere(write, found)
+							? new ChangedSinceRead()
+							: new AgreementStoreFailed({ failure: missing.failure }),
+					),
+				),
+			),
+		),
+	);
+
+/** Plain read: the client signature saved on the document (its receipt and the session that saved it), or null. */
+export const readSavedReceipt = (agreementId: string) =>
+	readAll(SavedSignatureColumns, (db) =>
+		db
+			.prepare(
+				"SELECT receipt_id,session_token_hash FROM software_agreement_signatures WHERE agreement_id=? AND party='client'",
+			)
+			.bind(agreementId),
+	).pipe(Effect.map((rows): SavedSignatureRow | null => rows[0] ?? null));
+
+/** Plain read: the client's saved draft for the offer and the session's address, or null (today's text). */
+export const readSavedDraft = (offerId: string, email: string) =>
+	readAll(DraftColumns, (db) =>
+		db
+			.prepare(
+				"SELECT values_json FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?",
+			)
+			.bind(offerId, email),
+	).pipe(Effect.map((rows): DraftRow | null => rows[0] ?? null));
+
+/**
+ * Plain reads, just before the signing batch (`stillSignable`): the offer's signing state (`readSigningFacts`, the SQL of
+ * today's `signingRefusal`), then the MSA the offer reuses by its id (only when it names one; the plain row, which the
+ * rule judges as A8 does). Both are new reads here; neither text matches a hook of the golden sign corpus.
+ */
+export const readStillSignable = (
+	offer: Pick<SoftwareOffer, "id" | "reused_msa_id">,
+	session: Pick<StoredAgreementSession, "link_hash">,
+) =>
+	Effect.all({
+		signing: readSigningFacts({
+			offerId: offer.id,
+			linkHash: session.link_hash,
+		}),
+		reusedMsa: offer.reused_msa_id
+			? readAll(SignReusedMsaColumns, (db) =>
+					db
+						.prepare(
+							"SELECT id,kind,status,terminated_at FROM software_agreements WHERE id=?",
+						)
+						.bind(offer.reused_msa_id),
+				).pipe(Effect.map((rows): SignReusedMsaRow | null => rows[0] ?? null))
+			: Effect.succeed<SignReusedMsaRow | null>(null),
+	}).pipe(Effect.map((facts): StillSignableFacts => facts));
+
+/**
+ * The signing batch, in today's order: A1, A2 at `sessionNow`, A7 when a draft was read, A8 when the offer reuses an MSA,
+ * the notice (inserted only where the client row has another address or notice email: a write-time filter that refuses
+ * nothing), then per document A9, the signature, the event and the move to client_signed; the draft removed; the two
+ * notifications.
+ */
+const signStatements = (
+	db: D1Database,
+	write: SignWrite,
+	sessionNow: string,
+) => {
+	const { guards, notice } = write;
+
+	return [
+		signingLiveGuard(db, guards.offerId, guards.linkHash, guards.recipient),
+		signingSessionGuard(db, guards.sessionTokenHash, sessionNow),
+		...(guards.draftValues === null
+			? []
+			: [
+					softwareGuard(
+						db,
+						"SELECT 1 FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=? AND values_json=?",
+						[guards.offerId, guards.recipient, guards.draftValues],
+					),
+				]),
+		...(guards.reusedMsaId === null
+			? []
+			: [
+					softwareGuard(
+						db,
+						"SELECT 1 FROM software_agreements WHERE id=? AND kind='msa' AND status='executed' AND terminated_at IS NULL",
+						[guards.reusedMsaId],
+					),
+				]),
+		db
+			.prepare(
+				"INSERT INTO software_agreement_notices(id,agreement_id,client_id,business_address,notice_email,recorded_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM software_agreement_clients WHERE id=? AND (business_address<>? OR notice_email<>?))",
+			)
+			.bind(
+				notice.id,
+				notice.agreement_id,
+				notice.client_id,
+				notice.business_address,
+				notice.notice_email,
+				notice.recorded_at,
+				notice.client_id,
+				notice.business_address,
+				notice.notice_email,
+			),
+		...write.documents.flatMap((document) => {
+			const signature = document.signature;
+
+			return [
+				softwareGuard(
+					db,
+					`SELECT 1 FROM software_agreements WHERE id=? AND ${signingStatusIs(guards.signFrom)} AND text_sha256=? AND review_session_hash=?`,
+					[document.id, document.text_sha256, guards.sessionTokenHash],
+				),
+				db
+					.prepare(
+						"INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v3',?,?,?,?,?,?,?,?,?,?,?,?,?)",
+					)
+					.bind(
+						signature.id,
+						signature.agreement_id,
+						signature.party,
+						signature.typed_name,
+						signature.title,
+						signature.consent_text,
+						signature.consent_at,
+						signature.signed_at,
+						signature.document_sha256,
+						signature.session_token_hash,
+						signature.owner_subject,
+						signature.verified_email,
+						signature.verified_at,
+						signature.verification_method,
+						signature.intent_text,
+						signature.document_list_json,
+						signature.receipt_id,
+						signature.ip_address,
+						signature.user_agent,
+					),
+				signingEvent(db, document.event),
+				db
+					.prepare(
+						`UPDATE software_agreements SET status=${signingStatusLiteral(document.status)},client_signed_at=? WHERE id=?`,
+					)
+					.bind(document.client_signed_at, document.id),
+			];
+		}),
+		db
+			.prepare(
+				"DELETE FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?",
+			)
+			.bind(write.draft.offer_id, write.draft.recipient_email),
+		...write.notifications.map((notification) =>
+			db
+				.prepare(
+					`INSERT INTO software_agreement_notifications(agreement_id,kind,email) VALUES(?,${notificationKindLiteral(notification.kind)},?)`,
+				)
+				.bind(notification.agreement_id, notification.email),
+		),
+	];
+};
+
+/** What a rejected signing batch is (see the head of this group). */
+const signRefused = (cause: unknown) =>
+	isUniqueViolation(cause) || foreignKeyFailed(cause)
+		? new GuardRefused()
+		: refusedBatch(cause);
+
+/**
+ * Stores the signature the rule wrote (`signDocuments`), binding its receipt, notice, signature and event ids; `sessionNow`
+ * is the time A2 compares the session's expiry with, read by the flow as the batch is built (today's `sessionGuard` read
+ * its own clock). Fails with `GuardRefused` for a guard, a UNIQUE or a FOREIGN KEY failure, `AgreementStoreFailed`
+ * otherwise.
+ */
+export const signBatch = (write: SignWrite, sessionNow: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () => db.batch(signStatements(db, write, sessionNow)),
+			catch: signRefused,
 		});
 	});
