@@ -276,13 +276,20 @@ describe("saving the draft", () => {
 		for (const facts of [
 			{ ...held, agreements: [agreement("client_signed")], project: null },
 			{ ...held, agreements: [], project: { offer_id: "o1" } },
+			{
+				...held,
+				agreements: [agreement("executed")],
+				project: { offer_id: "o1" },
+			},
 		]) {
 			const exit = asked(saveRequest({ values }), facts);
 
 			expect(Exit.isFailure(exit)).toBe(true);
 
-			if (Exit.isFailure(exit))
+			if (Exit.isFailure(exit)) {
+				expect(Cause.hasDies(exit.cause)).toBe(true);
 				expect(Cause.squash(exit.cause)).toBeInstanceOf(FieldsRefused);
+			}
 		}
 
 		// The review reads them once: the signed agreement is its refusal.

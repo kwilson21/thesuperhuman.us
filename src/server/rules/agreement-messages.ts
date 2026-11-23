@@ -6,7 +6,8 @@
 // src/server/machines/agreement-message.ts). Nothing is refused: a row that cannot move is skipped, as today.
 // - `copySigned`, then `copyClaimable`: a party with no signature is skipped before an attempt is drawn, as today; then
 //   the copy is claimed only when it is pending (CLAIM) and its agreement is executed with its archive open. Re-checked
-//   at write time by the claim's compare-and-set (A18).
+//   at write time by the claim's compare-and-set (A18), which re-checks the copy and its agreement, not the signature
+//   (retention deletes a signature only with its agreement, after closing its archive, which the claim refuses).
 // - `noticeAgreementFound`, then `noticeClaimable`: nothing is drawn when the agreement is gone, as today; then, per kind,
 //   a signing notice is claimed only when it is pending and current: its agreement is client_signed, its archive open,
 //   and its request has no project (today's `currentSigningNotification`). Re-checked at write time by the claim's
@@ -117,6 +118,7 @@ export const copySigned = rule({
 		(given: CopySignatureFacts) => given.signature === null,
 	),
 	refusals: [],
+	// A gate: what it answers is handed to the flow, which saves nothing for it.
 	// SAFETY: `writes` runs only when `nothingToDoIf` did not hold, which ruled out a missing signature.
 	writes: (given) => given.signature as { readonly receipt_id: string },
 	writesText:
@@ -171,6 +173,7 @@ export const noticeAgreementFound = rule({
 			given.agreement === null,
 	),
 	refusals: [],
+	// A gate: what it answers is handed to the flow, which saves nothing for it.
 	// SAFETY: `writes` runs only when `nothingToDoIf` did not hold, which ruled out a missing agreement.
 	writes: (given) => given.agreement as NoticeAgreementRow,
 	writesText:
