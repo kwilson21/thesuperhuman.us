@@ -13,7 +13,9 @@ import {
 	countersignFront,
 	countersignPending,
 	type OfferAgreementRow,
+	type RequestOfferRow,
 	type SentOfferRow,
+	sentOfferOf,
 } from "../../src/server/rules/agreement-countersign";
 import type { Refusal } from "../../src/server/terms";
 import {
@@ -55,9 +57,11 @@ const CONTRACTOR = {
 	registered_agent_confirmed: true,
 };
 
-const offer = (over: Partial<SentOfferRow> = {}): SentOfferRow => ({
+/** An offer version of the request: the sent one unless `over` says otherwise. */
+const offer = (over: Partial<RequestOfferRow> = {}): RequestOfferRow => ({
 	id: "o1",
 	request_id: "r1",
+	status: "sent",
 	contractor_snapshot_json: JSON.stringify({
 		...CONTRACTOR,
 		config_version: 1,
@@ -87,7 +91,7 @@ const BOTH = [
 const SOW_ONLY = [{ id: SOW, hash: SOW_HASH }];
 
 const facts = (over: Partial<CountersignFacts> = {}): CountersignFacts => ({
-	offer: offer(),
+	offers: [offer()],
 	signingEnabled: 1,
 	agreements: [agreement("msa"), agreement("sow")],
 	...over,
@@ -122,13 +126,65 @@ describe("the front: a sent offer with signing on", () => {
 	});
 
 	it("is refused with its own sentence when the request has no sent offer, whatever the setting", () => {
-		expect(front({ offer: null })).toEqual(OFFER_CHANGED);
-		expect(front({ offer: null, signingEnabled: null })).toEqual(OFFER_CHANGED);
+		expect(front({ offers: [] })).toEqual(OFFER_CHANGED);
+		expect(front({ offers: [], signingEnabled: null })).toEqual(OFFER_CHANGED);
 	});
 
 	it("is refused when signing is off or its row is missing", () => {
 		expect(front({ signingEnabled: 0 })).toEqual(OFFER_CHANGED);
 		expect(front({ signingEnabled: null })).toEqual(OFFER_CHANGED);
+	});
+
+	it("is refused when the request's versions are only drafts, superseded or withdrawn, with signing on", () => {
+		for (const status of ["draft", "superseded", "withdrawn"] as const)
+			expect(front({ offers: [offer({ status })] }), status).toEqual(
+				OFFER_CHANGED,
+			);
+
+		expect(
+			front({
+				offers: [
+					offer({ id: "o3", status: "draft" }),
+					offer({ id: "o2", status: "withdrawn" }),
+					offer({ id: "o1", status: "superseded" }),
+				],
+			}),
+		).toEqual(OFFER_CHANGED);
+	});
+
+	it("goes on when the sent version is among others", () => {
+		expect(
+			front({
+				offers: [
+					offer({ id: "o3", status: "draft" }),
+					offer({ id: "o2" }),
+					offer({ id: "o1", status: "superseded" }),
+				],
+			}),
+		).toEqual({ wrote: {} });
+	});
+});
+
+describe("the sent offer among the request's versions", () => {
+	it("chooses the version whose status is sent, wherever it is in the list", () => {
+		const sent = offer({ id: "o2" });
+		const draft = offer({ id: "o3", status: "draft" });
+		const superseded = offer({ id: "o1", status: "superseded" });
+
+		expect(sentOfferOf([draft, sent, superseded])).toBe(sent);
+		expect(sentOfferOf([superseded, draft, sent])).toBe(sent);
+		expect(sentOfferOf([sent])).toBe(sent);
+	});
+
+	it("answers null when no version is sent", () => {
+		expect(sentOfferOf([])).toBeNull();
+		expect(
+			sentOfferOf([
+				offer({ id: "o3", status: "draft" }),
+				offer({ id: "o2", status: "withdrawn" }),
+				offer({ id: "o1", status: "superseded" }),
+			]),
+		).toBeNull();
 	});
 });
 
@@ -197,7 +253,7 @@ describe("the pending documents", () => {
 	});
 
 	it("answers the offer's refusal first", () => {
-		expect(pending([], BOTH, { offer: null })).toEqual(OFFER_CHANGED);
+		expect(pending([], BOTH, { offers: [] })).toEqual(OFFER_CHANGED);
 		expect(pending([], BOTH, { signingEnabled: 0 })).toEqual(OFFER_CHANGED);
 	});
 });
@@ -208,7 +264,7 @@ const decide = (
 ) => said(countersign.decide(request(over), facts(overFacts)));
 
 const snapshot = (value: string | null) => ({
-	offer: offer({ contractor_snapshot_json: value }),
+	offers: [offer({ contractor_snapshot_json: value })],
 });
 
 describe("the countersignature's values", () => {
@@ -281,11 +337,41 @@ describe("the countersignature's values", () => {
 		});
 	});
 
+	it("reads the sent version's offer id, reused MSA, client email and contractor, not another version's", () => {
+		const other = {
+			reused_msa_id: "m9",
+			recipient_email_snapshot: "other@example.test",
+			contractor_snapshot_json: "{}",
+		};
+
+		expect(
+			decide(
+				{},
+				{
+					offers: [
+						offer({ id: "o3", status: "draft", ...other }),
+						offer({ id: "o2", reused_msa_id: "m0" }),
+						offer({ id: "o1", status: "superseded", ...other }),
+					],
+				},
+			),
+		).toMatchObject({
+			wrote: {
+				offerId: "o2",
+				reusedMsaId: "m0",
+				copies: [
+					{ recipient_role: "client", email: "client@example.test" },
+					{ recipient_role: "contractor", email: "owner@example.test" },
+				],
+			},
+		});
+	});
+
 	it("signs the SOW alone, with its own intent, when the offer reuses an MSA", () => {
 		const answer = decide(
 			{ documents: SOW_ONLY },
 			{
-				offer: offer({ reused_msa_id: "m0" }),
+				offers: [offer({ reused_msa_id: "m0" })],
 				agreements: [agreement("sow")],
 			},
 		);
@@ -310,7 +396,9 @@ describe("the countersignature's values", () => {
 	});
 
 	it("reads an empty reused MSA id as none, as today's guard list did (it tests the id's truth)", () => {
-		expect(decide({}, { offer: offer({ reused_msa_id: "" }) })).toMatchObject({
+		expect(
+			decide({}, { offers: [offer({ reused_msa_id: "" })] }),
+		).toMatchObject({
 			wrote: { reusedMsaId: null },
 		});
 	});
@@ -353,7 +441,7 @@ describe("the countersignature's values", () => {
 
 	it("sends the client's copy to an empty snapshot address, which only a missing one stops", () => {
 		expect(
-			decide({}, { offer: offer({ recipient_email_snapshot: "" }) }),
+			decide({}, { offers: [offer({ recipient_email_snapshot: "" })] }),
 		).toMatchObject({
 			wrote: { copies: [{ recipient_role: "client", email: "" }, {}] },
 		});
@@ -481,7 +569,7 @@ describe("the SOW and the client's address", () => {
 
 	it("refuses an offer with no client email snapshot (today the copy row's NOT NULL)", () => {
 		expect(
-			decide({}, { offer: offer({ recipient_email_snapshot: null }) }),
+			decide({}, { offers: [offer({ recipient_email_snapshot: null })] }),
 		).toEqual(changed("RecipientMissing"));
 	});
 });
@@ -497,7 +585,7 @@ describe("the order of the refusals, when several hold", () => {
 
 	it("answers the offer before the documents", () => {
 		expect(
-			decide({ documents: SOW_ONLY }, { offer: null, agreements: [] }),
+			decide({ documents: SOW_ONLY }, { offers: [], agreements: [] }),
 		).toEqual(OFFER_CHANGED);
 	});
 
@@ -523,13 +611,13 @@ describe("the order of the refusals, when several hold", () => {
 		expect(
 			decide(msaAlone, {
 				...msaAloneFacts,
-				offer: offer({ recipient_email_snapshot: null }),
+				offers: [offer({ recipient_email_snapshot: null })],
 			}),
 		).toEqual(changed("PendingChanged"));
 		expect(
 			decide(
 				{ ip: "1".repeat(101) },
-				{ offer: offer({ recipient_email_snapshot: null }) },
+				{ offers: [offer({ recipient_email_snapshot: null })] },
 			),
 		).toEqual(changed("EvidenceTooLong"));
 	});
@@ -586,7 +674,7 @@ async function today(
 	try {
 		await countersignAgreements(
 			db,
-			partial<SoftwareOffer>({ ...given.offer }),
+			partial<SoftwareOffer>({ ...sentOfferOf(given.offers) }),
 			[...command.documents],
 			command.typedName,
 			command.actor,
@@ -690,11 +778,11 @@ describe("today's countersignAgreements and the rule", () => {
 			"the SOW alone with a reused MSA",
 			{ documents: SOW_ONLY },
 			{
-				offer: offer({ reused_msa_id: "m0" }),
+				offers: [offer({ reused_msa_id: "m0" })],
 				agreements: [agreement("sow")],
 			},
 		],
-		["an empty reused MSA id", {}, { offer: offer({ reused_msa_id: "" }) }],
+		["an empty reused MSA id", {}, { offers: [offer({ reused_msa_id: "" })] }],
 		["no headers", { ip: null, userAgent: null }, {}],
 		["an address of 100 characters", { ip: "1".repeat(100) }, {}],
 		["an address of 101 characters", { ip: "1".repeat(101) }, {}],
@@ -705,14 +793,25 @@ describe("today's countersignAgreements and the rule", () => {
 		["a typed name in Cyrillic", { typedName: "Казон Вилсон" }, {}],
 		["a typed name with accents", { typedName: "Kazön Wílson" }, {}],
 		[
+			"the sent version among a newer draft and an older superseded one",
+			{},
+			{
+				offers: [
+					offer({ id: "o3", status: "draft", reused_msa_id: "m9" }),
+					offer(),
+					offer({ id: "o0", status: "superseded", reused_msa_id: "m9" }),
+				],
+			},
+		],
+		[
 			"no client email snapshot",
 			{},
-			{ offer: offer({ recipient_email_snapshot: null }) },
+			{ offers: [offer({ recipient_email_snapshot: null })] },
 		],
 		[
 			"an empty client email snapshot",
 			{},
-			{ offer: offer({ recipient_email_snapshot: "" }) },
+			{ offers: [offer({ recipient_email_snapshot: "" })] },
 		],
 		["no contractor snapshot", {}, snapshot(null)],
 		["a snapshot that is not JSON", {}, snapshot("{bad")],
@@ -807,8 +906,8 @@ beforeEach(() => {
 		`DROP TABLE IF EXISTS owner_requests; DROP TABLE IF EXISTS software_offers;
 		DROP TABLE IF EXISTS software_signing_settings; DROP TABLE IF EXISTS software_agreements;
 		CREATE TABLE owner_requests (id TEXT PRIMARY KEY, status TEXT NOT NULL);
-		CREATE TABLE software_offers (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, status TEXT NOT NULL,
-			contractor_snapshot_json TEXT, recipient_email_snapshot TEXT, reused_msa_id TEXT);
+		CREATE TABLE software_offers (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, version INTEGER NOT NULL,
+			status TEXT NOT NULL, contractor_snapshot_json TEXT, recipient_email_snapshot TEXT, reused_msa_id TEXT);
 		CREATE TABLE software_signing_settings (id INTEGER PRIMARY KEY, software_signing_enabled INTEGER NOT NULL);
 		CREATE TABLE software_agreements (id TEXT PRIMARY KEY, offer_id TEXT, request_id TEXT NOT NULL, kind TEXT NOT NULL,
 			status TEXT NOT NULL, text_sha256 TEXT NOT NULL)`,
@@ -853,40 +952,62 @@ describe("A10 and the offer's refusal", () => {
 					database
 						.prepare("INSERT INTO owner_requests VALUES (?,?)")
 						.run("r1", requestStatus);
-					database
-						.prepare(
-							"INSERT INTO software_offers(id,request_id,status) VALUES (?,?,?)",
-						)
-						.run("o1", "r1", offerStatus);
+
+					// The offer A10 checks, among the request's other versions: an older superseded one, and a newer draft
+					// unless the offer is the request's one draft (software_offers_one_draft).
+					const insertOffer = database.prepare(
+						"INSERT INTO software_offers(id,request_id,version,status) VALUES (?,?,?,?)",
+					);
+
+					insertOffer.run("o0", "r1", 1, "superseded");
+					insertOffer.run("o1", "r1", 2, offerStatus);
+
+					if (offerStatus !== "draft") insertOffer.run("o2", "r1", 3, "draft");
 
 					if (setting !== null)
 						database
 							.prepare("INSERT INTO software_signing_settings VALUES (1,?)")
 							.run(setting);
 
-					// Read as the route reads them: the request's sent offer, then the setting.
-					const sent = await db
+					// Today's read of the request's sent offer, beside the store's plain read of its versions: the rule's
+					// choice is the row today's SQL answered.
+					const today = await db
 						.prepare(
 							"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
 						)
 						.bind("r1")
 						.first<SentOfferRow>();
 
-					const row = await db
-						.prepare(
-							"SELECT software_signing_enabled FROM software_signing_settings WHERE id=1",
-						)
-						.first<{ software_signing_enabled: number }>();
+					const offers = (
+						await db
+							.prepare(
+								"SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC",
+							)
+							.bind("r1")
+							.all<RequestOfferRow>()
+					).results;
+
+					const label = `${offerStatus} ${requestStatus} ${setting}`;
+
+					expect(sentOfferOf(offers), label).toEqual(today);
+
+					// Read as the flow reads them: the setting only for a sent offer, as the route does.
+					const row = sentOfferOf(offers)
+						? await db
+								.prepare(
+									"SELECT software_signing_enabled FROM software_signing_settings WHERE id=1",
+								)
+								.first<{ software_signing_enabled: number }>()
+						: null;
 
 					const rule = said(
 						countersignFront.decide(null, {
-							offer: sent,
+							offers,
 							signingEnabled: row?.software_signing_enabled ?? null,
 						}),
 					);
 
 					const guard = await refuses(softwareGuard(db, A10, ["o1"]));
-					const label = `${offerStatus} ${requestStatus} ${setting}`;
 
 					if (requestStatus === "resolved" || requestStatus === "withdrawn")
 						// Only A10 checks the request's status today, and the plan does not read it first: the guard refuses
