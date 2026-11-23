@@ -460,13 +460,22 @@ describe("screenshot coverage", () => {
 		expect(captures).toHaveLength(22);
 	});
 
-	it("captures bare, expired and valid one-time landings with their document statuses and destinations", async () => {
+	it("captures bare, expired, valid and failed one-time landings with their document statuses and destinations", async () => {
 		const scenario = await import(
 			"../../scripts/screenshots/scenarios/software-signing.mjs"
 		);
 
 		const landings: { path: string; status: number }[] = [];
 		const seeds: string[] = [];
+
+		const offline =
+			"ALTER TABLE software_agreement_links RENAME TO screenshot_links_offline;";
+
+		const restored =
+			"ALTER TABLE screenshot_links_offline RENAME TO software_agreement_links;";
+
+		// Where each failed landing's capture fell among the seeds: the links table renamed just before it.
+		const failedAt: number[] = [];
 
 		const documents = [
 			{ id: "msa", kind: "msa", hash: "a".repeat(64) },
@@ -491,7 +500,32 @@ describe("screenshot coverage", () => {
 				if (!url.pathname.endsWith("/verify")) return file;
 				landings.push({ path, status });
 
-				if (url.searchParams.has("key")) {
+				if (url.searchParams.has("key") && file.includes("failed")) {
+					expect(status).toBe(500);
+					expect(seeds.at(-1)).toBe(offline);
+					failedAt.push(seeds.length);
+
+					await prepare({
+						getByRole: (
+							role: string,
+							options: { exact: boolean; name: string },
+						) => {
+							expect([role, options]).toEqual([
+								"heading",
+								{ name: "This link could not be opened.", exact: true },
+							]);
+
+							return { waitFor: async () => {} };
+						},
+						getByText: (text: string) => {
+							expect(text).toBe(
+								"Something went wrong on my side. Try the link again in a few minutes.",
+							);
+
+							return { isVisible: async () => true };
+						},
+					});
+				} else if (url.searchParams.has("key")) {
 					const expired = file.includes("expired");
 					expect(status).toBe(expired ? 401 : 200);
 					const key = url.searchParams.get("key")!;
@@ -566,7 +600,19 @@ describe("screenshot coverage", () => {
 				),
 			).toHaveLength(2);
 			expect(visits.filter((visit) => visit.status === 200)).toHaveLength(2);
+			expect(
+				visits.filter(
+					(visit) => visit.path.includes("?") && visit.status === 500,
+				),
+			).toHaveLength(2);
 		}
+
+		// Each failed landing renames the links table back right after its capture.
+		expect(failedAt).toHaveLength(4);
+
+		for (const at of failedAt) expect(seeds[at]).toBe(restored);
+		expect(seeds.filter((query) => query === offline)).toHaveLength(4);
+		expect(seeds.filter((query) => query === restored)).toHaveLength(4);
 	});
 
 	it("reports a seeded page whose scenario never captured it", () => {
