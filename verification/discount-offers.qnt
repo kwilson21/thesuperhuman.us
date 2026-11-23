@@ -424,7 +424,7 @@ module discountOffers {
     link.live, not(stillSending),
     link' = { ...link, live: false },
     agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
-      clientSignatures' = clientSignatures,
+    clientSignatures' = clientSignatures,
     keepOffers, keepMoney, keepRequest, keepSigning,
     clock' = clock, sending' = sending, declining' = declining, ghost' = ghost,
   }
@@ -443,7 +443,7 @@ module discountOffers {
     link' = if (MUTANT == "first-batch-keeps-link") link else { ...link, live: false },
     declining' = { phase: "email", start: clock },
     agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
-      clientSignatures' = clientSignatures,
+    clientSignatures' = clientSignatures,
     requestOpen' = requestOpen, requestVersion' = requestVersion + 1, keepMoney, clock' = clock,
     sending' = sending, keepSigning, ghost' = ghost,
   }
@@ -936,8 +936,8 @@ module discountOffers {
 module discount { import discountOffers(MUTANT = "none", VERSIONS = 2).* }
 
 // Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs, except the
-// equivalent mutants there (discountSecondBatchNoSendingGuard and discountAcceptedOnlyCheck), which must keep every
-// property.
+// equivalent mutant there (discountSecondBatchNoSendingGuard), which must keep every property. Since the signing
+// extension, discountAcceptedOnlyCheck is a mutant that breaks sendLinkLive (docs/verification.md).
 module discountEditSent { import discountOffers(MUTANT = "edit-sent", VERSIONS = 2).* }
 module discountLatestTerms { import discountOffers(MUTANT = "latest-terms", VERSIONS = 2).* }
 module discountDepositFromUsual { import discountOffers(MUTANT = "deposit-from-usual", VERSIONS = 2).* }
