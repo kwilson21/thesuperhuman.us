@@ -753,6 +753,25 @@ describe("today's route and the rules, over the same rows", () => {
 					).toEqual([
 						{ alternate_delivered_at: NOW, alternate_method: "Sent by post" },
 					]);
+					expect(
+						database
+							.prepare(
+								"SELECT agreement_id,action,actor,occurred_at FROM software_agreement_events WHERE action='copy-delivered'",
+							)
+							.all(),
+						label,
+					).toEqual(
+						"wrote" in copying
+							? [
+									{
+										agreement_id: ID,
+										action: "copy-delivered",
+										actor: "Owner@Example.TEST",
+										occurred_at: NOW,
+									},
+								]
+							: [],
+					);
 				}
 	});
 
