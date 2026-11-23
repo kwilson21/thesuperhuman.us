@@ -244,3 +244,287 @@ export function isCompleteImage(bytes: Uint8Array, type: string) {
 			return false;
 	}
 }
+
+/**
+ * The Orientation of the EXIF block held in `b` from `start` to `end` (the block's own bytes, with or without its
+ * "Exif\0\0" prefix): the value 1 to 8, undefined when the block is readable and has no Orientation tag, and null when
+ * the block cannot be read with certainty. Nothing outside `start` to `end` is read: an IFD offset or entry that falls
+ * outside it makes the block unreadable. The Orientation entry must be one SHORT with a value from 1 to 8.
+ */
+function exifOrientation(b: Uint8Array, start: number, end: number) {
+	if (start < 0 || start > end || end > b.length) return null;
+	const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+
+	if (
+		end - start >= 6 &&
+		ascii(b, start, 4) === "Exif" &&
+		b[start + 4] === 0 &&
+		b[start + 5] === 0
+	)
+		start += 6;
+
+	if (end - start < 8) return null;
+	const order = ascii(b, start, 2);
+
+	if (order !== "II" && order !== "MM") return null;
+	const little = order === "II";
+
+	if (view.getUint16(start + 2, little) !== 42) return null;
+	const offset = view.getUint32(start + 4, little);
+
+	if (offset < 8 || offset > end - start - 2) return null;
+
+	const ifd = start + offset,
+		count = view.getUint16(ifd, little);
+
+	if (ifd + 2 + count * 12 > end) return null;
+	let found: number | undefined;
+
+	for (let i = 0; i < count; i++) {
+		const entry = ifd + 2 + i * 12;
+
+		if (view.getUint16(entry, little) !== 0x0112) continue;
+		const value = view.getUint16(entry + 8, little);
+
+		if (
+			found !== undefined ||
+			view.getUint16(entry + 2, little) !== 3 ||
+			view.getUint32(entry + 4, little) !== 1 ||
+			value < 1 ||
+			value > 8
+		)
+			return null;
+		found = value;
+	}
+
+	return found;
+}
+
+type ImageSize = { width: number; height: number };
+
+const sized = (width: number, height: number): ImageSize | null =>
+	width > 0 && height > 0 ? { width, height } : null;
+
+function pngSize(b: Uint8Array) {
+	const view = new DataView(b.buffer, b.byteOffset, b.byteLength),
+		signature = [137, 80, 78, 71, 13, 10, 26, 10];
+
+	if (b.length < 33 || !signature.every((value, i) => b[i] === value))
+		return null;
+
+	if (ascii(b, 12, 4) !== "IHDR" || view.getUint32(8) !== 13) return null;
+	let position = 8;
+
+	while (position + 12 <= b.length) {
+		const length = view.getUint32(position),
+			type = ascii(b, position + 4, 4);
+
+		// The browser turns the image by its Orientation; the size shown is not guessed here.
+		if (type === "eXIf") {
+			const orientation = exifOrientation(
+				b,
+				position + 8,
+				position + 8 + length,
+			);
+
+			if (
+				orientation === null ||
+				(orientation !== undefined && orientation !== 1)
+			)
+				return null;
+		}
+
+		if (type === "IEND") break;
+		position += 12 + length;
+	}
+
+	return sized(view.getUint32(16), view.getUint32(20));
+}
+
+/**
+ * The size of a JPEG, with width and height exchanged for Orientation 5 to 8. It returns null in three cases beyond an
+ * unreadable file: an APP1 segment starting "Exif\0" whose sixth byte is not 0, a second Exif segment, and any other
+ * APP1 segment (XMP for example) before the Exif one. Browsers differ on which EXIF block they read, so wherever they
+ * could disagree the answer is null.
+ */
+function jpegSize(b: Uint8Array) {
+	if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+
+	let position = 2,
+		frame: ImageSize | null = null,
+		orientation: number | undefined,
+		exifSeen = false,
+		otherApp1 = false;
+
+	while (position < b.length) {
+		if (b[position] !== 0xff) return null;
+
+		while (b[position] === 0xff && position + 1 < b.length) position++;
+		const marker = b[position++];
+
+		if (marker === 0xd9 || marker === 0xda) break;
+
+		if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue;
+
+		if (marker === 0x00 || position + 2 > b.length) return null;
+		const length = (b[position] << 8) | b[position + 1];
+
+		if (length < 2 || position + length > b.length) return null;
+
+		if (isFrame(marker) && !frame) {
+			if (length < 8) return null;
+			frame = sized(
+				(b[position + 5] << 8) | b[position + 6],
+				(b[position + 3] << 8) | b[position + 4],
+			);
+
+			if (!frame) return null;
+		}
+
+		if (marker === 0xe1) {
+			if (length >= 7 && ascii(b, position + 2, 5) === "Exif\0") {
+				// Browsers differ on the sixth byte, so only Exif\0\0 is read, and on which block they read when there
+				// is more than one APP1 or Exif segment; the size is returned only when every browser would read the same.
+				if (length < 8 || b[position + 7] !== 0 || exifSeen || otherApp1)
+					return null;
+				exifSeen = true;
+				const read = exifOrientation(b, position + 2, position + length);
+
+				if (read === null) return null;
+				orientation = read;
+			} else if (!exifSeen) otherApp1 = true;
+		}
+
+		position += length;
+	}
+
+	if (!frame) return null;
+
+	// Orientations 5 to 8 turn the picture a quarter turn, so the browser shows it with width and height exchanged.
+	return orientation !== undefined && orientation >= 5 && orientation <= 8
+		? { width: frame.height, height: frame.width }
+		: frame;
+}
+
+/** The size in the header of a VP8 or VP8L chunk, or null when it is not one or its header is wrong. */
+function webpFrameSize(
+	b: Uint8Array,
+	chunk: { type: string; body: number; length: number },
+) {
+	const { body, length } = chunk;
+
+	if (chunk.type === "VP8 ") {
+		if (
+			length < 10 ||
+			b[body + 3] !== 0x9d ||
+			b[body + 4] !== 0x01 ||
+			b[body + 5] !== 0x2a
+		)
+			return null;
+
+		return sized(
+			((b[body + 7] << 8) | b[body + 6]) & 0x3fff,
+			((b[body + 9] << 8) | b[body + 8]) & 0x3fff,
+		);
+	}
+
+	if (chunk.type === "VP8L") {
+		if (length < 5 || b[body] !== 0x2f) return null;
+
+		const bits =
+			b[body + 1] |
+			(b[body + 2] << 8) |
+			(b[body + 3] << 16) |
+			(b[body + 4] << 24);
+
+		return sized((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
+	}
+
+	return null;
+}
+
+function webpSize(b: Uint8Array) {
+	if (b.length < 20 || ascii(b, 0, 4) !== "RIFF" || ascii(b, 8, 4) !== "WEBP")
+		return null;
+	const chunks = webpChunks(b, 12, b.length);
+
+	if (!chunks?.length) return null;
+
+	for (const chunk of chunks) {
+		if (chunk.type !== "EXIF") continue;
+
+		const orientation = exifOrientation(
+			b,
+			chunk.body,
+			chunk.body + chunk.length,
+		);
+
+		if (
+			orientation === null ||
+			(orientation !== undefined && orientation !== 1)
+		)
+			return null;
+	}
+
+	const [first] = chunks;
+
+	if (first.type === "VP8X") {
+		if (first.length < 10) return null;
+
+		const le24 = (at: number) => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16),
+			canvas = sized(le24(first.body + 4) + 1, le24(first.body + 7) + 1);
+
+		// An animation shows its canvas. A still image is decoded from its frame, and a browser that finds a canvas of
+		// another size rejects it, so the size is not given.
+		if (b[first.body] & 0x02 || chunks.some((chunk) => chunk.type === "ANIM"))
+			return canvas;
+
+		const frame = chunks.find(
+			(chunk) => chunk.type === "VP8 " || chunk.type === "VP8L",
+		);
+
+		if (!frame || !canvas) return null;
+
+		const still = webpFrameSize(b, frame);
+
+		return still &&
+			still.width === canvas.width &&
+			still.height === canvas.height
+			? canvas
+			: null;
+	}
+
+	return webpFrameSize(b, first);
+}
+
+/**
+ * The pixel size a browser shows for `bytes`, a complete image of `type`, with width and height exchanged for a JPEG
+ * with Orientation 5 to 8, or null when it is not certain.
+ *
+ * It returns null for an unreadable header or a zero size; for a JPEG whose EXIF is unreadable, whose Orientation tag
+ * is malformed, that has a second Exif segment, whose Exif segment has a sixth byte that is not 0, or that has another
+ * APP1 segment before its Exif one (see `jpegSize`); for a PNG or WebP whose EXIF is unreadable or gives an Orientation
+ * other than 1; and for a still extended WebP whose canvas differs from its frame. It never throws.
+ *
+ * Known limits: these rarer shapes are not detected, and each can give a size that some browsers do not use. They are
+ * an Orientation tag stored outside the first EXIF directory (in the Exif, GPS or second directory), an orientation
+ * given only in XMP inside a PNG, and EXIF resolution tags that make a browser scale the image. The effect is that the
+ * reserved shape is wrong and the image shifts when it loads; nothing is distorted, because the CSS sets
+ * `height: auto`.
+ */
+export function imageSize(bytes: Uint8Array, type: string): ImageSize | null {
+	try {
+		switch (type) {
+			case "image/png":
+				return pngSize(bytes);
+			case "image/jpeg":
+				return jpegSize(bytes);
+			case "image/webp":
+				return webpSize(bytes);
+			default:
+				return null;
+		}
+	} catch {
+		return null;
+	}
+}

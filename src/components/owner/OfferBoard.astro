@@ -1,0 +1,212 @@
+---
+// The offer board (docs/plans/2026-11-offer-board.md): above the offer editor, while an offer can still be drafted. The
+// AI suggests cards for each part of the offer and three prices sit side by side; the owner uses, edits or sets aside each
+// suggestion, and Use fills the offer editor's own fields. src/scripts/offer-board.ts runs it. The owner's day value,
+// contingency, research and past offers are rendered into the page for the owner only; the model never sees them.
+import {
+	OFFER_LANES,
+	type OfferLane,
+	offerLaneLabels,
+} from "~/lib/offer-board";
+import type { MarketReference, PricingKind } from "~/lib/pricing-reference";
+import { spread } from "~/lib/offer-pricing";
+import type { PastOffer } from "~/server/offer-board-store";
+
+interface Props {
+	requestId: string;
+	kind: PricingKind;
+	dayValueCents: number | null;
+	contingencyPercent: number;
+	market: MarketReference | null;
+	past: readonly PastOffer[];
+	/** The owner's pricing could not be read just now (the store failed), which is not the same as nothing saved. */
+	pricingUnreadable?: boolean;
+}
+
+const {
+	requestId,
+	kind,
+	dayValueCents,
+	contingencyPercent,
+	market,
+	past,
+	pricingUnreadable = false,
+} = Astro.props;
+
+const UNREADABLE =
+	"Your pricing could not be read just now. Reload the page to try again.";
+
+const kindNames: Record<PricingKind, string> = {
+	website: "website",
+	webapp: "web app",
+	workflow: "workflow",
+};
+
+/** An amount to the cent when it has cents: past offers can. */
+const dollars = (cents: number) =>
+	`$${(cents / 100).toLocaleString("en-US", {
+		minimumFractionDigits: cents % 100 ? 2 : 0,
+		maximumFractionDigits: 2,
+	})}`;
+
+const pastSpread = spread(past.map((offer) => offer.totalCents));
+
+/** This kind's ranges in the research; none when the research does not cover it. */
+const kindRanges = market?.ranges.filter((range) => range.kind === kind) ?? [];
+
+/** What the page script needs, for the owner only: their numbers, and the research for this kind of work. */
+const pricing = JSON.stringify({
+	dayValueCents,
+	contingencyPercent,
+	market:
+		market && kindRanges.length > 0
+			? {
+					researchedOn: market.researchedOn,
+					ranges: kindRanges,
+					sources: [],
+					caveats: [],
+				}
+			: null,
+});
+
+/** The lanes whose cards Use puts into the offer, and how the button says it. */
+const useLabels: Record<OfferLane, string> = {
+	outcome: "Use as outcome",
+	summary: "Use as summary",
+	milestones: "Add to the offer",
+	inputs: "Add to the offer",
+	exclusions: "Add to the offer",
+	timing: "Use as timing",
+	questions: "Copy to Ask a question",
+	drivers: "Keep",
+};
+---
+<section class="rail-section wide offer-board" data-offer-board data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/offer-board`} data-request={requestId} data-kind={kind} data-pricing={pricing} data-use-labels={JSON.stringify(useLabels)} aria-labelledby="offer-board-title">
+  <div class="offer-board-head">
+    <h2 id="offer-board-title" tabindex="-1">Shape the offer</h2>
+    <div class="software-actions offer-board-controls">
+      <button type="button" class="studio-button" data-offer-ask>Suggest an offer with AI</button>
+      <button type="button" class="studio-quiet" data-offer-undo disabled>Undo</button>
+      {/* Beside Undo, so a reply that waits never moves the cards or the prices. */}
+      <button type="button" class="studio-quiet" data-offer-held data-idle><span data-held-label>Show 88 updates</span><span class="offer-held-room" aria-hidden="true">Show 88 updates</span></button>
+    </div>
+    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It is not given the client’s name, email, company or site link, and wherever one appears as the client entered it, this website replaces it first with “the client” (the site with “the client’s current site”). It never sees your day value or your other offers. Nothing is saved until you save the draft, and nothing reaches the client until you send the offer or a question yourself.</p>
+    <p class="visually-hidden" data-offer-live role="status"></p>
+  </div>
+
+  <div class="offer-board-scroll" data-offer-scroll role="region" aria-label="Suggestions" tabindex="0">
+    {OFFER_LANES.map(lane => (
+      <section class="offer-lane" data-offer-lane={lane} aria-labelledby={`offer-lane-${lane}`}>
+        <h3 id={`offer-lane-${lane}`}>{offerLaneLabels[lane]}</h3>
+        <ul class="offer-cards" role="list" data-offer-cards></ul>
+        <p class="offer-empty" data-offer-empty>No suggestions yet.</p>
+      </section>
+    ))}
+    <details class="offer-aside" data-offer-aside hidden>
+      <summary data-offer-aside-summary>Set aside</summary>
+      <ul role="list" data-offer-aside-list></ul>
+    </details>
+  </div>
+
+  {/* Below the cards, so prices that fill in never move a card under the pointer. */}
+  <section class="offer-pricing" aria-labelledby="offer-pricing-title">
+    <h3 id="offer-pricing-title" tabindex="-1">What to charge</h3>
+    <dl class="offer-prices">
+      <div><dt>From your day value</dt><dd data-price-day>{pricingUnreadable ? UNREADABLE : dayValueCents === null ? <>Set your day value on the <a href="/owner/pricing">pricing page</a>.</> : 'Suggest an offer to see the AI’s day estimates.'}</dd></div>
+      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{past.length === 1 ? `${dollars(pastSpread.low)}, from your one sent ${kindNames[kind]} offer. ` : pastSpread.low === pastSpread.high ? `${dollars(pastSpread.low)}, from each of your last ${past.length} sent ${kindNames[kind]} offers. ` : `${dollars(pastSpread.low)} to ${dollars(pastSpread.high)}, middle ${dollars(pastSpread.middle)}, from your last ${past.length} sent ${kindNames[kind]} offers. `}<button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the whole-project range: your past offers">Use as the whole-project range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || 'Sent offer'}</a><span class="offer-past-figures">{dollars(offer.totalCents)} · sent {offer.sentAt.slice(0, 10).replace(/-/g, '\u2011')}</span></li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
+      <div><dt>From the market</dt><dd data-price-market>{pricingUnreadable ? UNREADABLE : market && kindRanges.length > 0 ? 'Suggest an offer to see where this brief sits in your research.' : market ? <>Your research has no ranges for {kindNames[kind]} work. Add them on the <a href="/owner/pricing">pricing page</a>.</> : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
+    </dl>
+    <p class="offer-caption">Estimates to help you decide. The fee is yours, and nothing is sent until you send the offer.{market && market.sources.length > 0 && <>{` The research’s ${market.sources.length} ${market.sources.length === 1 ? 'source is' : 'sources are'} on the `}<a href="/owner/pricing">pricing page</a>.</>}</p>
+  </section>
+
+  <template data-offer-card-template>
+    <li class="offer-card">
+      <p class="offer-card-origin" data-card-origin></p>
+      <p class="offer-card-text" data-card-text></p>
+      <ul class="offer-card-detail" role="list" data-card-detail hidden></ul>
+      <p class="offer-card-reason" data-card-reason hidden></p>
+      <div class="software-actions offer-card-actions" data-card-actions></div>
+      <div class="offer-card-editor" data-card-editor hidden>
+        <label>Edit<input class="studio-input" type="text" data-card-input autocomplete="off" /></label>
+        <p class="offer-card-hint" data-card-hint></p>
+        <p class="offer-card-error" data-card-error hidden></p>
+        <div class="software-actions"><button type="button" class="studio-quiet" data-card-save>Save</button><button type="button" class="studio-quiet" data-card-cancel>Cancel</button></div>
+      </div>
+    </li>
+  </template>
+</section>
+<style>
+  /* The board's working text is the studio's sans; the section heading keeps the rail's serif. */
+  .offer-board { display: grid; gap: 1rem; font: 400 .9rem/1.5 var(--font-sans); }
+  /* Unscoped, so it outranks the site's own paragraph rule but not the classes below (.offer-card-origin and the rest). */
+  :global(.offer-board p) { font: inherit; }
+  .offer-board-head h2 { margin-bottom: .5rem; }
+  .offer-board-controls { align-items: center; }
+  .offer-board-status { min-height: 3em; color: var(--studio-muted); }
+  /* Every quiet control in the board, the script's included, is one underlined style with a 44px target. */
+  .offer-board :global(.studio-quiet) { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: flex-start; padding: 0 .1rem; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; text-align: start; }
+  .offer-pricing { border: 1px solid var(--field-border); border-radius: 3px; padding: .75rem 1rem; }
+  .offer-pricing h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0; }
+  .offer-prices { display: grid; gap: .6rem; margin: .5rem 0; }
+  .offer-prices dt { font: 500 .85rem/1.4 var(--font-sans); color: var(--studio-muted); }
+  .offer-prices dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+  /* A price row's button sits on its own line under the figures it uses. */
+  .offer-prices :global(.studio-quiet) { display: flex; width: fit-content; }
+  .offer-past { margin: .35rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
+  /* Each offer: its outcome as a link, then its total and date on a line of their own. */
+  .offer-past li { display: grid; justify-items: start; overflow-wrap: anywhere; margin-bottom: .35rem; }
+  /* 44px tall, the underline at the text. */
+  .offer-past a { display: inline-block; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; padding-block: .75rem .35rem; min-height: 44px; }
+  .offer-past-figures { color: var(--studio-muted); }
+  .offer-caption { font-size: .85rem; color: var(--studio-muted); }
+  /* What a price row's button did, under the button (written by the script). */
+  .offer-prices :global(.offer-price-said) { margin: .1rem 0 .35rem; font: .85rem/1.45 var(--font-sans); color: var(--ink); }
+  /* The board scrolls inside its own box, so the page never grows with the cards. */
+  /* No scroll anchor inside the box: Chromium would otherwise scroll the whole page to follow a card the box moved. */
+  .offer-board-scroll { max-height: min(36rem, 70vh); max-height: min(36rem, 70dvh); overflow-y: auto; overflow-anchor: none; display: grid; gap: 1rem; padding: .35rem; margin-inline: -.35rem; scroll-padding-block: .5rem; }
+  .offer-lane h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0 0 .4rem; padding-bottom: .3rem; border-bottom: 1px solid var(--rule); }
+  .offer-board [data-offer-undo]:disabled { cursor: not-allowed; }
+  /* Idle: keeps its place, so a held reply's button appears without moving anything. */
+  .offer-board [data-offer-held][data-idle] { visibility: hidden; }
+  .offer-board [data-offer-held] { font-variant-numeric: tabular-nums; }
+  /* The label and a hidden copy of the longest one share one cell, so the button keeps its size, and the header its rows,
+     whatever the label says. */
+  .offer-board [data-offer-held] { display: inline-grid; align-items: center; justify-items: start; }
+  .offer-board [data-offer-held] > * { grid-area: 1 / 1; }
+  .offer-held-room { visibility: hidden; }
+  .offer-board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .offer-cards { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+  .offer-card { border: 1px dashed var(--field-border); border-radius: 3px; padding: .5rem .75rem; min-width: 0; }
+  .offer-card[data-status="kept"], .offer-card[data-status="edited"] { border-style: solid; }
+  .offer-card-origin { font: 500 .75rem/1.3 var(--font-sans); color: var(--studio-muted); margin: 0; }
+  .offer-card-text { margin: .15rem 0; overflow-wrap: anywhere; }
+  .offer-card-detail { margin: .25rem 0; padding-left: 1rem; font-size: .875rem; }
+  .offer-card-detail :global(li) { margin: .1rem 0; }
+  .offer-card-reason { font-size: .875rem; margin: .15rem 0; color: var(--studio-muted); }
+  /* Each action has the same space on both sides, so gaps match and a wrapped row starts where the first did; the row
+     moves left by that space, so the first label lines up with the card's text. */
+  .offer-card-actions { gap: 0 .45rem; margin-inline-start: -.55rem; }
+  .offer-card-actions :global(.studio-quiet), .offer-card-editor .software-actions :global(.studio-quiet) { padding-inline: .55rem; }
+  .offer-card-editor .software-actions { gap: 0 .45rem; margin-inline-start: -.55rem; }
+  .offer-empty { font-size: .875rem; color: var(--studio-muted); }
+  .offer-card-editor label { display: grid; gap: .3rem; font: 500 .82rem/1.4 var(--font-sans); }
+  .offer-card-editor input { width: min(100%, 40rem); min-width: 0; font-size: 1rem; min-height: 44px; }
+  .offer-card-error { margin: .25rem 0 0; font-size: .875rem; color: var(--studio-danger); }
+  .offer-card-hint { margin: .2rem 0 0; font-size: .78rem; color: var(--studio-muted); }
+  .offer-card-editor input[aria-invalid="true"] { border-color: var(--accent); }
+  .offer-aside summary { display: flex; align-items: center; gap: .5rem; min-height: 44px; cursor: pointer; font: 500 .85rem/1.3 var(--font-sans); list-style: none; }
+  .offer-aside summary::-webkit-details-marker { display: none; }
+  .offer-aside summary::before { content: '+'; color: var(--accent); }
+  .offer-aside[open] summary::before { transform: rotate(45deg); }
+  .offer-board :global(.offer-aside li) { display: grid; justify-items: start; margin: .25rem 0 .5rem; overflow-wrap: anywhere; }
+  @media (prefers-reduced-motion: no-preference) {
+    .offer-card.is-new { animation: offer-in .18s var(--ease-site); }
+    @keyframes offer-in { from { opacity: 0; transform: translateY(4px); } }
+  }
+  @media print { .offer-board { display: none; } }
+</style>
+<script>
+  import { setupOfferBoard } from '~/scripts/offer-board';
+
+  setupOfferBoard();
+</script>

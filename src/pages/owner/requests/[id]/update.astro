@@ -183,6 +183,8 @@ const update: ClientSoftwareUpdate = {
 	next_update_on: seed?.next_update_on ?? "",
 	shared_at: null,
 	has_visual: draft?.visual_key ? 1 : 0,
+	visual_width: draft?.visual_width ?? null,
+	visual_height: draft?.visual_height ?? null,
 	kind: seed?.kind ?? "progress",
 	links_json: JSON.stringify(links),
 };

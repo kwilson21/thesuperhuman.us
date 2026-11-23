@@ -16,19 +16,21 @@ export function setupSoftwareComposer() {
 	const email = form.querySelector<HTMLInputElement>("[name=email_client]")!,
 		alt = form.querySelector<HTMLInputElement>("[name=visual_alt]")!;
 
+	// The saved image, read once for its source and its size attributes.
+	const savedImage = preview.querySelector<HTMLImageElement>(
+		"[data-preview-image]",
+	);
+
 	let emailChosen = Boolean(root.dataset.id),
-		hasVisual = Boolean(
-			preview
-				.querySelector<HTMLImageElement>("[data-preview-image]")
-				?.getAttribute("src"),
-		);
+		hasVisual = Boolean(savedImage?.getAttribute("src"));
 
 	const updateId = root.dataset.id || crypto.randomUUID();
 
-	let savedVisual =
-		preview
-			.querySelector<HTMLImageElement>("[data-preview-image]")
-			?.getAttribute("src") || "";
+	let savedVisual = savedImage?.getAttribute("src") || "";
+
+	// The saved image's size attributes, put back when a chosen file is rejected; null when it had none.
+	let savedWidth = savedImage?.getAttribute("width") ?? null,
+		savedHeight = savedImage?.getAttribute("height") ?? null;
 
 	let objectUrl: string | undefined,
 		busy = false;
@@ -540,8 +542,14 @@ export function setupSoftwareComposer() {
 				"[data-preview-image]",
 			)!;
 
-			if (savedVisual) previewImage.src = savedVisual;
-			else previewImage.removeAttribute("src");
+			if (savedVisual) {
+				previewImage.src = savedVisual;
+
+				if (savedWidth !== null) previewImage.setAttribute("width", savedWidth);
+
+				if (savedHeight !== null)
+					previewImage.setAttribute("height", savedHeight);
+			} else previewImage.removeAttribute("src");
 			preview.querySelector<HTMLElement>("[data-preview-figure]")!.hidden =
 				!savedVisual;
 			const name = form.querySelector("[data-visual-name]");
@@ -558,8 +566,15 @@ export function setupSoftwareComposer() {
 
 		if (objectUrl) URL.revokeObjectURL(objectUrl);
 		objectUrl = URL.createObjectURL(image);
-		preview.querySelector<HTMLImageElement>("[data-preview-image]")!.src =
-			objectUrl;
+
+		const previewImage = preview.querySelector<HTMLImageElement>(
+			"[data-preview-image]",
+		)!;
+
+		// The size on the page was the saved image's; the new file's is not known here.
+		previewImage.removeAttribute("width");
+		previewImage.removeAttribute("height");
+		previewImage.src = objectUrl;
 		preview.querySelector<HTMLElement>("[data-preview-figure]")!.hidden = false;
 		render();
 	});
@@ -703,6 +718,9 @@ export function setupSoftwareComposer() {
 				root!.dataset.updatedAt = result.updatedAt;
 				hasVisual = true;
 				savedVisual = `${root!.dataset.endpoint}/${root!.dataset.id}/visual`;
+				// The uploaded file's size is not known here, and the preview has shown it with no size attributes.
+				savedWidth = null;
+				savedHeight = null;
 				file.value = "";
 
 				if (result.cleanupPending) {

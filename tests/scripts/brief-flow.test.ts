@@ -622,7 +622,7 @@ it("discloses browser drafts and Workers AI accurately, with reassurance only at
 		"You can turn suggestions off",
 		"in your browser",
 		"strictly necessary security cookie that expires after 30 minutes",
-		"Updated November 15, 2026",
+		"Updated November 22, 2026",
 		"kept for up to two days",
 		"Project brief suggestions use",
 		"While you write a project brief,",

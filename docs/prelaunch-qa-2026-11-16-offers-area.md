@@ -53,23 +53,28 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
 - Decided in the review of #306 (design, section 2 and 3): the four conditions only a guard checked are read first and
   refused by name; a refused guard is not retried; a UNIQUE failure that backs the draft rule's fact is read and decided
   again; question and decline save their after-email moves through the `@xstate/effect` bridge.
-- **UNVERIFIED, with no owner-accepted exception · The answer when the email's outcome never lands.** Not an owner
-  decision yet: `settled`'s TimeoutError (no landing within 30 seconds) and ActorStoppedError (the machine stopped
-  without one) answer the fixed 500 the route gives a defect ("The change could not be saved. Please try again."), as
-  the design's section 5 says, and are logged once through `logUnexpected`, as every unexpected failure and every defect
-  of a converted route is. Impact: neither can happen in the corpus (it answers every email at once), and live it needs
-  the question's or decline's emails to stall past their own 10-second timeouts or the worker to stop the actor. If it
-  did, the first batch is saved and the client email's outcome is unknown, yet the sentence asks for a retry where the
-  after-email answers ask for a reload. Follow-up: the owner was asked on 2026-11-16, with the open wording of those
-  after-email answers, whether this should also say to reload; a change is a behaviour fix in its own pull request.
+- **Decided after release · The answer when the email's outcome never lands.** Not an owner decision at release:
+  `settled`'s TimeoutError (no landing within 30 seconds) and ActorStoppedError (the machine stopped without one) answer
+  the fixed 500 the route gives a defect ("The change could not be saved. Please try again."), as the design's section 5
+  says, and are logged once through `logUnexpected`, as every unexpected failure and every defect of a converted route
+  is. Impact: neither can happen in the corpus (it answers every email at once), and live it needs the question's or
+  decline's emails to stall past their own 10-second timeouts or the worker to stop the actor. If it did, the first
+  batch is saved and the client email's outcome is unknown, yet the sentence asks for a retry where the after-email
+  answers ask for a reload. Follow-up: the owner was asked on 2026-11-16, with whether those after-email answers should
+  say "Reload before taking another action", whether this one should also say to reload; the owner answered "You decide"
+  (in conversation, 2026-11-22), and Claude Code decided: keep this answer as it is (two emails that each time out take
+  20 seconds, inside the 30-second wait, so this path needs the actor to stop or a call to ignore its own 10-second
+  abort), keep the approved "Reload before you try again" on the after-email answers (the sentence begins "The email was
+  sent", so the owner knows that trying again sends the client email a second time, and changing the wording would not
+  prevent it), and keep the sentences this conversion added as written. Nothing changes.
 
 ## The conversion (the third PR)
 
 - Flows, `src/server/flows/`: `offer-fit.ts` (`reviewSoftwareFit`), `offer-question.ts` (`askSoftwareQuestion`),
   `offer-decline.ts` (`declineSoftwareRequest`), `offer-revoke.ts` (`closeOfferLink`), `offer-draft.ts`
   (`saveOfferDraft`), `offer-send.ts` (`sendSoftwareOffer`), and what they share in `offer-request.ts`: the first read,
-  the reads after a refused batch (`answerRefusedBatch`, which asks the refused-batch rule for the next fact, reads it and
-  asks again), the client email through the request machine (`emailThroughMachine`), `MailNotConfigured`, and the
+  the reads after a refused batch (`answerRefusedBatch`, which asks the refused-batch rule for the next fact, reads it
+  and asks again), the client email through the request machine (`emailThroughMachine`), `MailNotConfigured`, and the
   failure after the email (`OffersStoreFailedAfterEmail`). Each flow calls only the store, the services and the pure
   rules, reads each rule's facts in the order the route always read them, and builds no response text.
 - The clock and ids: `now` and `sendingSince` (`offerSendingSince`) are inputs, read at each point the route always read
@@ -106,8 +111,8 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
   - `settled`'s timeout or a stopped machine (question, decline) answers the fixed 500 and is logged once; the old route
     had no such wait.
   - A failing read that is new (a signed agreement, an audio project, a reissue's link row, the named attachments' rows,
-    the closed archives, the reused MSA's row before a draft that confirms reuse) answers 500 with the fixed sentence and
-    is logged, where the old route made no read there and went on to its batch.
+    the closed archives, the reused MSA's row before a draft that confirms reuse) answers 500 with the fixed sentence
+    and is logged, where the old route made no read there and went on to its batch.
 - Route, `src/pages/api/owner/requests/[id]/software.ts` (1,165 lines to 242): the owner check (403), then
   `bindingsOrUnavailable(env, ["MUSIC_DB"])` (503 with the private header, before the body), `musicRequest`'s answers,
   the command reader's 400, and 404 for a missing or empty id; then `runRoute(services, program, offersDefect)` with
@@ -213,9 +218,8 @@ UNVERIFIED until checked:
 
 - **PASS · Changes, instructions and audience.** One owner route converted; no answer in the corpus changes (the
   answers that change outside it are listed under "The conversion").
-- **PASS, with exception · Approved decisions.** Quoted above. The exception, which the owner has not accepted: the
-  answer when the email's outcome never lands is UNVERIFIED, released without the owner's confirmation (impact and
-  follow-up under "Owner decisions").
+- **PASS · Approved decisions.** Quoted above. The answer when the email's outcome never lands was released before the
+  owner's decision and decided on 2026-11-22 (under "Owner decisions").
 - **N/A · Public copy, first screen, navigation.** No page changes.
 
 ## 2. Search and sharing
@@ -250,8 +254,8 @@ UNVERIFIED until checked:
 
 - **PASS · Checks and neutrality.** See "Golden neutrality" and "Evidence".
 - **N/A · Bindings, migrations.** None.
-- **UNVERIFIED, with no owner-accepted exception · The answer when the email's outcome never lands.** Released without
-  the owner's confirmation; impact and follow-up under "Owner decisions".
+- **PASS, decided after release · The answer when the email's outcome never lands.** Released before the decision;
+  decided 2026-11-22 to keep it (under "Owner decisions").
 - **PASS after the merge · Reviews.** Two of the merge authorization's conditions were not yet met when #334 merged: the
   last code change had not had another review pass, and the Workers preview build on its head had not reported. Both
   have since passed; the details are below. The reviews of #334 and #337, and the re-review of the closed-archive fix,

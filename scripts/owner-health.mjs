@@ -239,6 +239,7 @@ export async function ownerHealth({
 				"0026",
 				["version_label", "source_revision"],
 			],
+			["software_project_updates", "0028", ["visual_width", "visual_height"]],
 		]) {
 			try {
 				const columns = new Set(
@@ -383,7 +384,7 @@ export async function ownerHealth({
 	try {
 		const old = new Date(now.getTime() - 30 * 86400000).toISOString();
 
-		// audio_client_codes is the retired sign-in codes table; it counts here until a later migration drops it (0028, https://github.com/kwilson21/thesuperhuman.us/issues/271).
+		// audio_client_codes is the retired sign-in codes table; it counts here until a later migration drops it (https://github.com/kwilson21/thesuperhuman.us/issues/271).
 		const rows = await query(`SELECT
       (SELECT COUNT(*) FROM audio_client_signin_codes WHERE COALESCE(used_at,expires_at)< '${old}')
       ${availableSchema.has("audio_client_codes") ? `+(SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')` : ""}

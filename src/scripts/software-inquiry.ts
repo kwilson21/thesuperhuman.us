@@ -382,8 +382,6 @@ export function setupSoftwareInquiry(
 			if (isString(stored.idea) && !isString(stored.appGoal))
 				stored.appGoal = stored.idea;
 
-			const validPath = isSoftwarePath(stored.path);
-
 			// Every path's written answers, each cut to its question's limit.
 			for (const { key, max } of Object.values(briefQuestions).flat()) {
 				const value = stored[key];
@@ -421,15 +419,17 @@ export function setupSoftwareInquiry(
 
 			// The screen the draft was left on, by its data-step: the plan depends on the saved outline, which is read below. A
 			// draft from before the outline had screens saved only an index into the plans without one.
+			const storedPath: unknown = stored.path;
+
 			if (
-				isSoftwarePath(stored.path) &&
-				(!requestedPath || requestedPath === stored.path) &&
+				isSoftwarePath(storedPath) &&
+				(!requestedPath || requestedPath === storedPath) &&
 				(Number.isInteger(saved.section) ||
 					(Number.isInteger(saved.step) && saved.step >= 0))
 			)
 				resumeAt = Number.isInteger(saved.section)
 					? saved.section
-					: plans[stored.path][saved.step];
+					: plans[storedPath][saved.step];
 
 			if (
 				isString(saved.submissionId) &&
