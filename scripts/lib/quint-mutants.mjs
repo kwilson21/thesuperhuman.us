@@ -113,6 +113,49 @@ export const boardMutants = {
 	boardApplyPaused: { property: "pausedHolds" },
 };
 
+// verification/offer-board.qnt: the offer board's Use and Undo, which change the board and the offer editor together, while
+// the owner types and replies arrive late (src/scripts/offer-board.ts). Module name -> the property its change must break.
+export const offerBoardMutants = {
+	offerKeyByLength: { property: "undoMatchesStep" },
+	offerRestoreAlways: { property: "ownerWordsKept" },
+	offerKeepOnlyProposed: { property: "everyUseUndoable" },
+	offerFeeIsUse: { property: "ownerWordsKept" },
+	offerStaleUsedIn: { property: "useNeverOverwritesOther" },
+	offerDetailIgnoresSince: { property: "undoRespected" },
+	offerDetailOnOwned: { property: "ownedUntouched" },
+	offerRetryOnFail: { property: "noAutoAfterFailure" },
+	offerNameOnlyEmpty: { property: "ownerWordsKept" },
+	offerNoRowRemoval: { property: "undoComplete" },
+	offerRemoveLastRow: { property: "rowsBounded" },
+	offerFourFieldsOnly: { property: "ownerWordsKept" },
+	offerFeeAnyRow: { property: "feeOnItsOwnRow" },
+	offerFeeNoStep: { property: "undoComplete" },
+};
+
+// verification/daily-allowance.qnt: the daily AI allowance both boards reserve against, under concurrent requests
+// (src/server/brief-board-store.ts, src/server/offer-board-store.ts). Module name -> the property its change must break.
+export const allowanceMutants = {
+	allowanceNoGuard: { property: "limitsHold" },
+	allowanceSnapshotGuard: { property: "limitsHold" },
+	allowanceVisitorGuardOnly: { property: "limitsHold" },
+	allowanceSplitBatch: { property: "limitsHold" },
+	allowanceCleanToday: { property: "countsTrue" },
+	allowanceNoRetry: { property: "retriesBeforeAnswer" },
+	allowanceOffByOne: { property: "limitAnswersTrue" },
+};
+
+// verification/pricing-save.qnt: saving the owner's pricing reference from two forms and two tabs. `pricingTodayKv` is
+// the code as it is today on KV (docs/verification.md, "The pricing-save model"). Module name -> the property its change
+// must break.
+export const pricingMutants = {
+	pricingNoVersionCheck: { property: "noBlindOverwrite" },
+	pricingSplitReadWrite: { property: "otherPartKept" },
+	pricingStaleRead: { property: "noFalseConflict" },
+	pricingTodayKv: { property: "otherPartKept" },
+	pricingParallelSaves: { property: "noFalseConflict" },
+	pricingRetryAfterLost: { property: "noFalseConflict" },
+};
+
 // verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module
 // name -> the property its change must break.
 export const inquiryMutants = {
@@ -298,6 +341,30 @@ export const models = [
 		mutants: boardMutants,
 		equivalents: [],
 		exhaustive: ["board"],
+		samples: "20000",
+	},
+	{
+		file: "verification/offer-board.qnt",
+		current: ["offerBoard"],
+		mutants: offerBoardMutants,
+		equivalents: [],
+		exhaustive: ["offerBoard"],
+		samples: "20000",
+	},
+	{
+		file: "verification/daily-allowance.qnt",
+		current: ["allowance"],
+		mutants: allowanceMutants,
+		equivalents: [],
+		exhaustive: ["allowance"],
+		samples: "20000",
+	},
+	{
+		file: "verification/pricing-save.qnt",
+		current: ["pricing"],
+		mutants: pricingMutants,
+		equivalents: [],
+		exhaustive: ["pricing"],
 		samples: "20000",
 	},
 	{
