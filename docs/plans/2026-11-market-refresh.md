@@ -24,6 +24,11 @@ On `/owner/pricing`, under "Market research":
 
 The offer board itself does not change: its market row keeps reading the accepted research and saying its date.
 
+Using a proposal dates the research by the search (decided 2026-11-23; the owner left the choice to Claude). The search
+checked every cell that day, and a cell it could not confirm keeps the newest figure it had; the caveat names those cells
+and the date of the research they came from. Keeping the older date instead would leave the research looking 90 days
+old, so the daily run would search again every week (20 credits each) for as long as any cell stayed unconfirmed.
+
 ## 2. When a search runs
 
 A cron trigger runs the site's `scheduled` handler once a day. The run decides, from facts it reads first, whether to
