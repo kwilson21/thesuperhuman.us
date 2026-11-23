@@ -79,7 +79,8 @@ owner already knows the row exists, and a ready copy whose object is gone is an 
 
 **J2. Where the discount's send check runs (discount PR 4).** It runs only for a send with signing on, the one move
 that pins the current SOW template (offer-send.ts:245-248). With signing off nothing is pinned, and the website cannot
-sign the offer later without a new send ("The pinned templates are unavailable.", software-agreements.ts:243), so
+sign the offer later without a new send (its link request answers 404 "This offer is unavailable for signing.",
+access.ts:139-143, and its review "The pinned templates are unavailable.", software-agreements.ts:243), so
 there is nothing for the check to protect, and a discounted offer signed outside the website can still be sent. The
 discount plan states the refusal without that condition (section 4.5); PR 4 adds it there. The alternative refuses
 every send of a discounted offer while the template has no discount line, signing on or off.
@@ -493,9 +494,14 @@ with a `say` sentence, exactly today's.
 
 A refusal that today shares an answer with others keeps that answer: every `signDocuments` refusal answers the sign
 route's one 409; `OfferChanged` answers "Signing is off or the offer changed."; every other `countersign` refusal,
-`DateDoesNotExist`, `ArchiveClosed` and a lost guard answer the owner route's generic 409 (today's catch, agreement.ts:
-361-383, answers every error thrown inside it so); `StoredDataRefused` and `AlreadySigned` on the
-review answer "The agreement could not be reviewed."; `LinkExpired` answers the expired page's 401.
+`DateDoesNotExist`, `ArchiveClosed` and a lost guard answer the owner route's generic 409 (today's catch,
+agreement.ts:361-383, answers so every error thrown inside it, after abandon's re-read of the deposits and end's
+re-read of the MSA's use, 362-373); `StoredDataRefused` and `AlreadySigned` on the review answer "The agreement could
+not be reviewed."; `LinkExpired` answers the expired page's 401. `endAgreement` decides in today's order, which that
+catch makes: `NotEndable`, `EndDateOutside`, then for an MSA `MsaInUse`, then `DateDoesNotExist`. Today an impossible
+date throws (330-331) before the MSA check (334-338), and the catch then reads the MSA's use, so an impossible date on
+an MSA an open offer reuses answers "An open offer uses this agreement. Withdraw that offer first." (no golden case
+holds it: every impossible-date case ends a SOW).
 
 `agreementValues`, `renderAgreement`, `validateTemplate`, `templateFields` and `legalNameKey` stay pure in `src/lib`
 and the rules call them, so the rendered texts and their hashes are byte for byte today's. The abandon's deposit
@@ -564,16 +570,18 @@ decisions and outside effects.
   then the notices (below), each failure ignored by name (`Effect.ignore` on `AgreementStoreFailed` and
   `AgreementMailFailed` only). Under Q3 the agreements read after the batch moves into that step.
 - `agreement-countersign.ts`: the setting, the agreements, the batch (A10 A8 A11); then the MSA's packet when the SOW
-  names one, the SOW's packet and the copies, stopping at the first failure and ignoring the named ones (section 4, "The
-  best-effort steps' dependencies"); 200 whatever they did, as today.
+  names one, the SOW's packet and the copies, stopping at the first failure that escapes a packet's own handling and
+  ignoring it by name (section 4, "The best-effort steps' dependencies"); 200 whatever they did, as today.
 - `agreement-abandon.ts`: the agreements, the deposits (`DepositCounts`), the batch (A12 A11, the retirement); after a
   `GuardRefused`, the deposits again, as today's catch does (agreement.ts:362-367).
 - `agreement-record.ts`: end, hold and record-copy; end reads the MSA's use and, after a `GuardRefused`, reads it again
   (agreement.ts:369-373).
 - `agreement-packet.ts`, `preparePacket`: claim (A15; nothing to do when no row changes); the agreement, its MSA, the
   signatures and labels; `packetCertificates`; the render through `AgreementPacket`, reading through the store and the
-  bucket in today's order; the R2 puts, the readback, READY by attempt (A16). A failure is logged with today's line,
-  name and message, then FAIL by attempt with the step reached. `preflightPacket` is the send's preflight: the offers
+  bucket in today's order; the R2 puts, the readback, READY by attempt (A16). A failure after the claim (the reads,
+  the render, the puts, the readback, READY) is logged with today's line, name and message, then FAIL by attempt with
+  the step reached, and `preparePacket` then succeeds, as `prepareAgreementArtifact` returns normally today
+  (artifacts.ts:327-345): it does not reach the caller. `preflightPacket` is the send's preflight: the offers
   area's `AgreementPreflight` (`src/server/offers-services.ts:251-282`) calls it, with `PreflightReadFailed`'s meaning
   kept (pdf.ts:396-409).
 - `agreement-messages.ts`: `deliverNotices` and `deliverCopies` (per kind or role, in today's order: read, CLAIM with
@@ -596,10 +604,11 @@ it for the archive link, the downloads and the session reads (`AgreementStoreFai
 `studio-signin-store.ts` before the sign-in area extended it. One function per statement or batch over `MusicDb` and
 `AudioBucket`, each with `Effect.tryPromise`; rows read through Effect Schema readers (`rowsOf`, 52-61). A rejection is
 `AgreementStoreFailed` with the cause in `failure`, logged once by the route. A raised JSON guard or raise-only trigger
-is `GuardRefused`; a UNIQUE failure named in section 2 is `ChangedSinceRead`; a FOREIGN KEY failure with the evidence
-read after it is `ChangedSinceRead` (the review's client) or `GuardRefused` (an agreement deleted under a record).
-Statements keep today's SQL where a golden hook matches it; where one must change, its pattern changes in the re-record
-commit and the `trigger-hit` marker stays the same.
+is `GuardRefused`; a UNIQUE failure that section 2 reads and decides again is `ChangedSinceRead`, and the others it
+names (the signature and notice UNIQUEs, countersign's packet and copy keys) are `GuardRefused`; a FOREIGN KEY failure
+with the evidence read after it is `ChangedSinceRead` (the review's client) or `GuardRefused` (an agreement deleted
+under a record). Statements keep today's SQL where a golden hook matches it; where one must change, its pattern changes
+in the re-record commit and the `trigger-hit` marker stays the same.
 
 | Group | Functions | Today |
 |---|---|---|
@@ -646,19 +655,22 @@ would be counted for it.
 | `PdfCheck` (new) | pdf-lib's `PDFDocument.load` and its page count, loaded as today (attachments.ts:47-51) | `PdfLibUnavailable` (503), `PdfUnreadable` (B4) |
 | hashing (exists, `hashing` in agreement-services.ts:118-123) | `hashOfferToken`, `hashBytes` | `HashFailed` |
 
-**The best-effort steps' dependencies.** After a legal write commits, the packets, the copies and the notices are
-best effort, and today a missing bucket or mail setting skips them before anything is claimed:
-`prepareAgreementArtifact` throws "Storage unavailable." before its claim (artifacts.ts:160); `deliverAgreementCopies`
-returns after reading the ready packet row when the Resend key, the from address or the bucket is missing (360-372);
+**The best-effort steps' dependencies.** After a legal write commits, the packets, the copies and the notices are best
+effort, and today a missing bucket or mail setting skips them before anything is claimed: `prepareAgreementArtifact`
+throws "Storage unavailable." before its claim (artifacts.ts:160); `deliverAgreementCopies` returns after reading the
+ready packet row when the Resend key, the from address or the bucket is missing (360-372);
 `deliverAgreementNotifications` returns before any read when the key or the from address is missing (471). Each flow
 keeps its check at that point, so no missing service is ever a defect: `AgreementMail` is provided only when the Resend
-key and the from address are both set, and the steps read it and the bucket with `Effect.serviceOption`. The packet
-step fails with `StorageUnavailable` before the claim when the bucket is absent; the copies step reads the row, then
-does nothing when the bucket or the mail is absent; the notices step does nothing when the mail is absent, before its
-read. Countersign's step (the MSA's packet, the SOW's packet, the copies) stops at its first failure, as today's single
-`try` does (agreement.ts:84-106), and its named failures, `StorageUnavailable` among them, are ignored, so it answers
-200; the sign route's notices are ignored the same way (sign.ts:83-88); retry-copy answers 200 as today;
-retry-artifact answers B3's 503.
+key and the from address are both set, and the steps read it and the bucket with `Effect.serviceOption`. The packet step
+fails with `StorageUnavailable` before the claim when the bucket is absent; the copies step reads the row, then does
+nothing when the bucket or the mail is absent; the notices step does nothing when the mail is absent, before its read. A
+render, storage or readback failure stays inside `preparePacket`, logged and recorded as FAIL (section 3), so
+countersign still prepares the SOW's packet after the MSA's fails (golden countersign "R2 put fails: the packet is
+marked failed (storage)" marks both) and retry-artifact answers 200 after one. Only what escapes today's function stops
+a step: `StorageUnavailable` before the claim, a failed claim or FAIL write, the renderer's import, and the route's read
+of the MSA id. Countersign's step (the MSA's packet, the SOW's packet, the copies) stops at the first of those, as
+today's single `try` does (agreement.ts:84-106), and ignores them by name, so it answers 200; the sign route's notices
+are ignored the same way (sign.ts:83-88); retry-copy answers 200 as today; retry-artifact answers B3's 503.
 
 The packet keeps today's log line byte for byte: the golden packet cases record it ("a values record that lacks the
 contractor" logs a `TypeError` and its message, "a character the fonts cannot print" the renderer's `Error`). The
@@ -698,7 +710,8 @@ Every other answer is today's.
 ### Behaviour fixes
 
 Each fix PR comes before the conversion, without the `conversion` label, re-records its changed cases in a commit of
-its own and explains each one. Counts are golden cases, from the fixtures at `98e9404a`.
+its own and explains each one. Counts are golden cases, from the fixtures at `98e9404a`, except B5's two verify-page
+cases, which PR 2 adds.
 
 | # | What happens today | Golden cases | Count |
 |---|---|---|---|
@@ -757,12 +770,13 @@ steps ignore or log only named failures, so a bug there becomes a defect and the
 reaches one: each recorded failure there is a store, R2, mail or renderer failure, and each is named.
 
 **Retention's catches.** Retention has three more, each kept by name in `agreement-retention.ts`. A cursor marker
-whose body cannot be read or parsed (retention.ts:174-188 in the preview, 576-585 in the apply) is `MarkerUnreadable`,
-ignored, so the scan restarts as today (golden "an unreadable marker restarts the scan"); the marker's other checks
-(version, length, type) stay the rule's. A failed bucket list with a saved cursor, outside a reviewed scan, is retried
+whose body cannot be read or parsed, or parses to `null`, is `MarkerUnreadable`, ignored, so the scan restarts as today
+(retention.ts:174-188 in the preview, 576-585 in the apply; golden "an unreadable marker restarts the scan"). A `null`
+is caught today because `saved.version` throws inside the same `try` (180); any other value that is not an object is
+read as no cursor without throwing, and stays so. The marker's other checks (version, length, type) stay the rule's. A failed bucket list with a saved cursor, outside a reviewed scan, is retried
 once from the first page by catching `BucketListFailed` only (192-209), and a second failure is the route's 500
 ("a saved cursor and a failing bucket list retries and fails again"). A failed object delete puts the attachment row
-back with today's `INSERT OR IGNORE` and then fails with the same `BucketDeleteFailed` (513-531), the route's 500 with
+back with today's `INSERT OR IGNORE` and then fails with the same `BucketDeleteFailed` (513-534), the route's 500 with
 its sentence.
 
 ## 6. What depends on what
@@ -830,11 +844,13 @@ New properties, each with a mutant kept in the model that must fail in CI:
 | `executedOnlyWhenSigned` | countersign executes only a `client_signed` agreement of the sent offer, with the request open and signing on | `countersign-no-guards`: the countersign batch without A10 and A11 |
 | `abandonedHasNoDeposit` | an abandoned signing's version has no open or paid first deposit | `abandon-deposit-at-read`: the deposits judged at the read only, so a deposit reserved and written between the read and the batch survives |
 
-`redeem-no-live-guard` can be caught only through the signing switch: every other way an offer stops being signable
-(a send, reissue, revoke, decline or abandon, a request closed, a project started) also marks its links used
-(software-agreements.ts:72-75, through `retireRequestSigning` in owner-requests.ts:302 and project.ts:272), so A5
-refuses the redeem without A1. The model therefore lets signing be switched off between a link's issue and its redeem;
-if a run shows the mutant cannot break the property, it is listed as equivalent with that reason.
+`redeem-no-live-guard` can be caught only through the signing switch: every other way an offer stops being signable (a
+send, reissue, revoke, decline or abandon, a request closed, a project started) also marks its links used (the offers
+store's retirement, offers-store.ts:255-259, for a send, reissue, revoke or decline; abandon's own statement,
+agreement.ts:186-190; `retireRequestSigning`, software-agreements.ts:72-75, for a request closed in
+owner-requests.ts:302 and a project started in project.ts:272), so A5 refuses the redeem without A1. The model therefore
+lets signing be switched off between a link's issue and its redeem; if a run shows the mutant cannot break the property,
+it is listed as equivalent with that reason.
 
 The seven existing properties must still hold over the split steps. A mutant that turns out equivalent (one of today's
 other guards already stops what it removes) is listed with the equivalents in `scripts/lib/quint-mutants.mjs`, with its
@@ -851,7 +867,8 @@ archive open, A18) and `signing` (claim while `client_signed`, the archive open 
 sending, A21). Their reset is A20, not the audio queue: the audio `queueRead` moves a `pending` notice too
 (audio-project-notices.qnt:171), which A20 never matches (agreement.ts:214, 224), the same difference that gives this
 area its own machine (section 1). So the reset's condition becomes per kind in the model: today's for the audio kinds,
-A20's (failed, or sending, confirmed not sent and at least a minute old) for the two new ones. The existing
+A20's (failed, or sending, confirmed not sent and at least a minute old, and for a signing notice also
+`currentSigningNotification`, agreement.ts:224) for the two new ones. The existing
 `oneEmailInTotal` and `sentMeansMailed` must hold for both kinds, `failedMeansNotMailed` for copies (a signing notice
 made obsolete while its email was in flight ends `failed` today, by design, software-agreements.ts:615), and two new
 properties: `copyOnlyWhenExecuted` (mutant `CopyClaimNoState`) and `noticeOnlyBeforeCountersign` (mutant
@@ -904,11 +921,11 @@ access conversion did.
    `scripts/lib/quint-mutants.mjs`, `docs/verification.md` updated with the Apalache results.
 4. The behaviour fixes, each its own PR to `main`, no `conversion` label, each re-recording its changed cases in a
    commit of its own:
-   - client routes: B1, B2 and B5 on the link, draft, review and sign routes, B6 as Q3 decides, Q2's draft and sign
-     sentences;
-   - the verify pages: B1 and B2 on the redeem and the pages, Q2's failure page, the four consume-batch cases of
-     `offer-link` and `agreements-link`; the failure page is a UI change, so this PR runs `hallmark audit` on both
-     pages and carries their screenshots, as CLAUDE.md asks;
+   - client routes: B1, B2 and B5's draft and link cases on the link, draft, review and sign routes, B6 as Q3 decides,
+     Q2's draft and sign sentences;
+   - the verify pages: B1 and B2 on the redeem and the pages, B5's POST whose body is not a form, Q2's failure page, the
+     four consume-batch cases of `offer-link` and `agreements-link`; the failure page is a UI change, so this PR runs
+     `hallmark audit` on both pages and carries their screenshots, as CLAUDE.md asks;
    - the owner routes: B1, B2, B3, B4 and B8, and the two cases whose second trigger stops firing;
    - decisions out of SQL: B7, the review's re-decision on its UNIQUE failures and the link's races as Q1 decides.
 5. The conversion, a stack of four PRs merged into `main` as one; only the bottom PR targets `main` and carries the
