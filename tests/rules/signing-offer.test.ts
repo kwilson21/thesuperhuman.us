@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import * as Effect from "effect/Effect";
 import { beforeAll, describe, expect, it } from "vitest";
-import { liveSigningGuard } from "../../src/lib/agreement-access";
 import {
 	getLinkedOffer,
 	hashOfferToken,
@@ -13,11 +12,16 @@ import {
 	openForSigning,
 	type SigningStateRow,
 } from "../../src/server/rules/signing-offer";
+import {
+	LIVE_SIGNING_GUARD,
+	liveSigningGuard,
+} from "../helpers/signing-guards";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
 // The offer a signing token names, and whether it is open for signing (docs/plans/2026-11-signing-conversion.md,
 // section 2), as stories; then each held, on sqlite with the real schema (db/music.sql), to the SQL that decides it today:
-// `openForSigning` to the live signing guard A1 (`liveSigningGuard`, imported from src/lib/agreement-access.ts), and
+// `openForSigning` to the live signing guard A1 (copied in tests/helpers/signing-guards.ts and held here to the store's
+// text, src/server/agreement-store.ts), and
 // `linkedOffer` to `getLinkedOffer`'s filters (imported from src/lib/software-offers.ts). The facts are read with the
 // statements the store will read them with, copied here: A1's facts with the read today's link route makes after a
 // guard raised (`signingRefusal`, src/lib/agreement-access.ts), the linked offer's rows filtered by the token's hash alone.
@@ -265,6 +269,14 @@ const LINKS = ["live", "revoked", "replaced", "elsewhere", "none"] as const;
 const SNAPSHOTS = [RECIPIENT, "other@example.com", null] as const;
 const PROJECTS = ["none", "this offer", "another offer"] as const;
 const SETTINGS = ["missing", 0, 1] as const;
+
+describe("A1 as copied", () => {
+	it("is the store's guard, text for text", () => {
+		expect(readFileSync("src/server/agreement-store.ts", "utf8")).toContain(
+			LIVE_SIGNING_GUARD,
+		);
+	});
+});
 
 describe("A1 and openForSigning", () => {
 	it("refuse exactly together, for every offer, link, recipient, brief, project and setting", async () => {

@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgreementSession } from "../../src/lib/agreement-access";
 import { templateFields } from "../../src/lib/agreement-templates";
-import {
-	offerAgreements,
-	sessionGuard,
-} from "../../src/lib/software-agreements";
+import { offerAgreements } from "../../src/lib/software-agreements";
 import { signingStatusIs } from "../../src/server/agreement-store";
 import { AGREEMENT_SIGNED } from "../../src/server/machines/agreement-document";
 import { softwareGuard } from "../../src/lib/software-guard";
@@ -37,10 +34,12 @@ import {
 	type SqliteRow,
 	sqliteD1,
 } from "../helpers/sqlite-d1";
+import { sessionGuard } from "../helpers/signing-guards";
 
 // The review's decisions against the SQL they replace or that re-checks them, on sqlite with the real schema
 // (docs/plans/2026-11-signing-conversion.md, section 4: "a test runs each kept guard's SQL on sqlite against its rule").
-// Kept guards: A2 (`sessionGuard`, imported from src/lib/software-agreements.ts) against `openSession`, and A3 (the
+// Kept guards: A2 (`sessionGuard`, copied in tests/helpers/signing-guards.ts, held to the store's text in
+// tests/rules/signing-draft.test.ts) against `openSession`, and A3 (the
 // review's own guard, copied from `reviewOnce`) against `reviewExisting`; A1 is held to `openForSigning` elsewhere. Reads
 // whose SQL decided and whose rule now decides on plain rows: `offerAgreements`' filter (imported), the reused MSA's six
 // conditions, the pending MSA's statuses and `otherRequestChangedClient`'s evidence (copied from `reviewOnce` and

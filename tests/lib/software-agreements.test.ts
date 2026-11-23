@@ -22,7 +22,6 @@ import {
 	readClientAgreement,
 } from "~/lib/agreement-client-fields";
 import {
-	signAgreements,
 	countersignAgreements,
 	offerAgreements,
 	executedOfferAgreement,
@@ -52,6 +51,7 @@ import { requestArchiveLink } from "~/server/flows/agreement-link";
 import { storeDraft } from "~/server/flows/signing-draft";
 import { DraftRefused } from "~/server/rules/signing-draft";
 import { reviewAndStore } from "~/server/flows/signing-review";
+import { signAndStore } from "~/server/flows/signing-sign";
 import { AudioBucket, liveTurnstile, MusicDb } from "~/server/services";
 import {
 	hashOfferToken,
@@ -405,6 +405,37 @@ const reviewDocumentsOf = (
 		),
 	);
 
+/**
+ * The signature proper (`signAndStore`, src/server/flows/signing-sign.ts), as the sign route runs it after its front
+ * checks, with the browser evidence of `from`: answers the receipt id, or rejects with an Error naming the refusal and its
+ * sentence (a defect rejects as itself). The notices are not sent.
+ */
+const signDocumentsOf = (
+	database: D1Database,
+	signed: SoftwareOffer,
+	session: AgreementSession,
+	documents: readonly { readonly id: string; readonly hash: string }[],
+	from: Request,
+) =>
+	Effect.runPromise(
+		signAndStore(
+			{
+				request: from,
+				now: () => new Date(),
+				newId: () => crypto.randomUUID(),
+			},
+			signed,
+			{ ...session, revoked_at: null },
+			documents,
+		).pipe(
+			Effect.mapError(
+				(refusal) =>
+					new Error(`${refusal._tag}: ${"say" in refusal ? refusal.say : ""}`),
+			),
+			Effect.provideService(MusicDb, database),
+		),
+	);
+
 /** The draft saved as the review route saves it first (`storeDraft`, src/server/flows/signing-draft.ts), signing on. */
 const saveDraftOf = (
 	database: D1Database,
@@ -488,7 +519,7 @@ async function signed() {
 	const result = await review(),
 		session = (await agreementSession(db, request(), "agreement", "o"))!;
 
-	await signAgreements(
+	await signDocumentsOf(
 		db,
 		(await offer())!,
 		session,
@@ -915,7 +946,7 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 		session = (await agreementSession(db, request()))!;
 
 	await expect(
-		signAgreements(
+		signDocumentsOf(
 			db,
 			(await offer())!,
 			session,
@@ -927,7 +958,7 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 		sql.prepare("SELECT count(*) n FROM software_agreement_signatures").get().n,
 	).toBe(0);
 
-	const receipt = await signAgreements(
+	const receipt = await signDocumentsOf(
 		db,
 		(await offer())!,
 		session,
@@ -936,7 +967,7 @@ it("rejects stale hashes and stores one atomic client action with email, IP and 
 	);
 
 	expect(
-		await signAgreements(
+		await signDocumentsOf(
 			db,
 			(await offer())!,
 			session,
@@ -980,7 +1011,7 @@ it("returns a saved client signature only to the session that made it", async ()
 	const result = await review(),
 		session = (await agreementSession(db, request()))!;
 
-	const receipt = await signAgreements(
+	const receipt = await signDocumentsOf(
 		db,
 		(await offer())!,
 		session,
@@ -989,17 +1020,17 @@ it("returns a saved client signature only to the session that made it", async ()
 	);
 
 	await expect(
-		signAgreements(
+		signDocumentsOf(
 			db,
 			(await offer())!,
 			{ ...session, token_hash: "wrong" },
 			result.documents,
 			request(),
 		),
-	).rejects.toThrow("A different signing action is already saved.");
+	).rejects.toThrow("SignedElsewhere");
 
 	expect(
-		await signAgreements(
+		await signDocumentsOf(
 			db,
 			(await offer())!,
 			session,
@@ -1014,7 +1045,7 @@ it("does not sign a regenerated preview from another session", async () => {
 		session = (await agreementSession(db, request()))!;
 
 	await expect(
-		signAgreements(
+		signDocumentsOf(
 			db,
 			(await offer())!,
 			{ ...session, token_hash: "wrong" },
@@ -1827,7 +1858,7 @@ it("records changed notice details separately from the immutable party snapshot"
 		notice_email: "updated@example.com",
 	});
 
-	await signAgreements(
+	await signDocumentsOf(
 		db,
 		(await offer())!,
 		session,
@@ -2310,7 +2341,7 @@ it.each(["resolved", "withdrawn"])(
 		sql.prepare("UPDATE owner_requests SET status=?").run(status);
 		expect(await agreementSession(db, request(), "agreement", "o")).toBeNull();
 		await expect(
-			signAgreements(
+			signDocumentsOf(
 				db,
 				(await offer())!,
 				session,
@@ -2513,7 +2544,7 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		.prepare("SELECT * FROM software_offers WHERE id='o2'")
 		.first<SoftwareOffer>())!;
 
-	await signAgreements(
+	await signDocumentsOf(
 		db,
 		nextOffer,
 		(await agreementSession(db, request(), "agreement", "o2"))!,
@@ -3702,8 +3733,8 @@ it("rejects signing stale reviewed documents after autosaved details change", as
 		signer_title: "Updated title",
 	});
 	await expect(
-		signAgreements(db, (await offer())!, session, result.documents, request()),
-	).rejects.toThrow("details changed");
+		signDocumentsOf(db, (await offer())!, session, result.documents, request()),
+	).rejects.toThrow("DetailsChanged");
 	expect(
 		sql.prepare("SELECT count(*) n FROM software_agreement_signatures").get().n,
 	).toBe(0);
@@ -3764,7 +3795,7 @@ it("retires the redundant draft after saving immutable signatures", async () => 
 		resolved.client,
 	);
 
-	await signAgreements(
+	await signDocumentsOf(
 		db,
 		(await offer())!,
 		session,
@@ -3790,7 +3821,7 @@ it("prevents external start if website signing commits after the initial read", 
 		.run();
 	const originalBatch = db.batch.bind(db);
 	vi.spyOn(db, "batch").mockImplementationOnce(async (statements) => {
-		await signAgreements(
+		await signDocumentsOf(
 			fakeD1({ ...db, batch: originalBatch }),
 			(await offer())!,
 			session,
@@ -5757,7 +5788,7 @@ it("certificates read older stored values from the template rows, and blank sour
 			.run(JSON.stringify(values), agreement.id);
 	}
 
-	await signAgreements(
+	await signDocumentsOf(
 		db,
 		(await offer())!,
 		(await agreementSession(db, request(), "agreement", "o"))!,

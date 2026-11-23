@@ -3,13 +3,12 @@ import type { SQLInputValue } from "node:sqlite";
 import { gunzipSync } from "node:zlib";
 import * as Effect from "effect/Effect";
 import ts from "typescript";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { statementOf } from "../../scripts/sql-effects.mjs";
 import { resolveClientDetails } from "../../src/lib/agreement-draft-fields";
 import { templateFields } from "../../src/lib/agreement-templates";
 import type { RawValue } from "../../src/lib/fields";
 import { projectToday } from "../../src/lib/project-dates";
-import { signAgreements } from "../../src/lib/software-agreements";
 import {
 	hashOfferToken,
 	type SoftwareOffer,
@@ -1615,103 +1614,10 @@ describe("the signing batch", () => {
 	});
 });
 
-describe("today's signing batch beside the store's, on twin databases with the same clock and ids", () => {
-	beforeEach(() => {
-		vi.useFakeTimers({ toFake: ["Date"] });
-		vi.setSystemTime(new Date(AT));
-	});
-
-	afterEach(() => {
-		vi.restoreAllMocks();
-		vi.useRealTimers();
-	});
-
-	/** Runs today's code in `today`, drawing its ids from that world's counter. */
-	async function asToday<A>(today: World, work: () => Promise<A>) {
-		const draws = vi
-			.spyOn(crypto, "randomUUID")
-			.mockImplementation(() => today.draw());
-
-		try {
-			return await work();
-		} finally {
-			draws.mockRestore();
-		}
-	}
-
-	// The review ran here beside today's `reviewAgreements` until the review's conversion deleted it; the review flow
-	// (src/server/flows/signing-review.ts) runs this store's batch, and the offer-review golden corpus holds it to what
-	// `reviewAgreements` wrote and answered (`pnpm run golden:neutral`).
-
-	const signCases = [
-		{ name: "the MSA and the SOW", setup: () => OFFER, draft: false },
-		{ name: "with a saved draft", setup: () => OFFER, draft: true },
-		{
-			name: "the SOW of a reused MSA",
-			setup: (world: World) => reusing(world),
-			draft: true,
-		},
-		{
-			name: "with a notice, for a client row with another address",
-			setup: (world: World) => {
-				world.seed({
-					software_agreement_clients: [
-						clientRow("c1", { notice_email: "old@example.test" }),
-					],
-				});
-
-				return OFFER;
-			},
-			draft: false,
-		},
-	];
-
-	for (const testCase of signCases)
-		it(`signs as today's signAgreements: ${testCase.name}`, async () => {
-			const today = signingWorld();
-			const store = signingWorld();
-			const offer = testCase.setup(today);
-
-			testCase.setup(store);
-
-			const review = await reviewed(today, offer);
-
-			await reviewed(store, offer);
-
-			for (const world of [today, store])
-				if (testCase.draft)
-					world.seed({
-						software_agreement_drafts: [
-							{
-								offer_id: "o1",
-								recipient_email: EMAIL,
-								values_json: JSON.stringify(DRAFT),
-								updated_at: EARLIER,
-							},
-						],
-					});
-
-			const receipt = await asToday(today, () =>
-				signAgreements(
-					today.db,
-					offer,
-					SESSION,
-					namedOf(review),
-					new Request("https://thesuperhuman.us/api/offer/token/sign", {
-						method: "POST",
-						headers: { "cf-connecting-ip": ADDRESS, "user-agent": AGENT },
-					}),
-				),
-			);
-
-			const write = await store.ok(signPipeline(store, namedOf(review), offer));
-
-			await store.ok(signBatch(write, AT));
-
-			expect(write.receiptId).toBe(receipt);
-			expect(store.batches.at(-1)).toEqual(today.batches.at(-1));
-		});
-});
+// The review and the signature ran here beside today's `reviewAgreements` and `signAgreements` (src/lib/software-agreements.ts)
+// on twin databases, until the client routes' conversion deleted both; the flows (src/server/flows/signing-review.ts and
+// signing-sign.ts) run this store's batches, and the offer-review and offer-sign golden corpora hold them to what today's
+// code wrote and answered (`pnpm run golden:neutral`).
 
 // ---- the SQL against the golden corpora ----
 
@@ -1885,10 +1791,10 @@ describe("the store's SQL against the golden corpora (offer-review, offer-sign)"
 				expect(TODAY_SOURCE, change.why).toContain(`"${change.old}"`);
 		}
 
-		for (const added of ADDED) {
+		// The added reads are run by the store; the converted sign route makes them too, so the offer-sign corpus records
+		// them once re-recorded.
+		for (const added of ADDED)
 			expect(texts.has(added.sql), added.why).toBe(true);
-			expect(RECORDED_SQL.has(added.sql), added.why).toBe(false);
-		}
 
 		expect(LINK_RECORDED_SQL.has(ADDED[0].sql)).toBe(true);
 	});

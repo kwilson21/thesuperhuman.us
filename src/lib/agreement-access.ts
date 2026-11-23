@@ -267,15 +267,3 @@ export async function agreementSession(
 
 	return session;
 }
-
-export const liveSigningGuard = (
-	db: D1Database,
-	id: string,
-	linkHash: string,
-	email: string,
-) =>
-	db
-		.prepare(
-			`SELECT CASE WHEN EXISTS(SELECT 1 FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND l.token_hash=? AND l.revoked_at IS NULL AND o.recipient_email_snapshot=? AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id) AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)) THEN 1 ELSE json_extract('Signing state changed','$') END`,
-		)
-		.bind(id, linkHash, email);
