@@ -106,8 +106,10 @@ import {
 //                                     the page's Continue form posts the key", the first POST of "a POST twice ...", "a
 //                                     link consumed over http sets the cookie without Secure", "a POST at 59 minutes
 //                                     still works", "a multipart form with a good key", "a POST with another site's
-//                                     Origin header still consumes the link" (the page checks no Origin), the second
-//                                     POST of "a newer link makes the older one useless"
+//                                     Origin header still consumes the link" (the page checks no Origin; in production
+//                                     the middleware answers a cross-site form post 403 before the page runs,
+//                                     src/middleware.ts:139-144, and no corpus runs middleware), the second POST of "a
+//                                     newer link makes the older one useless"
 //
 // The ready and expired pages keep completeAgreementLink's status and add `Referrer-Policy: no-referrer` and
 // `Cache-Control: no-store`; the expired page's "Send a new link" goes to /offer/<token>/sign with the URL's token, as

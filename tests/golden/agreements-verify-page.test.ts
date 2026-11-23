@@ -81,7 +81,9 @@ import {
 //                                     Continue form posts the key", the first POST of "a POST twice ...", "a link
 //                                     consumed over http sets the cookie without Secure", "a POST at 59 minutes still
 //                                     works", "a multipart form with a good key", "a POST with another site's Origin
-//                                     header still consumes the link" (the page checks no Origin), "the archive key
+//                                     header still consumes the link" (the page checks no Origin; in production the
+//                                     middleware answers a cross-site form post 403 before the page runs,
+//                                     src/middleware.ts:139-144, and no corpus runs middleware), "the archive key
 //                                     still opens after the agreements end" (the redeem reads no agreement), the second
 //                                     POST of "a newer link makes the older one useless"
 //
