@@ -461,6 +461,7 @@ with a `say` sentence, exactly today's.
 | `agreement-link.ts` (reused) | `withinAllowance`, `afterMail`, `consumeOlderLinks` | as for the archive link | `TooManyLinks`, `SecurityCheckFailed` | as today |
 | `signing-redeem.ts` | `redeemLink` | `at`, the link read by the key's hash and purpose, the token's hash, `openForSigning`'s facts for a signing link | `LinkExpired` | the link used, the event, the session (two hours) |
 | `signing-draft.ts` | `saveSigningDraft` | the session, the setting, the nonce, the draft read, a signed agreement, a project | `SessionMissing`, `CsrfMismatch`, `DraftRefused`, `AlreadySigned`, `SigningStarted` | the draft |
+| `signing-review.ts` | `reviewDocument` (the GET) | the document id asked for, the offer's agreements (`readOfferAgreements`, plain rows: the rule leaves out the abandoned ones, as `offerAgreements`' filter does today), the session's token hash | `DocumentNotFound` (404 `{ok:false}`) | nothing written: it answers the document's kind and text |
 | `signing-review.ts` | `reviewDocuments`, staged as the offers' send is | the offer's stored terms, details and contractor, the existing agreements, the client row, the reused MSA, the templates, a pending MSA elsewhere, `at` | `SignatureSaved`, `MsaMismatch`, `TemplatesUnavailable`, `PendingMsaElsewhere`, `RenderRefused` (the template code's sentences), `StoredDataRefused`, `AlreadySigned`, `SigningStarted` | the client, the review rows, the stale clients removed, the event |
 | `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
 | `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the typed name | `OfferChanged`, `PendingChanged` | signatures, events, obsolete notices, statuses, packet rows, two copies |
@@ -522,9 +523,9 @@ decisions and outside effects.
   `agreement-link-email`; the visitor's session (`visitorSession`, `src/server/flows/agreement-session.ts:24-48`, for
   the receipt's address); `at`; then `decideAndSave` over the recipient's links and `openForSigning`'s facts (read just
   before the batch), `issueSigningLink`, and the link batch (A4, A1, the event, the insert); the brief's name; the
-  terms' outcome (a `JSON.parse` that throws is B5's 500); the mail; `afterMail`: a refusal takes the link, its
-  sessions and the uses back (`refundAllowances`) and answers 502, otherwise the older links are consumed (A6) and the
-  receipt given.
+  terms' outcome (a `JSON.parse` that throws is B5's 500); the mail; `afterMail`: a refusal takes the link, its sessions
+  and the uses (`refundAllowances`) back in one batch, `removeRefusedLink`, and answers 502, otherwise the older links
+  are consumed (A6) and the receipt given.
 - `signing-redeem.ts`, `redeemAgreementLink`: the host, the key's shape, `at`, the link read, `redeemLink`; a GET for a
   signing link reads `openForSigning`'s facts and decides; a POST draws the session token, hashes it, draws the nonce
   (access.ts:383-385) and writes the batch (A1 for a signing link, A5, the link used, the event, the session). It runs
@@ -535,11 +536,15 @@ decisions and outside effects.
   values; a signed agreement and a project; the batch (A1 A2 A3, the upsert).
 - `signing-review.ts`, `reviewSigningDocuments`: as today, the draft batch first, then the review's reads in today's
   order, its staged rule, and the review batch through `decideAndSave` (section 2).
+- `signing-review.ts`, `readReviewDocument` (the GET): the offer by the token, the session (`visitorSession`), the
+  setting, in today's order (review.ts:23-32); then the offer's agreements and `reviewDocument`. The route builds the
+  200 with today's five headers (42-50) from the kind and text the rule answers.
 - `signing-sign.ts`, `signSigningDocuments`: the agreements, the saved receipt, the draft, the batch (A1 A2 A7 A8 A9);
   then the notices (below), each failure ignored by name (`Effect.ignore` on `AgreementStoreFailed` and
   `AgreementMailFailed` only). Under Q3 the agreements read after the batch moves into that step.
 - `agreement-countersign.ts`: the setting, the agreements, the batch (A10 A8 A11); then the MSA's packet when the SOW
-  names one, the SOW's packet and the copies, each failure ignored by name; 200 whatever they did, as today.
+  names one, the SOW's packet and the copies, stopping at the first failure and ignoring the named ones (section 4, "The
+  best-effort steps' dependencies"); 200 whatever they did, as today.
 - `agreement-abandon.ts`: the agreements, the deposits (`DepositCounts`), the batch (A12 A11, the retirement); after a
   `GuardRefused`, the deposits again, as today's catch does (agreement.ts:362-367).
 - `agreement-record.ts`: end, hold and record-copy; end reads the MSA's use and, after a `GuardRefused`, reads it again
@@ -578,7 +583,7 @@ commit and the `trigger-hit` marker stays the same.
 | Group | Functions | Today |
 |---|---|---|
 | The offer and the session | `readLinkedOffer`, `readSigningFacts` (the project, the setting, the recipient), `readSigningEnabled`; the session reads are the existing `readSession`, `readSigningOffer` | software-offers.ts:451-460; access.ts:43-53, 88-106 |
-| The signing link | `readSigningLinks`, `storeSigningLink` (A4 A1, event, insert), `readBriefName`, `removeRefusedLink`, the existing `consumeLinks` (A6) | access.ts:207-242, 257-260, 281-299, 307-312 |
+| The signing link | `readSigningLinks`, `storeSigningLink` (A4 A1, event, insert), `readBriefName`, `removeRefusedLink` (one batch: the sessions, the link, each use's two refund statements), the existing `consumeLinks` (A6) | access.ts:207-242, 257-260, 281-299, 307-312 |
 | The redeem | `readLinkByKey`, `redeemLinkBatch` (A1, A5, used, event, session) | access.ts:349-359, 387-425 |
 | The draft and review | `readDraft`, `saveDraftBatch` (A1 A2 A3), `readOfferAgreements`, `readClientByKey`, `readReusedMsa`, `readTemplate`, `readPendingMsa`, `reviewBatch`, `readClientEvidence` | draft-lib.ts:42-78; software-agreements.ts:98-107, 124-159, 202-300, 306-380 |
 | Signing | `readSavedReceipt`, `signBatch` | software-agreements.ts:418-545 |
@@ -600,20 +605,39 @@ choose rows stay in SQL, as the offers design keeps the attachment delete's `NOT
 (agreement.ts:171-193).
 
 **The allowance.** Its statements live in `src/server/studio-signin-store.ts`. `countAllowance` (430-447) also answers
-the window start its `RETURNING uses,window_start` already reads, and a new `refundAllowance(key, windowStart)` holds
-today's two statements (access.ts:288-297), so `reserveStudioAllowance` goes.
+the window start its `RETURNING uses,window_start` already reads, so `reserveStudioAllowance` goes. The refund gets no
+function of its own: today's two refund statements (access.ts:288-297) run only after a refused email, in the same
+`db.batch` as the deletes of the link and its sessions, so they stay in that batch, `removeRefusedLink` in
+`agreement-store.ts`. A failure leaves the link, its sessions and both uses as they were, as today; split into
+separate calls, a failure between them could delete the link and keep a use, so a visitor whose email never went out
+would be counted for it.
 
 **Services.**
 
 | Service | What it wraps | Its failures |
 |---|---|---|
-| `MusicDb`, `AudioBucket` (exist) | the bindings, through `bindingsOrUnavailable` | none |
+| `MusicDb` (exists) | the database, through `bindingsOrUnavailable` on every route | none |
+| `AudioBucket` (exists) | the bucket. The attachment routes and the downloads ask `bindingsOrUnavailable` for it, so a missing bucket is their 503 (B3 for the attachments GET). The owner request route and the owner agreements route do not: they provide it only when `env.AUDIO` is set, as the offers routes do (`src/server/offers-services.ts:146-171`), and the retention actions keep today's 503 "Retention storage identity is not configured." when it is absent (owner/agreements.ts:119-123). The client routes never use it | none |
 | `AgreementMail` (exists, `src/server/agreement-services.ts:33-55`) | `sendAudioMessage`, the payload passed as each caller builds it so the request body Resend sees is byte for byte today's; it gains the idempotency key and attachments the packet's copies and the notices send | `AgreementMailFailed` (never expected: `sendAudioMessage` answers every outcome) |
-| `AgreementAllowance` (exists, 57-111) | `reserve` also answers the key and window start; `refund` | `AgreementAllowanceFailed`; a code key under 32 characters is `CodeKeyUnusable` at the first keyed hash, which keeps today's 503 there |
+| `AgreementAllowance` (exists, 57-111) | `reserve` also answers the key and window start | `AgreementAllowanceFailed`; a code key under 32 characters is `CodeKeyUnusable` at the first keyed hash, which keeps today's 503 there |
 | `Turnstile` (exists) | `verifyTurnstile` | `TurnstileFailed` |
 | `AgreementPacket` (new) | `renderAgreementPacket`, loaded with today's dynamic import (agreement.ts:85, 254) | `PacketNotRendered` with the cause, whose name and message the log line prints as today |
 | `PdfCheck` (new) | pdf-lib's `PDFDocument.load` and its page count, loaded as today (attachments.ts:47-51) | `PdfLibUnavailable` (503), `PdfUnreadable` (B4) |
 | hashing (exists, `hashing` in agreement-services.ts:118-123) | `hashOfferToken`, `hashBytes` | `HashFailed` |
+
+**The best-effort steps' dependencies.** After a legal write commits, the packets, the copies and the notices are
+best effort, and today a missing bucket or mail setting skips them before anything is claimed:
+`prepareAgreementArtifact` throws "Storage unavailable." before its claim (artifacts.ts:160); `deliverAgreementCopies`
+returns after reading the ready packet row when the Resend key, the from address or the bucket is missing (360-372);
+`deliverAgreementNotifications` returns before any read when the key or the from address is missing (471). Each flow
+keeps its check at that point, so no missing service is ever a defect: `AgreementMail` is provided only when the Resend
+key and the from address are both set, and the steps read it and the bucket with `Effect.serviceOption`. The packet
+step fails with `StorageUnavailable` before the claim when the bucket is absent; the copies step reads the row, then
+does nothing when the bucket or the mail is absent; the notices step does nothing when the mail is absent, before its
+read. Countersign's step (the MSA's packet, the SOW's packet, the copies) stops at its first failure, as today's single
+`try` does (agreement.ts:84-106), and its named failures, `StorageUnavailable` among them, are ignored, so it answers
+200; the sign route's notices are ignored the same way (sign.ts:83-88); retry-copy answers 200 as today;
+retry-artifact answers B3's 503.
 
 The packet keeps today's log line byte for byte: the golden packet cases record it ("a values record that lacks the
 contractor" logs a `TypeError` and its message, "a character the fonts cannot print" the renderer's `Error`). The
@@ -709,7 +733,7 @@ reaches one: each recorded failure there is a store, R2, mail or renderer failur
 
 | Today | From | In the conversion | Note |
 |---|---|---|---|
-| `reserveStudioAllowance` | audio-client-access.ts:68-98 | `countAllowance` (answering the window start), `takeAllowance`, `refundAllowance` | deleted with its last caller |
+| `reserveStudioAllowance` | audio-client-access.ts:68-98 | `countAllowance` (answering the window start), `takeAllowance`; the refund in `removeRefusedLink` | deleted with its last caller |
 | `normalizeClientEmail`, `keyedHash` | client-portal.ts | used as they are | none |
 | `verifyTurnstile` | src/lib/turnstile.ts:66 | `Turnstile` | none |
 | `sendAudioMessage` | src/lib/audio-resend.ts | `AgreementMail` | the payload's key order kept |
@@ -843,8 +867,8 @@ access conversion did.
       status lists to them; every rule file of section 2 with its tests; `abandonBlocked` with its contract and its SQL
       test; the tests that hold each kept guard's SQL to its rule. Before it, `pnpm run verify:quint:exhaustive` again,
       its bound and result in the PR.
-   2. **Store, services, answers.** `agreement-store.ts` extended, `countAllowance`'s window start and
-      `refundAllowance`, `AgreementMail` and `AgreementAllowance` extended, `AgreementPacket` and `PdfCheck`, the fixed
+   2. **Store, services, answers.** `agreement-store.ts` extended, `countAllowance`'s window start,
+      `AgreementMail` and `AgreementAllowance` extended, `AgreementPacket` and `PdfCheck`, the fixed
       answers; store and service tests.
    3. **Client flows and routes.** The link, redeem, draft, review and sign flows; the four client routes and both
       verify pages on `bindingsOrUnavailable` and `runRoute`; `issueAgreementLink`, `completeAgreementLink`,
