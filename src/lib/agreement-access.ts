@@ -27,8 +27,10 @@ export const agreementText = (body: string, status: number) =>
 // Each signing and agreement route's answer to a missing binding, and its answer to a store failure or a defect with the
 // label it logs that under, as the route gives them today: the status, the sentence and the headers. A failure answer is
 // the `{ route, answer }` pair `runRoute` takes (src/server/run.ts), so a defect is logged once and answered as a store
-// failure is; the route answers a named store failure with `loggedAnswer(route, answer)` (src/server/answers.ts). Pure:
-// pages import this file. tests/lib/agreement-answers.test.ts holds each to the bytes a golden fixture recorded.
+// failure is; the route answers a named store failure with `loggedAnswer(route, answer)` (src/server/answers.ts). The
+// answers below are pure: plain responses and labels, no store or service (the rest of this module holds D1 statements
+// and the Resend and Turnstile calls). tests/lib/agreement-answers.test.ts holds each to the bytes a golden fixture
+// recorded.
 
 /** A route's answer to a store failure or a defect, and the label it logs that under (`logUnexpected`). */
 export type FailureAnswer = {
