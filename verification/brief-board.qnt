@@ -7,7 +7,7 @@
 //                reply whose request was sent after the card last became unowned: `since`)
 //   actions:     src/lib/brief-board.ts `keepCard`, `editCard`, `setAside`, `bringBack`, `addNote`, `undo`
 //   the outline: src/lib/brief-board.ts `briefOutline` (what is sent with the brief, and its "from your answers" items)
-// The lane on screen (section 10.3 of the design): the page shows one lane at a time, or none (a written question). A
+// The lane on screen (section 2, rule 6 of docs/plans/2026-11-living-brief.md): the page shows one lane at a time, or none (a written question). A
 // reply applies in full to every lane not on screen. On the lane on screen it only adds cards; its changes to and
 // withdrawals of the cards already listed there wait, as the held reply (`deferred`), until the visitor leaves the lane,
 // and are then applied under the same rules as any reply (ownership, `since`, newest wins, pause) against the board as it

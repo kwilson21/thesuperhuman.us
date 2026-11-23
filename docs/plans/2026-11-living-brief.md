@@ -129,7 +129,9 @@ that it was too much at once.
    against the answers as they are then, and a held reply is dropped when the outline is paused or a newer reply has been
    applied. It also adds, to the lane being left only, the new cards the delivery could not add (a full lane, where the
    reply rewords every open card, would otherwise be left empty): leaving a lane gives it what an off-screen delivery of
-   the same reply would have. A card the reply adds to the lane on screen is stamped like any other, so the same reply's held changes
+   the same reply would have. It never adds an idea that a delivery added to that lane while it was on screen (any reply's,
+   including one a newer reply replaced, and however the visitor then edited or set aside the card), so the visitor's
+   edit is never undone by a second card in the original wording. A card the reply adds to the lane on screen is stamped like any other, so the same reply's held changes
    cannot touch it. Every other lane takes a reply in full when it arrives, and so does every lane while a written
    question or the review is showing. Each lane remembers the cards it listed (set-aside ones not counted) when the
    visitor last left it, which is what the status line and "New since you last looked" are read from. The visitor's own

@@ -76,6 +76,12 @@ function walk(seed: number, steps: number) {
 	const answers = () => PASSAGES.filter((p) => present.has(p)).join(". ");
 	const failures: string[] = [];
 
+	// The ideas a delivery added to the lane on screen during this visit, and how often each shows on the lane.
+	let visitAdded: { lane: Lane; text: string }[] = [];
+
+	const onLane = (b: Board, lane: Lane, text: string) =>
+		b.cards.filter((c) => c.lane === lane && sameIdea(c.text, text)).length;
+
 	// What the walk reached, so a walk that never overlapped or never undid in flight cannot pass for the wrong reason.
 	const seen = {
 		olderDropped: 0,
@@ -88,6 +94,9 @@ function walk(seed: number, steps: number) {
 		heldChangesApplied: 0,
 		heldDropped: 0,
 		leaveAdded: 0,
+		restated: 0,
+		repeated: 0,
+		addedThenGone: 0,
 	};
 
 	const fail = (step: number, what: string) =>
@@ -193,7 +202,20 @@ function walk(seed: number, steps: number) {
 						if (
 							item.lane !== screen ||
 							named ||
-							held.added.includes(item) ||
+							// Another item of the reply may name, by its ref, the card that says this idea, and reword it.
+							held.reply.some(
+								(other) =>
+									other !== item &&
+									board.cards.some(
+										(c) =>
+											c.id === other.ref &&
+											c.lane === screen &&
+											sameIdea(c.text, item.text),
+									),
+							) ||
+							held.added.some(
+								(a) => a.lane === item.lane && sameIdea(a.text, item.text),
+							) ||
 							(item.basis === "said" && !quotedFrom(item.quote, answers()))
 						)
 							continue;
@@ -208,6 +230,21 @@ function walk(seed: number, steps: number) {
 								`leaving ${screen} left "${item.text}" of the held reply off the lane`,
 							);
 					}
+
+				// 10. leaveAddsNothingTwice: no idea a delivery added to the lane during this visit is on more cards after
+				// the leave than before it, whatever the visitor did to the cards meanwhile.
+				for (const idea of visitAdded) {
+					if (onLane(board, idea.lane, idea.text) === 0) seen.addedThenGone++;
+
+					if (
+						onLane(left, idea.lane, idea.text) >
+						onLane(board, idea.lane, idea.text)
+					)
+						fail(
+							step,
+							`leaving ${screen} added "${idea.text}" again, which a delivery added during the visit`,
+						);
+				}
 
 				if (addedOnLeave.length) seen.leaveAdded++;
 
@@ -228,6 +265,7 @@ function walk(seed: number, steps: number) {
 			}
 
 			screen = target ?? null;
+			visitAdded = [];
 		}
 
 		if (roll < 0.1) present = new Set([...present, pick(PASSAGES)!]);
@@ -240,7 +278,13 @@ function walk(seed: number, steps: number) {
 		} else if (roll < 0.27) {
 			const target = pick(board.cards.filter((c) => c.status !== "dismissed"));
 
-			if (target) board = editCard(board, target.id, `${target.text} edited`);
+			if (target)
+				// Half the edits keep the idea, half say something else (so a card no longer says the idea it was added for).
+				board = editCard(
+					board,
+					target.id,
+					next() < 0.5 ? `${target.text} edited` : `Reworked ${step}`,
+				);
 		} else if (roll < 0.3) {
 			const target = pick(
 				board.cards.filter(
@@ -317,7 +361,27 @@ function walk(seed: number, steps: number) {
 					: [],
 			);
 
-			const applied = applyReply(
+			// Some replies state an idea twice, and some restate an idea an earlier delivery added, without naming its card.
+			if (reply.length && next() < 0.25) {
+				const twin = pick(reply)!;
+				reply.push({ ...twin, text: `${twin.text}.` });
+				seen.repeated++;
+			}
+
+			if (visitAdded.length && next() < 0.4) {
+				const again = pick(visitAdded)!;
+				reply.push({
+					ref: "",
+					lane: again.lane,
+					text: again.text,
+					basis: "suggested",
+					quote: "",
+					reason: "",
+				});
+				seen.restated++;
+			}
+
+			const applied: Board = applyReply(
 				board,
 				reply,
 				request.n,
@@ -419,7 +483,22 @@ function walk(seed: number, steps: number) {
 					`reply ${request.n} changed the board while ${paused ? "paused" : "older than the last applied"}`,
 				);
 
+			if (screen && !paused && request.n > board.applied)
+				for (const c of applied.cards)
+					if (
+						c.lane === screen &&
+						!board.cards.some((b) => b.id === c.id) &&
+						c.status === "proposed"
+					)
+						visitAdded.push({ lane: c.lane, text: c.text });
+
 			board = applied;
+
+			// The visitor, looking at the lane, often rewrites a card a reply just added.
+			const justAdded = added.filter((c) => c.lane === screen);
+
+			if (screen && justAdded.length && next() < 0.4)
+				board = editCard(board, pick(justAdded)!.id, `Reworked ${step}`);
 		}
 
 		// 2. rejectedStaysRejected
@@ -475,6 +554,9 @@ describe("the board's properties on the real code", () => {
 			"heldReplies",
 			"heldChangesApplied",
 			"heldDropped",
+			"restated",
+			"repeated",
+			"addedThenGone",
 		] as const)
 			expect(total(key), key).toBeGreaterThan(20);
 	});

@@ -1948,31 +1948,125 @@ describe("the lane on screen", () => {
 		expect(texts(left, "parts")).toEqual(["Shows", "Song words and credits"]);
 	});
 
-	it("does not bring back, on leave, a card the delivery added and the visitor then set aside or removed", () => {
-		for (const away of [
-			(b: Board, id: string) => setAside(b, id),
-			(b: Board, id: string) => removeNote(editCard(b, id, "Song words"), id),
-		]) {
-			let b = started(suggested("parts", "Shows"));
-			let n: number;
-			[b, n] = sendRequest(b);
-			b = applyReply(
-				b,
-				[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
-				n,
-				ANSWERS,
-				false,
-				"parts",
-			).board;
-			b = away(b, card(b, "Lyrics").id);
+	it("does not bring back, on leave, a card the delivery added and the visitor then set aside", () => {
+		let b = started(suggested("parts", "Shows"));
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		b = setAside(b, card(b, "Lyrics").id);
 
-			const left = leaveLane(b, "parts", ANSWERS);
+		const left = leaveLane(b, "parts", ANSWERS);
 
-			// No second Lyrics card appears: the lane has the cards it had.
-			expect(left.cards.filter((c) => c.lane === "parts")).toHaveLength(
-				b.cards.filter((c) => c.lane === "parts").length,
-			);
-		}
+		// No second Lyrics card appears: the lane has the cards it had.
+		expect(left.cards.filter((c) => c.lane === "parts")).toHaveLength(
+			b.cards.filter((c) => c.lane === "parts").length,
+		);
+	});
+
+	it("does not re-offer, on leave, a note of the visitor's own that they removed while the lane was on screen", () => {
+		let b = started(suggested("parts", "Shows"));
+		b = addNote(b, "parts", "Lyrics");
+
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		b = removeNote(b, card(b, "Lyrics").id);
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toEqual(["Shows"]);
+	});
+
+	it("does not add on leave a second item of the same idea after the visitor edited the card the first one added", () => {
+		let b = started(suggested("parts", "Shows"));
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[
+				suggested("parts", "Shows", "c1"),
+				suggested("parts", "Lyrics"),
+				suggested("parts", "Lyrics."),
+			],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		b = editCard(b, card(b, "Lyrics").id, "Song words and credits");
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toEqual(["Shows", "Song words and credits"]);
+	});
+
+	it("does not add on leave an idea an earlier delivery added, when a newer reply restates it without a ref and the visitor edited the card", () => {
+		let b = started(suggested("parts", "Shows"));
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		b = editCard(b, card(b, "Lyrics").id, "Song words and credits");
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toEqual(["Shows", "Song words and credits"]);
+	});
+
+	it("keeps, on leave, a card an earlier delivery added that a newer reply restates without a ref, once and unwithdrawn", () => {
+		let b = started(suggested("parts", "Shows"));
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toEqual(["Shows", "Lyrics"]);
 	});
 
 	it("drops a held reply when the board is paused as the lane is left, or a newer reply has applied", () => {

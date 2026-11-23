@@ -211,8 +211,11 @@ export type HeldReply<L extends string = Lane> = {
 	readonly n: number;
 	readonly reply: readonly ReplyCard<L>[];
 	readonly refs: readonly string[];
-	/** The items of `reply` the delivery added to the lane while it was on screen: leaving does not add them again. */
-	readonly added: readonly ReplyCard<L>[];
+	/**
+	 * The ideas (lane and words) any delivery added to the lane while it has been on screen, across replies that replaced
+	 * one another: leaving does not add them again, whatever the visitor did to those cards (edited, set aside).
+	 */
+	readonly added: readonly { readonly lane: L; readonly text: string }[];
 };
 
 export type Board<L extends string = Lane> = {
@@ -1027,6 +1030,8 @@ type Scope<L extends string> = {
 	readonly skip: L | null;
 	/** The only lane whose cards the pass may change or withdraw (null: any). */
 	readonly only: L | null;
+	/** Ideas the pass does not add as new cards, though the reply carries them (a lane's ideas a delivery already added). */
+	readonly notAdded: readonly { readonly lane: L; readonly text: string }[];
 };
 
 /**
@@ -1167,8 +1172,11 @@ function reconcile<L extends string>(
 		// A pass limited to one lane adds to that lane only: the others took the reply in full when it arrived.
 		if (scope.only !== null && item.lane !== scope.only) continue;
 
-		// A card reworded later in this reply may now say the new idea.
+		// A card reworded later in this reply may now say the new idea; an idea a delivery already added is not added again.
 		if (
+			scope.notAdded.some(
+				(idea) => idea.lane === item.lane && sameIdea(idea.text, item.text),
+			) ||
 			kept.some(
 				(card) => card.lane === item.lane && sameIdea(card.text, item.text),
 			) ||
@@ -1253,6 +1261,7 @@ export function applyReplyIn<L extends string>(
 		add: true,
 		skip: onScreen,
 		only: null,
+		notAdded: [],
 	});
 
 	const { addedItems, ...applied } = result;
@@ -1263,7 +1272,19 @@ export function applyReplyIn<L extends string>(
 			...result.board,
 			applied: n,
 			deferred: onScreen
-				? { lane: onScreen, n, reply, refs, added: addedItems }
+				? {
+						lane: onScreen,
+						n,
+						reply,
+						refs,
+						// A newer reply for the same lane keeps what the older deliveries added and extends it.
+						added: [
+							...(board.deferred?.lane === onScreen
+								? board.deferred.added
+								: []),
+							...addedItems.map(({ lane, text }) => ({ lane, text })),
+						],
+					}
 				: result.board.deferred,
 		},
 	};
@@ -1276,7 +1297,9 @@ export function applyReplyIn<L extends string>(
  * was full. Cards it did add are not touched again (their `since` is not before the reply). A held reply is dropped, not applied, when the board is
  * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
  * listed before the held reply applied, so a card the leave adds counts as new and one it withdraws as removed. A
- * reply's items the delivery already added are not added again (the visitor may have edited or set them aside).
+ * idea a delivery added to the lane while it was on screen (any reply's, including one a newer reply replaced) is not
+ * added again, though a reply still carries it: the held reply is applied whole, so the card still counts as named, and
+ * the visitor may have edited it or set it aside.
  */
 export function leaveLane(
 	board: Board,
@@ -1301,11 +1324,11 @@ export function leaveLane(
 		next = reconcile(
 			BRIEF_LANES,
 			rest,
-			deferred.reply.filter((item) => !deferred.added.includes(item)),
+			deferred.reply,
 			deferred.n,
 			answers,
 			deferred.refs,
-			{ add: true, skip: null, only: lane },
+			{ add: true, skip: null, only: lane, notAdded: deferred.added },
 		).board;
 
 	return {
