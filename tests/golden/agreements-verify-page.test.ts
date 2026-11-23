@@ -79,7 +79,7 @@ import {
 //                                     left unused)
 //   401, the expired page             a method other than GET or POST, after the link read: "a PUT with a good key in
 //                                     the query" (the page alone: in production the middleware answers a PUT with no
-//                                     Origin and no content type 403 before the page runs, src/middleware.ts:124-144),
+//                                     Origin and no content type 403 before the page runs, src/middleware.ts:125-145),
 //                                     "a HEAD with a good key" (its recorded body is one production never sends: an
 //                                     answer to a HEAD carries no body)
 //   401, the expired page             POST: a guard of the batch raised (A5): "another tab consumes the link between
@@ -95,7 +95,7 @@ import {
 //                                     works", "a multipart form with a good key", "a POST with another site's Origin
 //                                     header still consumes the link" (the page checks no Origin; in production the
 //                                     middleware answers a cross-site form post 403 before the page runs,
-//                                     src/middleware.ts:139-144, and no corpus runs middleware), "the archive key
+//                                     src/middleware.ts:140-145, and no corpus runs middleware), "the archive key
 //                                     still opens after the agreements end" (the redeem reads no agreement), the second
 //                                     POST of "a newer link makes the older one useless"
 //
@@ -330,7 +330,7 @@ const cases: Case[] = [
 	}),
 	// methods and bodies
 	// The page alone: in production the middleware answers a PUT with no Origin and no content type 403 before the page
-	// runs (src/middleware.ts:124-144), and no corpus runs middleware.
+	// runs (src/middleware.ts:125-145), and no corpus runs middleware.
 	scene("a PUT with a good key in the query", [
 		issue(),
 		open({}, { method: "PUT" }),

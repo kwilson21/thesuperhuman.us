@@ -59,11 +59,11 @@ binding.
   and the consume batch's 500; `src/server/failure.ts` lists the redeem's races beside the signing route's. The plan
   records no pull request states, so it is unchanged.
 - Screenshots: the software-signing scenario (`scripts/screenshots/scenarios/software-signing.mjs`) captures the failure
-  page of both verify pages at both sizes (`software-signing-link-failed-*.png`, `software-signing-archive-link-failed-*.png`).
-  A store failure is made by renaming the links table for one capture and back after it, so the page's read of the link
-  fails as a database outage would (a GET; see "Found while working" for why not the Continue form's POST).
-  `tests/scripts/screenshots.test.ts` holds the scenario to that: four failed landings with status 500, each between
-  the rename and the rename back.
+  page of both verify pages at both sizes (`software-signing-link-failed-*.png`,
+  `software-signing-archive-link-failed-*.png`). A store failure is made by renaming the links table for one capture and
+  back after it, so the page's read of the link fails as a database outage would (a GET; see "Found while working" for
+  why not the Continue form's POST). `tests/scripts/screenshots.test.ts` holds the scenario to that: four failed
+  landings with status 500, each between the rename and the rename back.
 
 ## Judgment calls (the owner may overrule)
 
@@ -76,16 +76,17 @@ binding.
 - **Only a `TypeError` from `formData()` reads as no key.** That is how the Fetch standard refuses a body that is not
   a form; any other error still throws.
 
-## Found while working (not changed here)
+## Found while working (fixed in #386)
 
 - **The verify pages' Continue form is refused by the middleware in a browser.** The pages and `AgreementLayout` set
   `Referrer-Policy: no-referrer`, so under the Fetch standard the form's POST carries `Origin: null`, and the
   middleware's cross-site form check (`src/middleware.ts`, the `formLike` check) answers 403 "Cross-site POST form
-  submissions are forbidden" before the page runs. Seen locally with Playwright's Chromium on the screenshots preview: the
-  GET shows "Your agreement is ready.", and Continue answers that 403. No corpus runs middleware, and no screenshot
-  scenario posts the form, so nothing caught it. It predates this pull request and is outside its lists; it needs its
-  own fix (for example a referrer policy on the form that still sends the origin, or a same-origin check that accepts
-  this form), decided separately.
+  submissions are forbidden" before the page runs. Seen locally with Playwright's Chromium on the screenshots preview:
+  the GET shows "Your agreement is ready.", and Continue answers that 403. No corpus runs middleware, and no screenshot
+  scenario posts the form, so nothing caught it. It predates this pull request and is outside its lists. Fixed in its
+  own pull request, [#386](https://github.com/kwilson21/thesuperhuman.us/pull/386), merged before this one: a request is
+  this site's when its `Origin` is the site's, or when it is `null` and the browser's `Sec-Fetch-Site` says
+  `same-origin` (`src/lib/same-origin.ts`); its record is `docs/prelaunch-qa-2026-11-23-form-origin.md`.
 
 ## Hallmark audit
 

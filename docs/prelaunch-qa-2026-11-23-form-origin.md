@@ -2,13 +2,14 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: opened after this record; its number and the merge facts are recorded in the next pull request.
+Pull request: [#386](https://github.com/kwilson21/thesuperhuman.us/pull/386), merged at 08:57:54 UTC as `b367302a`
+(head `2992217c`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson's standing instruction to fix verified defects and merge once reviews pass and CI is green
 (CLAUDE.md). This is a bug fix to the middleware's cross-site checks; no answer a visitor is meant to get changes. The
 work was done with Claude Code.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. No migration, no
-binding.
+Rollback revision: `a11a4fab`, the revision of `main` before the merge; or `git revert -m 1 b367302a`. No migration,
+no binding.
 
 ## The defect
 
@@ -18,9 +19,10 @@ native form post with `Origin: null` (the Fetch standard's "append a request Ori
 is not GET or HEAD and whose mode is not `cors` gets `null` when the referrer policy is `no-referrer`). The middleware
 refused a form-like post (and any state-changing request to the owner and studio actions) whose `Origin` was not the
 site's own, so it answered such a post 403 "Cross-site POST form submissions are forbidden" before the page ran. The
-agreement routes' form reader (`agreementRequest`, `src/lib/agreement-request.ts`) had the same rule and answered 403
-"Forbidden" to the no-script fallbacks of the link, draft, review and sign forms, whose scripted path sends JSON
-through `fetch` with the real origin. The
+agreement routes' form reader (`agreementRequest`, `src/lib/agreement-request.ts`) had the same rule, so the no-script
+fallbacks of the forms that have one (the link form on `/agreements`, `/offer/[token]/sign` and the offer page, and the
+review form) would have got 403 "Forbidden" there had the middleware let them through; their scripted path sends JSON
+through `fetch` with the real origin. The draft posts JSON only, and no form posts natively to the sign route. The
 verify pages' Continue form is a plain form with no script, so on production a client who opened an emailed signing or
 archive link and pressed Continue got the 403. Scripted `fetch` posts from the same pages send the real origin and were
 not affected.
@@ -70,13 +72,21 @@ one; `no-referrer` stays.
 ## 1 to 6. Content, search, accessibility, performance, forms, privacy
 
 - **PASS · Forms.** A same-origin native form post from a no-referrer page reaches its route: the verify pages'
-  Continue forms and the agreement forms' no-script fallbacks.
+  Continue forms and the link and review forms' no-script fallbacks.
 - **PASS · Privacy.** The referrer policies are unchanged; link keys still never reach a Referer header.
 - **N/A · Content, search, accessibility, performance.** No page changed.
 
 ## 7. Release and final QA
 
-- **UNVERIFIED · Checks, reviews, production revision and live check.** Recorded after the merge.
+- **PASS · Reviews.** Codex's code and security reviews of both heads found nothing. The independent security review
+  and a second review of the shared-rule commit found nothing blocking; their wording notes (which forms were affected,
+  the helper's docstring, line citations) were corrected in #385.
+- **PASS · CI.** On the head `2992217c` before merge, all 20 check runs succeeded, the Workers preview build among them.
+- **PASS · Production revision and live check.** After merge, on `b367302a`: the Workers build succeeded (08:59:40 UTC)
+  and `validate` succeeded (09:01:59 UTC). Live check at 09:02:34 UTC: `https://thesuperhuman.us/` answered 200; a
+  form POST to `/agreements/verify` with `Origin: null` and `Sec-Fetch-Site: same-origin` reached the page (401, the
+  expired page, for an unknown key; before the fix, 403); with `Sec-Fetch-Site: cross-site`, or with `Origin: null`
+  and no `Sec-Fetch-Site`, it still answered 403.
 - **N/A · Bindings, migrations.** None.
 
 ## 8. Private owner center
