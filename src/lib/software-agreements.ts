@@ -672,6 +672,12 @@ export function closeObsoleteAgreementNotifications(
 	];
 }
 
+/**
+ * The owner's countersignature on the client-signed documents, in one batch; answers the SOW's id. The read and the batch
+ * that the database rejects throw a StoreRejected carrying the rejection, which the owner route sorts (a guard, a unique
+ * index, a foreign key, a NOT NULL value or a trigger's raise keep its 409; anything else is a fault of the site); every
+ * refusal the code makes throws as itself.
+ */
 export async function countersignAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
@@ -680,7 +686,7 @@ export async function countersignAgreements(
 	actor: string,
 	request: Request,
 ) {
-	const agreements = await offerAgreements(db, offer.id),
+	const agreements = await stored(offerAgreements(db, offer.id)),
 		pending = agreements.filter((a) => a.status === "client_signed");
 
 	if (
@@ -701,7 +707,9 @@ export async function countersignAgreements(
 		),
 		sow = pending.find((a) => a.kind === "sow")!;
 
-	await db.batch([
+	// The statements are built first, so a refusal while building one (the evidence, the signer's characters) throws as
+	// itself; only the batch's own rejection is marked as the store's.
+	const statements = [
 		softwareGuard(
 			db,
 			"SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND r.status NOT IN ('withdrawn','resolved') AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)",
@@ -758,7 +766,9 @@ export async function countersignAgreements(
 						: config.notice_email,
 				),
 		),
-	]);
+	];
+
+	await stored(db.batch(statements));
 
 	return sow.id;
 }

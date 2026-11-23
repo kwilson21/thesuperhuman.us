@@ -478,6 +478,8 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 		.spyOn(db, "batch")
 		.mockRejectedValue(new Error("database unavailable"));
 
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
 	try {
 		const { PUT } = await import(
 			"~/pages/api/owner/requests/[id]/agreement-attachments"
@@ -507,12 +509,23 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 			}),
 		);
 
-		expect(response.status).toBe(503);
+		// A failed batch is a fault of the site: the fixed 500, logged once (behaviour fix B1).
+		expect(response.status).toBe(500);
+		expect(await readJson(response)).toEqual({
+			ok: false,
+			error: "The attachment could not be saved.",
+		});
+		expect(log).toHaveBeenCalledExactlyOnceWith(
+			"Owner attachment upload failed unexpectedly:",
+			"Error",
+			"database unavailable",
+		);
 		expect(env.AUDIO!.put).toHaveBeenCalledOnce();
 		expect(env.AUDIO!.delete).toHaveBeenCalledOnce();
 		expect(bucketData.size).toBe(0);
 	} finally {
 		batch.mockRestore();
+		log.mockRestore();
 	}
 });
 
@@ -1015,8 +1028,10 @@ it("countersigns identical hashes atomically and blocks start until artifact and
 		expect(payload.text).not.toContain(`Receipt: ${id}\n`);
 	}
 
-	const ownerCopy = await agreementDownload(env, id);
+	const unexpected = vi.fn();
+	const ownerCopy = await agreementDownload(env, id, { unexpected });
 	expect(ownerCopy.status).toBe(200);
+	expect(unexpected).not.toHaveBeenCalled();
 	expect(await visitorDownload(id)).toEqual({ refused: "SignInFirst" });
 });
 
@@ -1373,9 +1388,11 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 
 	if (!artifact.pdf_key) throw new Error("The agreement has no stored PDF.");
 	bucketData.set(artifact.pdf_key, new TextEncoder().encode("%PDF-changed"));
-	const response = await agreementDownload(env, id);
+	const unexpected = vi.fn();
+	const response = await agreementDownload(env, id, { unexpected });
 	expect(response.status).toBe(503);
 	expect(await response.text()).toMatch(/integrity check/i);
+	expect(unexpected).not.toHaveBeenCalled();
 });
 
 it("runs private source templates through one, two and three milestones in both payment modes when supplied", async () => {

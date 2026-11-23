@@ -22,6 +22,8 @@ import {
 } from "~/lib/agreement-artifacts";
 import { softwareGuard } from "~/lib/software-guard";
 import type { SoftwareOffer } from "~/lib/software-offers";
+import { StoreRejected, stored } from "~/lib/reader-message";
+import { classifyFailure, logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 
@@ -37,12 +39,40 @@ const depositUse =
 const msaUse =
 	"SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? AND o.status IN ('draft','sent') AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)";
 
+const changedOrFailed =
+	"The agreement changed or the operation failed. Reload before retrying.";
+
+/**
+ * A rejection the database gives for a reason another request or the stored data explains, which keeps today's 409: a
+ * foreign key (every row a batch here refers to was read just before it, so one was deleted since), a NOT NULL failure (a
+ * stored value a batch copies is missing: an offer with no client email snapshot, which countersign's delivery row needs),
+ * and a raise-only trigger (the cleanup lock on a closed archive, the immutability triggers). `classifyFailure` adds a
+ * guard that raised and a unique index (another request wrote the row first).
+ */
+const REFUSED_BY_THE_DATABASE =
+	/FOREIGN KEY constraint failed|NOT NULL constraint failed|Archive cleanup is reserved|Immutable (template|config|signature|signed agreement|identity|notice)/;
+
+/** Whether a rejected database or bucket call is a fault of the site (the fixed 500, logged) rather than a refusal. */
+function storeFault<Failure>(failure: Failure) {
+	return (
+		classifyFailure(failure).kind === "unexpected" &&
+		!(failure instanceof Error && REFUSED_BY_THE_DATABASE.test(failure.message))
+	);
+}
+
+/** A failure on the site's side: logged once, never shown, and answered with the route's fixed 500 (B1, B2). */
+function failed<Failure>(failure: Failure) {
+	logUnexpected("Owner request agreement", failure);
+
+	return agreementJson({ ok: false, error: changedOrFailed }, 500);
+}
+
 const post: APIRoute = async ({ request, locals, params }) => {
 	const db = locals.runtime.env.MUSIC_DB;
 
 	if (!locals.owner) return agreementJson({ ok: false }, 403);
 
-	if (!db || !params.id) return agreementJson({ ok: false }, 503);
+	if (!db) return agreementJson({ ok: false }, 503);
 	const body = await agreementRequest(request);
 
 	if (body instanceof Response) return body;
@@ -57,16 +87,28 @@ const post: APIRoute = async ({ request, locals, params }) => {
 	const c = parsed.value,
 		at = new Date().toISOString();
 
-	const offer = await db
-		.prepare(
-			"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
-		)
-		.bind(params.id)
-		.first<SoftwareOffer>();
+	// A missing or empty id matches no request, as an unknown one does (B3, as offers F6 decided): no offer and no agreement
+	// is read for it, and each action answers what an unknown id gets.
+	let offer: SoftwareOffer | null;
 
 	try {
+		offer = params.id
+			? await db
+					.prepare(
+						"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
+					)
+					.bind(params.id)
+					.first<SoftwareOffer>()
+			: null;
+	} catch (error) {
+		return failed(error);
+	}
+
+	// Each database or bucket call is marked with `stored`, so that its rejection can be told from a refusal the code
+	// throws (a ReaderMessage, refused stored values, a date that does not exist), which keeps today's 409.
+	try {
 		if (c.action === "countersign") {
-			if (!offer || !(await signingEnabled(db)))
+			if (!offer || !(await stored(signingEnabled(db))))
 				return agreementJson(
 					{ ok: false, error: "Signing is off or the offer changed." },
 					409,
@@ -119,7 +161,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 		if (c.action === "abandon") {
 			if (!offer) return agreementJson({ ok: false }, 409);
 
-			const pending = (await offerAgreements(db, offer.id)).filter(
+			const pending = (await stored(offerAgreements(db, offer.id))).filter(
 				(d) => d.status === "client_signed",
 			);
 
@@ -134,9 +176,10 @@ const post: APIRoute = async ({ request, locals, params }) => {
 					409,
 				);
 
-			if (await db.prepare(depositUse).bind(offer.id).first())
+			if (await stored(db.prepare(depositUse).bind(offer.id).first()))
 				return agreementJson({ ok: false, error: depositBlockMessage }, 409);
-			await db.batch([
+
+			const statements = [
 				softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(${depositUse})`, [
 					offer.id,
 				]),
@@ -191,56 +234,74 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				db
 					.prepare("DELETE FROM software_agreement_drafts WHERE offer_id=?")
 					.bind(offer.id),
-			]);
+			];
+
+			await stored(db.batch(statements));
 		} else {
-			const agreement = await db
-				.prepare(
-					"SELECT status,kind,effective_on,client_signed_at,executed_at FROM software_agreements WHERE id=? AND request_id=?",
-				)
-				.bind(c.agreement_id, params.id)
-				.first<{
-					status: string;
-					kind: string;
-					effective_on: string;
-					client_signed_at: string | null;
-					executed_at: string | null;
-				}>();
+			const agreement = params.id
+				? await stored(
+						db
+							.prepare(
+								"SELECT status,kind,effective_on,client_signed_at,executed_at FROM software_agreements WHERE id=? AND request_id=?",
+							)
+							.bind(c.agreement_id, params.id)
+							.first<{
+								status: string;
+								kind: string;
+								effective_on: string;
+								client_signed_at: string | null;
+								executed_at: string | null;
+							}>(),
+					)
+				: null;
 
 			if (!agreement) return agreementJson({ ok: false }, 404);
 
+			// The notices, the copies, the recovery and the packet reject only when one of their database or bucket calls does
+			// (a packet's other failures are logged and marked failed inside it), so each call is marked whole.
 			if (c.action === "retry-copy") {
-				await db
-					.prepare(
-						"UPDATE software_agreement_deliveries SET status='pending' WHERE agreement_id=? AND (status='failed' OR (status='sending' AND ?=1 AND attempted_at<=?))",
-					)
-					.bind(
-						c.agreement_id,
-						c.confirmedNotSent ? 1 : 0,
-						new Date(Date.now() - 60000).toISOString(),
-					)
-					.run();
-				await db
-					.prepare(
-						`UPDATE software_agreement_notifications SET status='pending' WHERE agreement_id=? AND ${currentSigningNotification} AND (status='failed' OR (status='sending' AND ?=1 AND attempted_at<=?))`,
-					)
-					.bind(
-						c.agreement_id,
-						c.confirmedNotSent ? 1 : 0,
-						new Date(Date.now() - 60000).toISOString(),
-					)
-					.run();
-				await deliverAgreementNotifications(locals.runtime.env, c.agreement_id);
-				await deliverAgreementCopies(locals.runtime.env, c.agreement_id);
+				await stored(
+					db
+						.prepare(
+							"UPDATE software_agreement_deliveries SET status='pending' WHERE agreement_id=? AND (status='failed' OR (status='sending' AND ?=1 AND attempted_at<=?))",
+						)
+						.bind(
+							c.agreement_id,
+							c.confirmedNotSent ? 1 : 0,
+							new Date(Date.now() - 60000).toISOString(),
+						)
+						.run(),
+				);
+				await stored(
+					db
+						.prepare(
+							`UPDATE software_agreement_notifications SET status='pending' WHERE agreement_id=? AND ${currentSigningNotification} AND (status='failed' OR (status='sending' AND ?=1 AND attempted_at<=?))`,
+						)
+						.bind(
+							c.agreement_id,
+							c.confirmedNotSent ? 1 : 0,
+							new Date(Date.now() - 60000).toISOString(),
+						)
+						.run(),
+				);
+				await stored(
+					deliverAgreementNotifications(locals.runtime.env, c.agreement_id),
+				);
+				await stored(
+					deliverAgreementCopies(locals.runtime.env, c.agreement_id),
+				);
 			}
 
 			if (c.action === "retry-artifact") {
 				if (
 					c.expectedAttempt &&
-					!(await recoverAgreementRendering(
-						db,
-						c.agreement_id,
-						c.expectedAttempt,
-						c.confirmedStale,
+					!(await stored(
+						recoverAgreementRendering(
+							db,
+							c.agreement_id,
+							c.expectedAttempt,
+							c.confirmedStale,
+						),
 					))
 				)
 					return agreementJson(
@@ -253,54 +314,69 @@ const post: APIRoute = async ({ request, locals, params }) => {
 				// Loading the renderer is kept separate from committing legal execution.
 				const { renderAgreementPacket } = await import("~/lib/agreement-pdf");
 
-				const msa = await db
-					.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
-					.bind(c.agreement_id)
-					.first<{ msa_id: string | null }>();
+				const msa = await stored(
+					db
+						.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
+						.bind(c.agreement_id)
+						.first<{ msa_id: string | null }>(),
+				);
+
+				// No bucket is a known unavailable dependency: 503 where the packet would be claimed, as the 409 was (B3).
+				if (!locals.runtime.env.AUDIO) return agreementJson({ ok: false }, 503);
 
 				if (msa?.msa_id)
-					await prepareAgreementArtifact(
-						locals.runtime.env,
-						msa.msa_id,
-						renderAgreementPacket,
+					await stored(
+						prepareAgreementArtifact(
+							locals.runtime.env,
+							msa.msa_id,
+							renderAgreementPacket,
+						),
 					);
-				await prepareAgreementArtifact(
-					locals.runtime.env,
-					c.agreement_id,
-					renderAgreementPacket,
+				await stored(
+					prepareAgreementArtifact(
+						locals.runtime.env,
+						c.agreement_id,
+						renderAgreementPacket,
+					),
 				);
-				await deliverAgreementCopies(locals.runtime.env, c.agreement_id);
+				await stored(
+					deliverAgreementCopies(locals.runtime.env, c.agreement_id),
+				);
 			}
 
 			if (c.action === "record-alternate-copy")
-				await db.batch([
-					db
-						.prepare(
-							"UPDATE software_agreement_deliveries SET alternate_delivered_at=?,alternate_method=? WHERE agreement_id=? AND recipient_role=?",
-						)
-						.bind(at, c.method, c.agreement_id, c.role),
-					agreementEvent(
-						db,
-						"copy-delivered",
-						locals.owner!.email,
-						at,
-						c.agreement_id,
-					),
-				]);
+				await stored(
+					db.batch([
+						db
+							.prepare(
+								"UPDATE software_agreement_deliveries SET alternate_delivered_at=?,alternate_method=? WHERE agreement_id=? AND recipient_role=?",
+							)
+							.bind(at, c.method, c.agreement_id, c.role),
+						agreementEvent(
+							db,
+							"copy-delivered",
+							locals.owner!.email,
+							at,
+							c.agreement_id,
+						),
+					]),
+				);
 
 			if (c.action === "hold")
-				await db.batch([
-					db
-						.prepare("UPDATE software_agreements SET legal_hold=? WHERE id=?")
-						.bind(c.held ? 1 : 0, c.agreement_id),
-					agreementEvent(
-						db,
-						"hold-changed",
-						locals.owner!.email,
-						at,
-						c.agreement_id,
-					),
-				]);
+				await stored(
+					db.batch([
+						db
+							.prepare("UPDATE software_agreements SET legal_hold=? WHERE id=?")
+							.bind(c.held ? 1 : 0, c.agreement_id),
+						agreementEvent(
+							db,
+							"hold-changed",
+							locals.owner!.email,
+							at,
+							c.agreement_id,
+						),
+					]),
+				);
 
 			if (c.action === "end") {
 				if (!["executed", "abandoned"].includes(agreement.status))
@@ -333,23 +409,25 @@ const post: APIRoute = async ({ request, locals, params }) => {
 
 				if (
 					agreement.kind === "msa" &&
-					(await db.prepare(msaUse).bind(c.agreement_id).first())
+					(await stored(db.prepare(msaUse).bind(c.agreement_id).first()))
 				)
 					return agreementJson({ ok: false, error: openMsaMessage }, 409);
-				await db.batch([
-					...(agreement.kind === "msa"
-						? [
-								softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(${msaUse})`, [
-									c.agreement_id,
-								]),
-							]
-						: []),
-					db
-						.prepare(
-							"UPDATE software_agreements SET ended_at=?,retain_until=?,terminated_at=CASE WHEN kind='msa' THEN ? ELSE terminated_at END WHERE id=? AND status IN ('executed','abandoned')",
-						)
-						.bind(c.ended_on, end.toISOString(), c.ended_on, c.agreement_id),
-				]);
+				await stored(
+					db.batch([
+						...(agreement.kind === "msa"
+							? [
+									softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(${msaUse})`, [
+										c.agreement_id,
+									]),
+								]
+							: []),
+						db
+							.prepare(
+								"UPDATE software_agreements SET ended_at=?,retain_until=?,terminated_at=CASE WHEN kind='msa' THEN ? ELSE terminated_at END WHERE id=? AND status IN ('executed','abandoned')",
+							)
+							.bind(c.ended_on, end.toISOString(), c.ended_on, c.agreement_id),
+					]),
+				);
 			}
 		}
 
@@ -358,28 +436,29 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			agreementJson({ ok: true }),
 			`/owner/requests/${params.id}`,
 		);
-	} catch {
-		if (
-			c.action === "abandon" &&
-			offer &&
-			(await db.prepare(depositUse).bind(offer.id).first())
-		)
-			return agreementJson({ ok: false, error: depositBlockMessage }, 409);
+	} catch (error) {
+		// A store failure answers at once, with no read after it; a refusal is read again as today.
+		if (error instanceof StoreRejected && storeFault(error.failure))
+			return failed(error.failure);
 
-		if (
-			c.action === "end" &&
-			(await db.prepare(msaUse).bind(c.agreement_id).first())
-		)
-			return agreementJson({ ok: false, error: openMsaMessage }, 409);
+		try {
+			if (
+				c.action === "abandon" &&
+				offer &&
+				(await db.prepare(depositUse).bind(offer.id).first())
+			)
+				return agreementJson({ ok: false, error: depositBlockMessage }, 409);
 
-		return agreementJson(
-			{
-				ok: false,
-				error:
-					"The agreement changed or the operation failed. Reload before retrying.",
-			},
-			409,
-		);
+			if (
+				c.action === "end" &&
+				(await db.prepare(msaUse).bind(c.agreement_id).first())
+			)
+				return agreementJson({ ok: false, error: openMsaMessage }, 409);
+		} catch (recheck) {
+			return failed(recheck);
+		}
+
+		return agreementJson({ ok: false, error: changedOrFailed }, 409);
 	}
 };
 
