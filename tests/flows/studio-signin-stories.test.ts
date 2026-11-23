@@ -490,8 +490,12 @@ describe("the agreement link's allowance", () => {
 			AgreementAllowance,
 		);
 
-		const reserve = () =>
-			Effect.runPromise(allowance.reserve("archive-ip", "203.0.113.7", 2));
+		const reserve = async () =>
+			(
+				await Effect.runPromise(
+					allowance.reserve("archive-ip", "203.0.113.7", 2),
+				)
+			).allowed;
 
 		expect([await reserve(), await reserve(), await reserve()]).toEqual([
 			true,
