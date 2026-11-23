@@ -30,19 +30,39 @@ import {
 	AGREEMENT_SIGNED,
 	AGREEMENT_STATUSES,
 	type AgreementStatus,
+	agreementDocument,
 } from "./machines/agreement-document";
-import { OFFER_STATUSES } from "./machines/offer-version";
+import {
+	agreementMessage,
+	MESSAGE_MOVES,
+	MESSAGE_STATUSES,
+} from "./machines/agreement-message";
+import { next } from "./machines/next";
+import { OFFER_MOVES, OFFER_STATUSES } from "./machines/offer-version";
+import type { AbandonWrite, OfferInvoiceRow } from "./rules/agreement-abandon";
 import type {
 	AttachmentFacts,
 	StoredAttachment,
 	StoredOffer,
 } from "./rules/agreement-attachment";
 import type {
+	OfferAgreementRow as CountersignAgreementRow,
+	CountersignWrite,
+	RequestOfferRow,
+} from "./rules/agreement-countersign";
+import type {
 	DownloadAgreement,
 	StoredSignedCopy,
 	StudioProject,
 } from "./rules/agreement-download";
 import type { StoredSignature } from "./rules/agreement-link";
+import type {
+	CopyRecordWrite,
+	EndWrite,
+	HoldWrite,
+	RecordAgreementRow,
+	ReusingOfferRow,
+} from "./rules/agreement-record";
 import type {
 	SigningOfferRow,
 	StoredAgreementSession,
@@ -225,19 +245,19 @@ const AttachedOfferColumns = Schema.Struct({
 // ---- what the signing groups share ----
 //
 // The status lists, guards and statements more than one signing group writes, each text for text as today's code
-// builds it. The status lists come from the agreement document machine.
+// builds it. The status lists come from the machines.
 
-/** A status the agreement machine names, written into SQL as a literal; anything else is a bug, never a request's value. */
-function signingStatusLiteral(status: AgreementStatus) {
-	if (!AGREEMENT_STATUSES.includes(status))
-		throw new Error(`Not a status the agreement machine names: ${status}`);
+/** A status a machine names, written into SQL as a literal; anything else is a bug, never a request's value. */
+function statusLiteral(status: string, known: readonly string[]) {
+	if (!known.includes(status))
+		throw new Error(`Not a status the signing machines name: ${status}`);
 
 	return `'${status}'`;
 }
 
 /** `status='x'` for one status, `status IN ('x','y')` for several, in the order given (the machine's). */
-export function signingStatusIs(statuses: readonly AgreementStatus[]) {
-	const quoted = statuses.map(signingStatusLiteral);
+function statusIs(statuses: readonly string[], known: readonly string[]) {
+	const quoted = statuses.map((status) => statusLiteral(status, known));
 
 	if (quoted.length === 0)
 		throw new Error("A move with no status to move from.");
@@ -246,6 +266,14 @@ export function signingStatusIs(statuses: readonly AgreementStatus[]) {
 		? `status=${quoted[0]}`
 		: `status IN (${quoted.join(",")})`;
 }
+
+/** An agreement status as a SQL literal, from the agreement document machine. */
+const signingStatusLiteral = (status: AgreementStatus) =>
+	statusLiteral(status, AGREEMENT_STATUSES);
+
+/** `status='x'` or `status IN (...)` of agreement statuses, from the agreement document machine. */
+export const signingStatusIs = (statuses: readonly AgreementStatus[]) =>
+	statusIs(statuses, AGREEMENT_STATUSES);
 
 /**
  * A1, today's `liveSigningGuard` (src/lib/agreement-access.ts), text for text: the offer is sent, through the offer link
@@ -305,6 +333,65 @@ const signingEvent = (db: D1Database, event: EventRow) =>
 /** Whether a rejection is a FOREIGN KEY failure, found down the cause chain. */
 const foreignKeyFailed = (cause: unknown) =>
 	cause instanceof Error && chainMatches(cause, /FOREIGN KEY/);
+
+/** A8, today's reused-MSA guard of the signature and the countersignature: the MSA is executed and not terminated. */
+const reusedMsaGuard = (db: D1Database, msaId: string) =>
+	softwareGuard(
+		db,
+		"SELECT 1 FROM software_agreements WHERE id=? AND kind='msa' AND status='executed' AND terminated_at IS NULL",
+		[msaId],
+	);
+
+/** A signature row as a rule wrote it, with the id the flow drew. */
+type SignatureRow = {
+	readonly id: string;
+	readonly agreement_id: string;
+	readonly party: string;
+	readonly typed_name: string;
+	readonly title: string;
+	readonly consent_text: string;
+	readonly consent_at: string;
+	readonly signed_at: string;
+	readonly document_sha256: string;
+	readonly session_token_hash: string | null;
+	readonly owner_subject: string | null;
+	readonly verified_email: string;
+	readonly verified_at: string;
+	readonly verification_method: string;
+	readonly intent_text: string;
+	readonly document_list_json: string;
+	readonly receipt_id: string;
+	readonly ip_address: string;
+	readonly user_agent: string;
+};
+
+/** One signature: the statement `signatureInsert` (src/lib/software-agreements.ts) builds, its consent version fixed. */
+const signatureStatement = (db: D1Database, signature: SignatureRow) =>
+	db
+		.prepare(
+			"INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v3',?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		)
+		.bind(
+			signature.id,
+			signature.agreement_id,
+			signature.party,
+			signature.typed_name,
+			signature.title,
+			signature.consent_text,
+			signature.consent_at,
+			signature.signed_at,
+			signature.document_sha256,
+			signature.session_token_hash,
+			signature.owner_subject,
+			signature.verified_email,
+			signature.verified_at,
+			signature.verification_method,
+			signature.intent_text,
+			signature.document_list_json,
+			signature.receipt_id,
+			signature.ip_address,
+			signature.user_agent,
+		);
 
 // ---- the archive link ----
 
@@ -1120,10 +1207,16 @@ const SignReusedMsaColumns = Schema.Struct({
 	terminated_at: maybeText,
 });
 
+/** One agreement of the offer, as each rule that reads the offer's agreements takes it. */
+type OfferAgreement = OfferAgreementRow &
+	SigningDocumentRow &
+	CountersignAgreementRow;
+
 /**
  * Plain read: every agreement of the offer, abandoned ones included, ordered by kind as today, with the columns the
- * review's rules (`OfferAgreementRow`, the GET's and the POST's) and the signature's (`SigningDocumentRow`) read. The rules
- * leave out the abandoned ones, as `offerAgreements`' `status<>'abandoned'` did.
+ * review's rules (`OfferAgreementRow`, the GET's and the POST's), the signature's (`SigningDocumentRow`) and the owner's
+ * countersign and abandon (`CountersignAgreementRow`) read. The rules leave out the abandoned ones, as
+ * `offerAgreements`' `status<>'abandoned'` did.
  */
 export const readOfferAgreements = (offerId: string) =>
 	readAll(OfferAgreementColumns, (db) =>
@@ -1132,11 +1225,7 @@ export const readOfferAgreements = (offerId: string) =>
 				"SELECT id,kind,status,client_id,canonical_text,text_sha256,values_json,review_session_hash FROM software_agreements WHERE offer_id=? ORDER BY kind",
 			)
 			.bind(offerId),
-	).pipe(
-		Effect.map(
-			(rows): readonly (OfferAgreementRow & SigningDocumentRow)[] => rows,
-		),
-	);
+	).pipe(Effect.map((rows): readonly OfferAgreement[] => rows));
 
 /** The clients with the natural key (the table's UNIQUE key, so at most one), as today's review reads it. */
 const clientsByKeyStatement = (db: D1Database, key: ClientKey) =>
@@ -1401,13 +1490,7 @@ const signStatements = (
 				]),
 		...(guards.reusedMsaId === null
 			? []
-			: [
-					softwareGuard(
-						db,
-						"SELECT 1 FROM software_agreements WHERE id=? AND kind='msa' AND status='executed' AND terminated_at IS NULL",
-						[guards.reusedMsaId],
-					),
-				]),
+			: [reusedMsaGuard(db, guards.reusedMsaId)]),
 		db
 			.prepare(
 				"INSERT INTO software_agreement_notices(id,agreement_id,client_id,business_address,notice_email,recorded_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM software_agreement_clients WHERE id=? AND (business_address<>? OR notice_email<>?))",
@@ -1432,31 +1515,7 @@ const signStatements = (
 					`SELECT 1 FROM software_agreements WHERE id=? AND ${signingStatusIs(guards.signFrom)} AND text_sha256=? AND review_session_hash=?`,
 					[document.id, document.text_sha256, guards.sessionTokenHash],
 				),
-				db
-					.prepare(
-						"INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,session_token_hash,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent) VALUES(?,?,?,?,?,?,'website-signing-v3',?,?,?,?,?,?,?,?,?,?,?,?,?)",
-					)
-					.bind(
-						signature.id,
-						signature.agreement_id,
-						signature.party,
-						signature.typed_name,
-						signature.title,
-						signature.consent_text,
-						signature.consent_at,
-						signature.signed_at,
-						signature.document_sha256,
-						signature.session_token_hash,
-						signature.owner_subject,
-						signature.verified_email,
-						signature.verified_at,
-						signature.verification_method,
-						signature.intent_text,
-						signature.document_list_json,
-						signature.receipt_id,
-						signature.ip_address,
-						signature.user_agent,
-					),
+				signatureStatement(db, document.signature),
 				signingEvent(db, document.event),
 				db
 					.prepare(
@@ -1501,3 +1560,507 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 			catch: signRefused,
 		});
 	});
+
+// ---- the owner's actions ----
+//
+// What the owner's actions on a request's signing read and write (POST /api/owner/requests/[id]/agreement: countersign,
+// abandon, end, hold and record-alternate-copy), for the rules in src/server/rules/agreement-countersign.ts,
+// agreement-abandon.ts and agreement-record.ts. Each statement is the route's own (src/pages/api/owner/requests/[id]/
+// agreement.ts), or `countersignAgreements` and `closeObsoleteAgreementNotifications`' (src/lib/software-agreements.ts),
+// in the same order statement for statement, with five reads changed so the rules decide what their SQL filtered:
+//   - the request's sent offer becomes `readRequestOffers`, every version of the request with its status, in the offers
+//     store's text (src/server/offers-store.ts, `readOffers`); the rules choose the sent one (`sentOfferOf`). Every
+//     action reads it first, as the route does, and the golden hooks that picked today's `status='sent'` read are
+//     re-pointed in PR 4 (the plan's section 9 lists them);
+//   - the offer's agreements are `readOfferAgreements` above, with the abandoned ones (`offerAgreements` left them out;
+//     the rules keep only the client-signed);
+//   - the agreement an end, a hold or a copy record names also reads `archive_closed_at`, which the rules decide
+//     ArchiveClosed on;
+//   - the deposit check (A12's `depositUse`) and the open-offer check of an MSA (A13's `msaUse`) become plain reads of
+//     every invoice of the offer and every offer that reuses the agreement, which the rules decide on. Their texts no
+//     longer start as today's checks do, so the golden hooks that picked those checks are re-pointed in PR 4 (the plan's
+//     section 9 lists them). Both conditions stay in their batches' guards as today's text.
+// Each changed read names its table first, as today's did, so the operation and table a golden `trigger-hit` marker
+// records for it (scripts/sql-effects.mjs, `statementOf`) stay today's.
+// The signing setting is `readSigningEnabled` above, today's statement. tests/server/agreement-store-owner.test.ts holds
+// every other text, and each batch's statements and values, to what the golden corpora recorded, and each changed text
+// to the hook patterns that picked the old one, less the ones PR 4 re-points.
+//
+// Ids. Every id is an input: the flow draws them where today's code draws them, in the same order. Today countersign
+// draws the receipt id, then, as it builds the batch, for each pending document in the order read, the signature's id,
+// the `countersigned` event's and the obsolete-notice event's, in that order (`signatureInsert`, `agreementEvent`,
+// `closeObsoleteAgreementNotifications`); abandon draws, for each document named in the order named, the `abandoned`
+// event's id then the obsolete-notice event's; a hold and a copy record one event id each. The statuses the guards and
+// moves name come from the machines (`AGREEMENT_MOVES`, `MESSAGE_MOVES`, `OFFER_MOVES.SUPERSEDE`). The events, the
+// signatures, A8 and the FOREIGN KEY check are the shared ones near the top of the file.
+//
+// Failures. A rejected read is `AgreementStoreFailed`. A batch a guard (A8, A10 to A13) or a raise-only trigger (the
+// cleanup lock on a closed archive) refused is `GuardRefused` (`refusedBatch`), and so are the rows another request wrote
+// first: countersign's signature (one per agreement and party), packet and copy rows (their keys), and, for a hold or a
+// copy record, the event's foreign key when the agreement was deleted since it was read (no other foreign key can fail
+// there, so the failure is itself the evidence). Any other rejection is `AgreementStoreFailed`, an event id another row
+// holds included (the ids are drawn at random). The client email snapshot a copy row needs is the rule's
+// (RecipientMissing), so no batch here meets its NOT NULL.
+
+const RequestOfferColumns = Schema.Struct({
+	id: text,
+	request_id: text,
+	status: Schema.Literals(OFFER_STATUSES),
+	contractor_snapshot_json: maybeText,
+	recipient_email_snapshot: maybeText,
+	reused_msa_id: maybeText,
+});
+
+const InvoiceColumns = Schema.Struct({
+	milestone_index: Schema.Number,
+	kind: text,
+	status: text,
+	refunded_at: maybeText,
+});
+
+const RecordAgreementColumns = Schema.Struct({
+	status: text,
+	kind: text,
+	effective_on: text,
+	client_signed_at: maybeText,
+	executed_at: maybeText,
+	archive_closed_at: maybeText,
+});
+
+const ReusingOfferColumns = Schema.Struct({
+	status: text,
+	request_status: text,
+	project_offer_id: maybeText,
+});
+
+/** The one status an event sets from every status it is allowed from, as the machine answers it. */
+function ownerMovedTo(
+	machine: Parameters<typeof next>[0],
+	from: readonly string[],
+	event: string,
+	known: readonly string[],
+): string {
+	const targets = [
+		...new Set(from.map((status) => next(machine, status, event))),
+	];
+
+	const [target] = targets;
+
+	if (targets.length !== 1 || target === undefined || target === null)
+		throw new Error(`The move ${event} does not set one status.`);
+
+	if (!known.includes(target))
+		throw new Error(`Not a stored status: ${target}`);
+
+	return target;
+}
+
+const COUNTERSIGN_FROM = statusIs(
+	AGREEMENT_MOVES.COUNTERSIGN,
+	AGREEMENT_STATUSES,
+);
+
+const COUNTERSIGN_TO = ownerMovedTo(
+	agreementDocument,
+	AGREEMENT_MOVES.COUNTERSIGN,
+	"COUNTERSIGN",
+	AGREEMENT_STATUSES,
+);
+
+const ABANDON_FROM = statusIs(AGREEMENT_MOVES.ABANDON, AGREEMENT_STATUSES);
+
+const ABANDON_TO = ownerMovedTo(
+	agreementDocument,
+	AGREEMENT_MOVES.ABANDON,
+	"ABANDON",
+	AGREEMENT_STATUSES,
+);
+
+const END_FROM = statusIs(AGREEMENT_MOVES.END, AGREEMENT_STATUSES);
+
+const OBSOLETE_FROM = statusIs(MESSAGE_MOVES.OBSOLETE, MESSAGE_STATUSES);
+
+const OBSOLETE_TO = ownerMovedTo(
+	agreementMessage,
+	MESSAGE_MOVES.OBSOLETE,
+	"OBSOLETE",
+	MESSAGE_STATUSES,
+);
+
+const SUPERSEDE_FROM = statusIs(OFFER_MOVES.SUPERSEDE.from, OFFER_STATUSES);
+
+/**
+ * A12's condition, today's `depositUse`: a first-milestone deposit of the offer that may still be charged, or is paid and
+ * not refunded. `abandonBlocked` (src/lib/software-deposit-block.ts) decides the same from the rows `readOfferDeposits`
+ * reads, and the test holds the two to each other.
+ */
+const DEPOSIT_COUNTS =
+	"SELECT 1 FROM software_invoices WHERE offer_id=? AND milestone_index=0 AND kind='deposit' AND (status IN ('creating','open','payment_failed','uncollectible') OR (status='paid' AND refunded_at IS NULL))";
+
+/** A13's condition, today's `msaUse`: a draft or sent offer of an open request, with no project, reuses the MSA. */
+const MSA_REUSED_OPEN =
+	"SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? AND o.status IN ('draft','sent') AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)";
+
+/** The rows another request wrote first that refuse a countersignature: its signature, packet or copy rows. */
+const COUNTERSIGN_ROW_TAKEN =
+	/UNIQUE constraint failed: software_agreement_(signatures|artifacts|deliveries)\./;
+
+/** Runs one batch of the owner's actions; `refused` says whether a rejection was a refusal or the store's failure. */
+const ownerBatch = (
+	statements: (db: D1Database) => D1PreparedStatement[],
+	refused: (cause: unknown) => GuardRefused | AgreementStoreFailed,
+) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () => db.batch(statements(db)),
+			catch: refused,
+		});
+	});
+
+/** Countersign's refusals: a guard or a trigger (`refusedBatch`), or a signature, packet or copy row written first. */
+const countersignRefused = (cause: unknown) =>
+	cause instanceof Error && chainMatches(cause, COUNTERSIGN_ROW_TAKEN)
+		? new GuardRefused()
+		: refusedBatch(cause);
+
+/** A hold's or a copy record's refusals: the cleanup lock (`refusedBatch`), or the agreement deleted since the read. */
+const recordRefused = (cause: unknown) =>
+	foreignKeyFailed(cause) ? new GuardRefused() : refusedBatch(cause);
+
+/**
+ * A21, as `closeObsoleteAgreementNotifications` writes it: the agreement's signing notices still sending are failed as
+ * obsolete, with one `delivery-failed` event when there is one. A write-time filter that refuses nothing.
+ */
+const obsoleteNotices = (
+	db: D1Database,
+	agreementId: string,
+	movedTo: string,
+	actor: string,
+	at: string,
+	eventId: string,
+) => [
+	db
+		.prepare(
+			`INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at,reason) SELECT ?,?,'delivery-failed',?,?,? WHERE EXISTS(SELECT 1 FROM software_agreement_notifications WHERE agreement_id=? AND ${OBSOLETE_FROM})`,
+		)
+		.bind(
+			eventId,
+			agreementId,
+			actor,
+			at,
+			`obsolete-signing-notice:${movedTo}`,
+			agreementId,
+		),
+	db
+		.prepare(
+			`UPDATE software_agreement_notifications SET status='${OBSOLETE_TO}' WHERE agreement_id=? AND ${OBSOLETE_FROM}`,
+		)
+		.bind(agreementId),
+];
+
+/**
+ * Plain read: every offer version of the request with its status, newest first, in the offers store's text
+ * (src/server/offers-store.ts, `readOffers`). Every action reads it first, as the route reads the sent offer; which
+ * version is sent is the rule's (`sentOfferOf`), and countersign's A10 keeps `status='sent'` as the re-check.
+ */
+export const readRequestOffers = (requestId: string) =>
+	readAll(RequestOfferColumns, (db) =>
+		db
+			.prepare(
+				"SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC",
+			)
+			.bind(requestId),
+	).pipe(Effect.map((rows): readonly RequestOfferRow[] => rows));
+
+/**
+ * Plain read: every invoice of the offer, in id order, unfiltered, so the abandon's deposit decision is `abandonBlocked`'s.
+ * Today's `depositUse` filtered them in SQL; A12 keeps that condition as the re-check.
+ */
+export const readOfferDeposits = (offerId: string) =>
+	readAll(InvoiceColumns, (db) =>
+		db
+			.prepare(
+				"SELECT milestone_index,kind,status,refunded_at FROM software_invoices WHERE offer_id=? ORDER BY id",
+			)
+			.bind(offerId),
+	).pipe(Effect.map((rows): readonly OfferInvoiceRow[] => rows));
+
+/** Plain read: the agreement with this id of this request (an end's, a hold's or a copy record's), or null. */
+export const readAgreement = (agreementId: string, requestId: string) =>
+	readAll(RecordAgreementColumns, (db) =>
+		db
+			.prepare(
+				"SELECT status,kind,effective_on,client_signed_at,executed_at,archive_closed_at FROM software_agreements WHERE id=? AND request_id=?",
+			)
+			.bind(agreementId, requestId),
+	).pipe(Effect.map((rows): RecordAgreementRow | null => rows[0] ?? null));
+
+/**
+ * Plain read: every offer that reuses the agreement as its MSA, in id order, with its request's status and its project's
+ * offer id (null without one), unfiltered, so whether one is open is the rule's. Today's `msaUse` filtered them in SQL;
+ * A13 keeps that condition as the re-check. `software_offers` is the first table the text names, as in `msaUse`, so a
+ * golden hook's marker reads the same table; the projects are joined as their distinct offer ids, since several project
+ * rows may name one offer and a plain join would repeat it.
+ */
+export const readMsaUse = (agreementId: string) =>
+	readAll(ReusingOfferColumns, (db) =>
+		db
+			.prepare(
+				"SELECT o.status,r.status AS request_status,p.offer_id AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id LEFT JOIN (SELECT DISTINCT offer_id FROM software_projects) p ON p.offer_id=o.id WHERE o.reused_msa_id=? ORDER BY o.id",
+			)
+			.bind(agreementId),
+	).pipe(Effect.map((rows): readonly ReusingOfferRow[] => rows));
+
+/** The ids today's countersign draws for one pending document, in the order it draws them. */
+export type CountersignIds = {
+	readonly signatureId: string;
+	readonly eventId: string;
+	readonly obsoleteEventId: string;
+};
+
+/**
+ * The countersignature, one batch: A10 (the offer still sent, its request open, signing on), A8 when the offer reuses
+ * an MSA; per pending document A11, its signature, the `countersigned` event, its obsolete notices (A21) and its move to
+ * executed; a packet row per document; the SOW's two copies. `ids` holds each document's ids, in the order of
+ * `write.documents`; a list of another length is a bug, so it dies.
+ */
+export const countersignBatch = (
+	write: CountersignWrite,
+	ids: readonly CountersignIds[],
+) =>
+	Effect.gen(function* () {
+		if (ids.length !== write.documents.length)
+			return yield* Effect.die(
+				new Error("Countersign needs three ids per pending document."),
+			);
+
+		yield* ownerBatch(
+			(db) => [
+				softwareGuard(
+					db,
+					"SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND r.status NOT IN ('withdrawn','resolved') AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)",
+					[write.offerId],
+				),
+				...(write.reusedMsaId === null
+					? []
+					: [reusedMsaGuard(db, write.reusedMsaId)]),
+				...write.documents.flatMap((document, index) => {
+					// SAFETY: the lengths were compared above, so every document has its ids.
+					const drawn = ids[index] as CountersignIds;
+
+					return [
+						softwareGuard(
+							db,
+							`SELECT 1 FROM software_agreements WHERE id=? AND ${COUNTERSIGN_FROM} AND text_sha256=?`,
+							[document.id, document.hash],
+						),
+						signatureStatement(db, {
+							id: drawn.signatureId,
+							...document.signature,
+						}),
+						signingEvent(db, {
+							id: drawn.eventId,
+							agreement_id: document.id,
+							offer_id: write.offerId,
+							action: "countersigned",
+							actor: write.actor,
+							occurred_at: write.at,
+							reason: null,
+						}),
+						...obsoleteNotices(
+							db,
+							document.id,
+							COUNTERSIGN_TO,
+							write.actor,
+							write.at,
+							drawn.obsoleteEventId,
+						),
+						db
+							.prepare(
+								`UPDATE software_agreements SET status='${COUNTERSIGN_TO}',executed_at=? WHERE id=?`,
+							)
+							.bind(write.at, document.id),
+					];
+				}),
+				...write.packets.map((agreementId) =>
+					db
+						.prepare(
+							"INSERT INTO software_agreement_artifacts(agreement_id) VALUES(?)",
+						)
+						.bind(agreementId),
+				),
+				...write.copies.map((copy) =>
+					db
+						.prepare(
+							"INSERT INTO software_agreement_deliveries(agreement_id,recipient_role,email) VALUES(?,?,?)",
+						)
+						.bind(copy.agreement_id, copy.recipient_role, copy.email),
+				),
+			],
+			countersignRefused,
+		);
+	});
+
+/** The ids today's abandon draws for one document named, in the order it draws them. */
+export type AbandonIds = {
+	readonly eventId: string;
+	readonly obsoleteEventId: string;
+};
+
+/**
+ * The abandon, one batch: A12 (no first deposit of the offer counts); per document named A11 (still client_signed with
+ * its hash, of this request and offer), its move to abandoned with the reason, the `abandoned` event and its obsolete
+ * notices (A21); then the offer superseded, the request's offer link revoked, the offer's signing sessions revoked, its
+ * signing links used and its drafts deleted, write-time filters that refuse nothing, as today. `ids` holds each
+ * document's ids, in the order of `write.documents`; a list of another length is a bug, so it dies.
+ */
+export const abandonBatch = (write: AbandonWrite, ids: readonly AbandonIds[]) =>
+	Effect.gen(function* () {
+		if (ids.length !== write.documents.length)
+			return yield* Effect.die(
+				new Error("Abandon needs two ids per document named."),
+			);
+
+		yield* ownerBatch(
+			(db) => [
+				softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(${DEPOSIT_COUNTS})`, [
+					write.offerId,
+				]),
+				...write.documents.flatMap((document, index) => {
+					// SAFETY: the lengths were compared above, so every document has its ids.
+					const drawn = ids[index] as AbandonIds;
+
+					return [
+						softwareGuard(
+							db,
+							`SELECT 1 FROM software_agreements WHERE id=? AND request_id=? AND offer_id=? AND text_sha256=? AND ${ABANDON_FROM}`,
+							[document.id, write.requestId, write.offerId, document.hash],
+						),
+						db
+							.prepare(
+								`UPDATE software_agreements SET status='${ABANDON_TO}',abandoned_at=?,abandoned_reason=? WHERE id=?`,
+							)
+							.bind(write.at, write.reason, document.id),
+						signingEvent(db, {
+							id: drawn.eventId,
+							agreement_id: document.id,
+							offer_id: write.offerId,
+							action: "abandoned",
+							actor: write.actor,
+							occurred_at: write.at,
+							reason: "owner-abandoned",
+						}),
+						...obsoleteNotices(
+							db,
+							document.id,
+							ABANDON_TO,
+							write.actor,
+							write.at,
+							drawn.obsoleteEventId,
+						),
+					];
+				}),
+				db
+					.prepare(
+						`UPDATE software_offers SET status='${OFFER_MOVES.SUPERSEDE.to}',updated_at=? WHERE id=? AND ${SUPERSEDE_FROM}`,
+					)
+					.bind(write.at, write.offerId),
+				db
+					.prepare(
+						"UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL",
+					)
+					.bind(write.at, write.requestId),
+				db
+					.prepare(
+						"UPDATE software_agreement_sessions SET revoked_at=? WHERE offer_id=? AND revoked_at IS NULL",
+					)
+					.bind(write.at, write.offerId),
+				db
+					.prepare(
+						"UPDATE software_agreement_links SET used_at=? WHERE offer_id=? AND used_at IS NULL",
+					)
+					.bind(write.at, write.offerId),
+				db
+					.prepare("DELETE FROM software_agreement_drafts WHERE offer_id=?")
+					.bind(write.offerId),
+			],
+			refusedBatch,
+		);
+	});
+
+/**
+ * The end, one batch: A13 first for an MSA (no open offer reuses it), then the update, which A14 filters (it changes the
+ * row only while it is executed or abandoned; otherwise nothing, and no failure). The CASE is today's: it writes
+ * `terminated_at` for an MSA only, the day `terminatedOn` names, so the store binds the end date there as today does for
+ * every kind (a SOW's `terminatedOn` is null, which the CASE never reads). No event.
+ */
+export const endBatch = (write: EndWrite) =>
+	ownerBatch(
+		(db) => [
+			...(write.guardsMsaUse
+				? [
+						softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(${MSA_REUSED_OPEN})`, [
+							write.agreementId,
+						]),
+					]
+				: []),
+			db
+				.prepare(
+					`UPDATE software_agreements SET ended_at=?,retain_until=?,terminated_at=CASE WHEN kind='msa' THEN ? ELSE terminated_at END WHERE id=? AND ${END_FROM}`,
+				)
+				.bind(
+					write.endedOn,
+					write.retainUntil,
+					write.endedOn,
+					write.agreementId,
+				),
+		],
+		refusedBatch,
+	);
+
+/** The hold, one batch: `legal_hold` and the `hold-changed` event, with the id the flow drew. */
+export const holdBatch = (write: HoldWrite, eventId: string) =>
+	ownerBatch(
+		(db) => [
+			db
+				.prepare("UPDATE software_agreements SET legal_hold=? WHERE id=?")
+				.bind(write.legalHold, write.agreementId),
+			signingEvent(db, {
+				id: eventId,
+				agreement_id: write.agreementId,
+				offer_id: null,
+				action: write.event,
+				actor: write.actor,
+				occurred_at: write.at,
+				reason: null,
+			}),
+		],
+		recordRefused,
+	);
+
+/**
+ * The copy record, one batch: the copy row's alternate delivery and method (a row that does not exist changes nothing)
+ * and the `copy-delivered` event, with the id the flow drew.
+ */
+export const recordCopyBatch = (write: CopyRecordWrite, eventId: string) =>
+	ownerBatch(
+		(db) => [
+			db
+				.prepare(
+					"UPDATE software_agreement_deliveries SET alternate_delivered_at=?,alternate_method=? WHERE agreement_id=? AND recipient_role=?",
+				)
+				.bind(write.at, write.method, write.agreementId, write.role),
+			signingEvent(db, {
+				id: eventId,
+				agreement_id: write.agreementId,
+				offer_id: null,
+				action: write.event,
+				actor: write.actor,
+				occurred_at: write.at,
+				reason: null,
+			}),
+		],
+		recordRefused,
+	);

@@ -484,8 +484,8 @@ with a `say` sentence, exactly today's.
 | `signing-review.ts` | `reviewDocument` (the GET) | the document id asked for, the offer's agreements (`readOfferAgreements`, plain rows: the rule leaves out the abandoned ones, as `offerAgreements`' filter does today), the session's token hash | `DocumentNotFound` (404 `{ok:false}`) | nothing written: it answers the document's kind and text |
 | `signing-review.ts` | `reviewDocuments`, staged as the offers' send is | the offer's stored terms, details and contractor, the existing agreements, the client row, the reused MSA, the templates, a pending MSA elsewhere, `at` | `SignatureSaved`, `MsaMismatch`, `TemplatesUnavailable`, `PendingMsaElsewhere`, `RenderRefused` (the template code's sentences), `StoredDataRefused`, `AlreadySigned`, `SigningStarted` | the client, the review rows, the stale clients removed, the event |
 | `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `StoredDataRefused` (the stored values: golden "values with no client object", "values with no contractor object", "values whose client misses a field", "... has an extra field", "... names a portfolio but denies it"), `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
-| `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
-| `agreement-abandon.ts` | `abandonSigning` | the offer, the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
+| `agreement-countersign.ts` | `countersign` | the request's offers (the rule picks the sent one, `sentOfferOf`), the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
+| `agreement-abandon.ts` | `abandonSigning` | the request's offers (`sentOfferOf`), the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
 | `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end (with no event, as today), the hold and the copy record, each with its event |
 | `agreement-packet.ts` | `packetClaimable`, `packetRecoverable` | the packet row, `now`, the attempt | `StaleAttemptUnconfirmed` | the claim, the outcome |
 | `agreement-messages.ts` | `messagesToReset`, `copySigned` then `copyClaimable`, `noticeAgreementFound` then `noticeClaimable` | the rows, `now`, the agreement's status and archive, the project | none: a row that cannot move is skipped, as today | the reset, the claims |
@@ -600,7 +600,9 @@ decisions and outside effects.
 
 The owner request route reads the sent offer for every action, before the action, as today (agreement.ts:60-65). Hold,
 end, record-copy and the retries never use it, but its failure answers B2's 500 for them too, so dropping the read
-would change those answers; it is kept.
+would change those answers; it is kept, as `readRequestOffers`, a plain read of the request's versions with their
+statuses, from which the countersign and abandon rules pick the sent one (`sentOfferOf`). Countersign reads the setting
+only when there is a sent offer, as today.
 
 ## 4. The store and the services
 
@@ -622,7 +624,7 @@ in the re-record commit and the `trigger-hit` marker stays the same.
 | The redeem | `readLinkByKey`, `redeemLinkBatch` (A1, A5, used, event, session) | access.ts:349-359, 387-425 |
 | The draft and review | `readDraft`, `saveDraftBatch` (A1 A2 A3), `readOfferAgreements`, `readClientByKey`, `readReusedMsa`, `readTemplate`, `readPendingMsa`, `reviewBatch`, `readClientEvidence` | draft-lib.ts:42-78; software-agreements.ts:98-107, 124-159, 202-300, 306-380 |
 | Signing | `readSavedReceipt`, `signBatch` | software-agreements.ts:418-545 |
-| The owner's actions | `readSentOffer`, `countersignBatch`, `readOfferDeposits`, `abandonBatch`, `readAgreement`, `readMsaUse`, `endBatch`, `holdBatch`, `recordCopyBatch` | agreement.ts:60-65, 122-353; software-agreements.ts:644-733 |
+| The owner's actions | `readRequestOffers`, `countersignBatch`, `readOfferDeposits`, `abandonBatch`, `readAgreement`, `readMsaUse`, `endBatch`, `holdBatch`, `recordCopyBatch` | agreement.ts:60-65, 122-353; software-agreements.ts:644-733 |
 | The packet | `claimPacket`, `readPacketDocuments`, `readDocumentSignatures`, `readTemplateLabel`, `markPacketReady`, `markPacketFailed`, `recoverPacket`; R2 through `AudioBucket` | artifacts.ts:108-346, 449-465 |
 | The emails | `readCopyArtifact`, `readReceiptId`, `claimCopy`, `recordCopyOutcome`, `readNoticeAgreement`, `claimNotice`, `recordNoticeOutcome`, `readMessages`, `resetCopies`, `resetNotices` | artifacts.ts:357-447, 470-523; agreement.ts:211-231 |
 | Templates and settings | `readCurrentTemplate`, `readTemplateVersion`, `readLabelUse`, `publishBatch` (A22), `saveContractorBatch` (A23), `saveSetting`, `readAccessRows`, `cleanupBatch` | templates.ts:266-381; owner-agreements.ts:149-186; access.ts:26-41 |
@@ -1013,6 +1015,43 @@ today's function beside the rule on the same database. What it found, for the st
   `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.
 - **New reads.** Before claiming a packet, a copy or a notice, and before the contractor's save, the flows read the row
   they decide on; PR 2 checks each new read against the golden hook patterns, which count statements by `nth`.
+- **Hook patterns PR 4 re-points:** the store keeps today's text wherever a golden hook picks a statement; where a
+  read had to change, the pattern below no longer picks it, and PR 4's re-record commit re-points it to the converted
+  statement (the same operation, table and access, so its `trigger-hit` marker is unchanged). Each store test lists its
+  own and checks them against the corpora.
+  - `offer-link`, "the used_at update after a sent email fails": `/UPDATE software_agreement_links SET used_at=\? WHERE
+    purpose/`. A6 consumes the older links through `consumeLinks` (`WHERE id IN (...)`), as `agreements-link` does.
+  - `offer-verify-page`, "outage: the GET's live check: the expired page": `/SELECT CASE WHEN EXISTS\(SELECT 1 FROM
+    software_offers o JOIN software_offer_links/` at `nth: 2`. The GET reads `readSigningFacts` for
+    `stillOpenForSigning` in place of running A1 as a read.
+  - `offer-review`: `/SELECT \* FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/` (every case that
+    uses it), since `readOfferAgreements` reads the abandoned agreements too; and `/SELECT \* FROM software_agreements
+    WHERE id=\? AND kind='msa'/`, since `readReusedMsa` reads the plain row with its copy's status.
+  - `offer-sign`: `/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/`, both reads of the agreements
+    (the first and `nth: 2`).
+  - `owner-request-agreement-abandon`: `/SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("outage: the first deposit
+    check only") and `/^SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("outage: the first deposit check and the
+    recheck after it", with its `nth: 2` entry and the `optionalTriggers` text that names it). `readOfferDeposits` is
+    one plain read of the offer's invoices; left as it is, the unanchored pattern would pick the batch's A12 guard
+    instead.
+  - `owner-request-agreement-end`: `/SELECT 1 FROM software_offers o JOIN owner_requests r/` ("outage: the open-offer
+    check of an MSA") and `/^SELECT 1 FROM software_offers o JOIN owner_requests r/` ("outage: the batch of an MSA, and
+    the recheck", `nth: 2`, with its `optionalTriggers` text). `readMsaUse` is one plain read of the reusing offers;
+    left as it is, the unanchored pattern would pick the batch's A13 guard instead. Its text names `software_offers`
+    first, as today's check does (the projects are joined as their distinct offer ids), so the operation and table the
+    `trigger-hit` marker records stay today's.
+  - `owner-request-agreement-abandon`, `-countersign`, `-end`, `-hold`, `-record-copy`, `-retry-artifact` and
+    `-retry-copy`, each "outage: the offer lookup": `/SELECT \* FROM software_offers WHERE request_id=\? AND
+    status='sent'/`, re-pointed to `/SELECT \* FROM software_offers WHERE request_id=\? ORDER BY version DESC/`. Every
+    owner action reads the request's offers first through `readRequestOffers`, the offers store's plain read of every
+    version with its status, and `sentOfferOf` in the countersign and abandon rules picks the sent one. The new pattern
+    picks that read and no statement any of the eight owner request corpora recorded or the converted store runs
+    (`tests/server/agreement-store-owner.test.ts` checks both).
+  - `owner-agreements-retention-preview`, "the orphan reference check fails": `/SELECT 1 WHERE\s+EXISTS/`.
+    `readOrphanReferences` reads the references as rows for `orphanUnreferenced`.
+
+  `tests/api/signing-owner-outages.test.ts` picks today's deposit check and today's sent-offer read by the same texts
+  (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which PR 4 deletes with its tests.
 
 ## Open questions from reading the code
 

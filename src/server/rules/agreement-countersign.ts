@@ -1,12 +1,15 @@
 // The owner's countersignature (docs/plans/2026-11-signing-conversion.md, section 2, `countersign`): the owner signs the
-// documents the client has signed, and they become executed. Decided from the request's sent offer (its contractor
-// snapshot, its client email snapshot and the MSA it reuses), the signing setting, every agreement of the offer as read
-// (ordered by kind), the documents the owner named, the typed name, the owner's email and the browser evidence (the
-// request's cf-connecting-ip and user-agent headers), with the time and the receipt id the flow reads after the pending
-// documents are checked, where `countersignAgreements` (src/lib/software-agreements.ts) reads them today. Its reads come
-// between its decisions, so the rule is staged, each stage repeating the refusals before it, in the order the route has
-// always answered (src/pages/api/owner/requests/[id]/agreement.ts and `countersignAgreements`):
-//   1. the request has a sent offer and signing is on: OfferChanged (countersignFront);
+// documents the client has signed, and they become executed. Decided from the request's offers, read plainly (every
+// version with its status; `sentOfferOf` chooses the sent one, whose contractor snapshot, client email snapshot and reused
+// MSA the rule reads), the signing setting, every agreement of the offer as read (ordered by kind), the documents the
+// owner named, the typed name, the owner's email and the browser evidence (the request's cf-connecting-ip and user-agent
+// headers), with the time and the receipt id the flow reads after the pending documents are checked, where
+// `countersignAgreements` (src/lib/software-agreements.ts) reads them today. The flow reads the setting only when
+// `sentOfferOf(offers)` is not null, as today's route reads it only for a sent offer (`!offer || !(await
+// stored(signingEnabled(db)))`), so a request with no sent offer reads no setting. Its reads come between its decisions,
+// so the rule is staged, each stage repeating the refusals before it, in the order the route has always answered
+// (src/pages/api/owner/requests/[id]/agreement.ts and `countersignAgreements`):
+//   1. the request has a sent offer (`sentOfferOf`) and signing is on: OfferChanged (countersignFront);
 //   2. the client-signed documents are exactly those named: PendingChanged (countersignPending); the flow then reads the
 //      time and draws the receipt id;
 //   3. the contractor snapshot reads (StoredDataRefused), the typed name and the contractor's title can be printed
@@ -29,6 +32,7 @@ import type { Body } from "../../lib/fields";
 import { agreementCharacterSupported } from "../../lib/agreement-templates";
 import { signatureIds } from "../../lib/software-agreements";
 import { AGREEMENT_MOVES } from "../machines/agreement-document";
+import { OFFER_MOVES, type OfferStatus } from "../machines/offer-version";
 import { alwaysWrites, term, unless } from "../terms";
 
 /** The owner request route's answer to every refusal of the owner's actions that has no sentence of its own (409). */
@@ -91,6 +95,25 @@ export type SentOfferRow = {
 	readonly reused_msa_id: string | null;
 };
 
+/** One offer version of the request, as stored: the sent offer's columns and the version's status. */
+export type RequestOfferRow = SentOfferRow & { readonly status: OfferStatus };
+
+/** The status of a sent offer: the one the offer machine's SEND sets (src/server/machines/offer-version.ts). */
+const OFFER_SENT: OfferStatus = OFFER_MOVES.SEND.to;
+
+/**
+ * The request's sent offer among its versions: the one whose status is the offer machine's `sent`, or null when no
+ * version is sent (only drafts, superseded or withdrawn versions, or none). The unique index software_offers_one_sent
+ * (migrations/music/0020_software_offers.sql) allows at most one sent version per request, so this is the row today's
+ * `SELECT * FROM software_offers WHERE request_id=? AND status='sent'` answered; the store reads every version plainly
+ * and the rule, not the SQL, picks it.
+ */
+export function sentOfferOf(
+	offers: readonly RequestOfferRow[],
+): RequestOfferRow | null {
+	return offers.find((offer) => offer.status === OFFER_SENT) ?? null;
+}
+
 /** One agreement of the offer, as stored. */
 export type OfferAgreementRow = {
 	readonly id: string;
@@ -145,10 +168,14 @@ export type CountersignStamp = {
 	readonly receiptId: string;
 };
 
-/** The offer and the setting, read first. */
+/** The request's offers and the setting, read first. */
 export type CountersignOfferFacts = {
-	readonly offer: SentOfferRow | null;
-	/** The setting's `software_signing_enabled`: null when its row is missing, or when there is no sent offer to read it for. */
+	/** Every offer version of the request, as read; the rule chooses the sent one through `sentOfferOf`. */
+	readonly offers: readonly RequestOfferRow[];
+	/**
+	 * The setting's `software_signing_enabled`: null when its row is missing, or when there is no sent offer to read it for
+	 * (the flow reads the setting only when `sentOfferOf(offers)` is not null, as the route does today).
+	 */
 	readonly signingEnabled: number | null;
 };
 
@@ -207,7 +234,7 @@ type CountersignGiven = PendingGiven & {
 };
 
 const frontGiven = (facts: CountersignOfferFacts): FrontGiven => ({
-	offer: facts.offer,
+	offer: sentOfferOf(facts.offers),
 	signingOn: Boolean(facts.signingEnabled),
 });
 
@@ -282,7 +309,7 @@ const recipientKnown = unless(
 	() => new RecipientMissing(),
 );
 
-/** Stage 1, before the agreements are read: the request has a sent offer, and signing is on. */
+/** Stage 1, before the agreements are read: the request has a sent offer (`sentOfferOf`), and signing is on. */
 export const countersignFront = alwaysWrites({
 	name: "countersign: a sent offer, with signing on",
 	given: (_request: null, facts: CountersignOfferFacts) => frontGiven(facts),
@@ -372,7 +399,7 @@ export const countersign = alwaysWrites({
 			...pending,
 			request,
 			contractor: snapshotContractor(
-				facts.offer?.contractor_snapshot_json ?? null,
+				pending.offer?.contractor_snapshot_json ?? null,
 			),
 			ip: request.ip ?? "",
 			userAgent: request.userAgent ?? "",
