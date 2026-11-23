@@ -486,7 +486,7 @@ with a `say` sentence, exactly today's.
 | `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `StoredDataRefused` (the stored values: golden "values with no client object", "values with no contractor object", "values whose client misses a field", "... has an extra field", "... names a portfolio but denies it"), `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
 | `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
 | `agreement-abandon.ts` | `abandonSigning` | the offer, the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
-| `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end, the hold, the copy record, each with its event |
+| `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end (with no event, as today), the hold and the copy record, each with its event |
 | `agreement-packet.ts` | `packetClaimable`, `packetRecoverable` | the packet row, `now`, the attempt | `StaleAttemptUnconfirmed` | the claim, the outcome |
 | `agreement-messages.ts` | `messagesToReset`, `copyClaimable`, `noticeClaimable` | the rows, `now`, the agreement's status and archive, the project | none: a row that cannot move is skipped, as today | the reset, the claims |
 | `agreement-templates.ts` | `previewTemplate`, `publishTemplate`, `saveContractor` | the text, the current version, the label's use, the expected version | `TemplateRefused`, `NothingToPublish`, `LabelInvalid`, `LabelUsed`, `NotConfirmed`, `VersionChanged`, `VersionNotFound` | the version, the config |
@@ -562,9 +562,10 @@ decisions and outside effects.
   pages map as they do today; a store failure or defect answers B1's 500, which the pages render as Q2's failure page.
   `tests/golden/areas/agreement-access.ts:351-357` calls it in place of `completeAgreementLink`.
 - `signing-draft.ts`, `saveSigningDraft`: the offer, the session (`visitorSession`), the setting; the nonce; the
-  values; a signed agreement and a project; the batch (A1 A2 A3, the upsert).
-- `signing-review.ts`, `reviewSigningDocuments`: as today, the draft batch first, then the review's reads in today's
-  order, its staged rule, and the review batch through `decideAndSave` (section 2).
+  values; a signed agreement and a project; the batch (A1 A2 A3, the upsert). The rule's request names the route that
+  saves (`route`), since the draft route stores the values read a second time and the review stores them as read once.
+- `signing-review.ts`, `reviewSigningDocuments`: as today, the draft batch first (`route: "review"`), then the
+  review's reads in today's order, its staged rule, and the review batch through `decideAndSave` (section 2).
 - `signing-review.ts`, `readReviewDocument` (the GET): the offer by the token, the session (`visitorSession`), the
   setting, in today's order (review.ts:23-32); then the offer's agreements and `reviewDocument`. The route builds the
   200 with today's five headers (42-50) from the kind and text the rule answers.
@@ -945,8 +946,12 @@ access conversion did.
      `hallmark audit` on both pages and carries their screenshots, as CLAUDE.md asks;
    - the owner routes: B1, B2, B3, B4 and B8, and the two cases whose second trigger stops firing;
    - decisions out of SQL: B7, the review's re-decision on its UNIQUE failures and the link's races as Q1 decides.
-5. The conversion, a stack of four PRs merged into `main` as one; only the bottom PR targets `main` and carries the
-   `conversion` label:
+5. The conversion, in four parts. The owner asked on 2026-11-23 for small pull requests, since one PR per part
+   (the first was #394, about 21,000 lines) cannot be reviewed properly. So each part is a series of small PRs, each
+   one rule group, store group or flow, stacked on the one before it and reviewed on its own. They merge in order into
+   the integration branch `claude/signing-conversion` (GitHub retargets the next PR when a merged branch is deleted),
+   and one integration PR, carrying the `conversion` label, takes the whole conversion into `main`, so the area is
+   converted completely or not at all (CLAUDE.md). The parts:
    1. **Readers, machines, rules.** The Effect Schema readers with the frozen Zod copies and differential blocks; the
       `agreementDocument`, `agreementPacket` and `agreementMessage` machines with the tests that hold the store's
       status lists to them; every rule file of section 2 with its tests; `abandonBlocked` with its contract and its SQL
@@ -964,7 +969,11 @@ access conversion did.
       patterns re-pointed, the fixtures re-recorded in a commit of their own; the `golden:neutral` output; a release
       record `docs/prelaunch-qa-<date>-signing-area.md`.
 
-   4 merges into 3, 3 into 2, 2 into 1 (each retargeted by hand after the merge below it), then 1 into `main`.
+   Part 1 is twelve PRs: the machines and `openForSigning`; the readers; the link, redeem and draft; the review; the
+   sign; countersign and abandon; end, hold and record a copy; the packet and the emails; the upload and the owner's
+   download; the templates; retention; retention held to today's SQL. Part 2 is one PR per store group and one for
+   the services and answers. Parts 3 and 4 are one PR per flow and its route. The `golden:neutral` output and the
+   release record belong to the integration PR.
 
 After it, discount PRs 3 to 5 (step 4 of the plan).
 
@@ -972,6 +981,38 @@ A small test-comment PR, not part of this stack, corrects the golden header comm
 fixtures hold the 500 that `f78896099` brought: `tests/golden/owner-agreements-access.test.ts:37, 44`,
 `owner-agreements-config.test.ts:31`, `owner-agreements-preview.test.ts:34`, `owner-agreements-publish.test.ts:38`,
 `owner-agreements-template-version.test.ts:27` and `owner-agreements-retention-preview.test.ts:43`.
+
+## 9. What the rules PR found
+
+The first PR of the stack (readers, machines, rules) holds each rule to today's code on sqlite and, where it could, runs
+today's function beside the rule on the same database. What it found, for the store, flows and routes that follow:
+
+- **Rules are staged.** Where today's code reads, draws an id or calls an outside service between two decisions, the
+  rule is split at that point, each stage repeating the refusals before it, as the offers' send is
+  (`src/server/rules/offer-send.ts`). So the link has `signingOn`, `linkRecipient`, `issueSigningLink` and
+  `refundAllowances`; the review seven stages (`reviewStored` to `reviewDocuments`); the sign four
+  (`documentsToSign`, `savedReceipt`, `signDocuments`, `stillSignable`); countersign, abandon, end, the upload, the
+  templates and retention likewise. Each rule file's opening comment lists its stages in order.
+- **Refusals the table above did not name:** `DetailsRefused` (the review: `validateAgreementDetails`' four sentences,
+  409 with that sentence), `MailRefused` (the link's 502), `ListedObjectGone` (retention's preview: "Archive changed."
+  when a listed object is gone by the time it is read).
+  Refusals that share an answer keep one class per rule file; a route maps each tag to its own answer (`SigningStarted`
+  says the link's 404 sentence; the draft, review and sign answer it with their own 409).
+- **Random draws.** The golden corpora seed the random values per case, so a flow draws its ids in today's order and the
+  store binds the ids it is given; a statement builder that draws its own id (`agreementEvent`) is called only where
+  today calls it, at the same point. Where a rule now refuses before today's code drew its ids (countersign's
+  `RecipientMissing` and its SOW-less pending MSA), no later step of a golden case depends on them.
+- **Today's throws stay defects.** The review's terms that are not JSON and a missing contractor snapshot throw the same
+  errors from the rule, so the route logs today's line; on the draft route a draft value whose NFC form outgrows its
+  limit stays the fixed 500 (the review reads the values once, as today, and stores them as read: `route` in
+  `saveSigningDraft`'s request). `readOwnerAgreementsCommand` throws where Zod threw (`Number()` of a symbol or of an
+  object with a bad `toString`): the owner route calls it in plain code before `runRoute`, as the offers route calls its
+  reader, so the owner still gets a bare 500.
+- **Not reachable, decided by name:** the sign's pending set with no SOW (today a TypeError, 409) is `DocumentsChanged`;
+  a contractor notice email that is not text (today 409, 500 or 200 by its type; the review always writes text) is
+  `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.
+- **New reads.** Before claiming a packet, a copy or a notice, and before the contractor's save, the flows read the row
+  they decide on; PR 2 checks each new read against the golden hook patterns, which count statements by `nth`.
 
 ## Open questions from reading the code
 
