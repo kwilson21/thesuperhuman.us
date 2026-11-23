@@ -23,6 +23,175 @@ export const agreementJson = (body: JsonValue, status = 200) =>
 export const agreementText = (body: string, status: number) =>
 	new Response(body, { status, headers: agreementHeaders });
 
+// ---- the fixed answers (docs/plans/2026-11-signing-conversion.md, section 5) ----
+// Each signing and agreement route's answer to a missing binding, and its answer to a store failure or a defect with the
+// label it logs that under, as the route gives them today: the status, the sentence and the headers. A failure answer is
+// the `{ route, answer }` pair `runRoute` takes (src/server/run.ts), so a defect is logged once and answered as a store
+// failure is; the route answers a named store failure with `loggedAnswer(route, answer)` (src/server/answers.ts). Pure:
+// pages import this file. tests/lib/agreement-answers.test.ts holds each to the bytes a golden fixture recorded.
+
+/** A route's answer to a store failure or a defect, and the label it logs that under (`logUnexpected`). */
+export type FailureAnswer = {
+	readonly route: string;
+	readonly answer: () => Response;
+};
+
+const SIGN_IN_UNAVAILABLE = "Agreement sign-in is temporarily unavailable.";
+
+const FRESH_LINK =
+	"Open a fresh email link to keep going. Your saved details will be here.";
+
+/** The signing link (POST /api/offer/[token]/link) with no D1, code key, Resend key, sender or Turnstile secret. */
+export const signingLinkUnavailable = () =>
+	agreementJson({ ok: false, error: SIGN_IN_UNAVAILABLE }, 503);
+
+/** The signing link: the same sentence as a 500 (B1, B2; the archive link's answer). */
+export const signingLinkFailed: FailureAnswer = {
+	route: "Agreement link",
+	answer: () => agreementJson({ ok: false, error: SIGN_IN_UNAVAILABLE }, 500),
+};
+
+/** Either verify page's redeem with no D1: the 401 every refusal gets, which the page shows as the expired page. */
+export const redeemExpired = () =>
+	agreementJson({ ok: false, error: "This link has expired." }, 401);
+
+const linkNotOpened = () =>
+	agreementJson({ ok: false, error: "This link could not be opened." }, 500);
+
+/** The signing link's verify page (src/pages/offer/[token]/verify.astro): a 500 the page shows as Q2's failure page. */
+export const signingVerifyFailed: FailureAnswer = {
+	route: "Agreement verify",
+	answer: linkNotOpened,
+};
+
+/** The archive link's verify page (src/pages/agreements/verify.astro): the same, logged under its own label. */
+export const archiveVerifyFailed: FailureAnswer = {
+	route: "Archive verify",
+	answer: linkNotOpened,
+};
+
+/** The signing draft (POST /api/offer/[token]/draft) with no D1: the 401 of a visitor with no session. */
+export const signingDraftUnavailable = () =>
+	agreementJson({ ok: false, error: FRESH_LINK }, 401);
+
+/** The signing draft: Q2's sentence as a 500. */
+export const signingDraftFailed: FailureAnswer = {
+	route: "Agreement draft",
+	answer: () =>
+		agreementJson(
+			{
+				ok: false,
+				error: "Your details could not be saved. Try again in a moment.",
+			},
+			500,
+		),
+};
+
+/** The review's POST (/api/offer/[token]/review) with no D1. */
+export const signingReviewUnavailable = () => agreementJson({ ok: false }, 503);
+
+/** The review's GET (one document's text) with no D1: the 401 of a visitor with no session. */
+export const signingReviewDocumentUnavailable = () =>
+	agreementJson({ ok: false }, 401);
+
+/** The review, GET and POST. */
+export const signingReviewFailed: FailureAnswer = {
+	route: "Agreement review",
+	answer: () =>
+		agreementJson(
+			{ ok: false, error: "The agreement could not be reviewed." },
+			500,
+		),
+};
+
+/** The signature (POST /api/offer/[token]/sign) with no D1. */
+export const signingSignUnavailable = () => agreementJson({ ok: false }, 503);
+
+/** The signature: Q2's sentence as a 500. */
+export const signingSignFailed: FailureAnswer = {
+	route: "Agreement signing",
+	answer: () =>
+		agreementJson(
+			{
+				ok: false,
+				error: "Your signature could not be saved. Try again in a moment.",
+			},
+			500,
+		),
+};
+
+/** The owner's agreements (POST /api/owner/agreements) with no D1. */
+export const ownerAgreementsUnavailable = () =>
+	agreementJson({ ok: false }, 503);
+
+/** The owner's retention preview or apply with no bucket or no retention binding id. */
+export const retentionUnavailable = () =>
+	agreementJson(
+		{ ok: false, error: "Retention storage identity is not configured." },
+		503,
+	);
+
+/** The owner's agreements. */
+export const ownerAgreementsFailed: FailureAnswer = {
+	route: "Owner agreements",
+	answer: () =>
+		agreementJson(
+			{ ok: false, error: "The agreement could not be saved." },
+			500,
+		),
+};
+
+/** The owner's request agreement (POST /api/owner/requests/[id]/agreement) with no D1, and retry-artifact with no bucket (B3). */
+export const ownerRequestAgreementUnavailable = () =>
+	agreementJson({ ok: false }, 503);
+
+/** The owner's request agreement. */
+export const ownerRequestAgreementFailed: FailureAnswer = {
+	route: "Owner request agreement",
+	answer: () =>
+		agreementJson(
+			{
+				ok: false,
+				error:
+					"The agreement changed or the operation failed. Reload before retrying.",
+			},
+			500,
+		),
+};
+
+/** The owner's attachment upload (PUT /api/owner/requests/[id]/agreement-attachments) with no D1 or no bucket. */
+export const attachmentUploadUnavailable = () =>
+	agreementJson({ ok: false }, 503);
+
+/** The owner's attachment upload. */
+export const attachmentUploadFailed: FailureAnswer = {
+	route: "Owner attachment upload",
+	answer: () =>
+		agreementJson(
+			{ ok: false, error: "The attachment could not be saved." },
+			500,
+		),
+};
+
+/** The owner's attachment download (GET of the same route) with no D1 or no bucket: plain text with no agreement headers (B3). */
+export const ownerAttachmentUnavailable = () =>
+	new Response("Unavailable", { status: 503 });
+
+/** The owner's attachment download, a missing object included (B8): plain text with no agreement headers. */
+export const ownerAttachmentFailed: FailureAnswer = {
+	route: "Owner attachment",
+	answer: () => new Response("Unavailable", { status: 500 }),
+};
+
+/** The owner's signed copy (GET /api/owner/agreements/[id]/file) with no D1 or no bucket. */
+export const ownerCopyUnavailable = () => agreementText("Unavailable", 503);
+
+/** The owner's signed copy, a ready copy whose object is gone included (B8, J1). */
+export const ownerCopyFailed: FailureAnswer = {
+	route: "Owner signed copy",
+	answer: () => agreementText("Signed copy unavailable. Contact Kazon.", 500),
+};
+
 export async function cleanupAgreementAccess(db: D1Database) {
 	const before = new Date(Date.now() - 30 * 86400000).toISOString();
 	// Successful verification evidence lives in immutable signatures, independently of these short-lived rows.
