@@ -87,6 +87,10 @@ module discountOffers {
   //                            the abandon batch without A11 (A12 kept)
   //   "abandon-deposit-at-read"
   //                            the abandon's deposit condition judged at the read only, not in the batch (A12 gone from it)
+  //   "review-no-signed-guard" the review batch without A3, so a review read before the client signed replaces the signed
+  //                            agreement with a new review. In code the one-live-SOW index (0023:13) also refuses that
+  //                            batch's insert of a new SOW while a client_signed or executed one exists, so dropping A3
+  //                            alone is equivalent there; the model's condition stands for both (see reviewBatch)
   const MUTANT: str
   // Offer versions the owner can create. Two are enough for every path the properties need (a revision, a decline then
   // a new offer) and keep the random runs fast; the manual Apalache check uses the same module.
@@ -179,6 +183,9 @@ module discountOffers {
   var access: int -> Access    // the emailed signing links and their sessions, by key (LINK_IDS)
   // The versions whose client-signed agreement the owner abandoned (their rows stay, status abandoned).
   var abandonedVersions: Set[int]
+  // The versions with a client signature (software_agreement_signatures, party client): a raise-only trigger keeps the
+  // rows as they are, and nothing in a run deletes them.
+  var clientSignatures: Set[int]
   // One of each request in flight at a time: a link request, a redeem, a review, a sign, a countersign, an abandon.
   var issuing: Op
   var redeeming: Op
@@ -285,13 +292,16 @@ module discountOffers {
     signingOn' = true,
     access' = LINK_IDS.mapBy(_ => noAccess),
     abandonedVersions' = Set(),
+    clientSignatures' = Set(),
     issuing' = noOp, redeeming' = noOp, reviewing' = noOp, signingReq' = noOp, countersigning' = noOp, abandoning' = noOp,
     ghost' = { badSign: false, badInvoice: false, badSend: false, declined: false, badSession: false, badCountersign: false },
   }
 
   // Everything else stays as it is.
   action keepOffers = all { offers' = offers, versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent }
-  action keepClient = all { agreement' = agreement, access' = access, abandonedVersions' = abandonedVersions }
+  action keepClient = all {
+    agreement' = agreement, access' = access, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
+  }
   action keepMoney = all { bills' = bills, pending' = pending, project' = project, projectTerms' = projectTerms }
   action keepFlows = all { clock' = clock, link' = link, sending' = sending, declining' = declining }
   action keepRequest = all { requestOpen' = requestOpen, requestVersion' = requestVersion }
@@ -351,6 +361,7 @@ module discountOffers {
       sentTerms' = sentTerms.set(v, offers.get(v).terms),
       wasSent' = wasSent.union(Set(v)),
       agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+      clientSignatures' = clientSignatures,
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       clock' = clock, declining' = declining,
@@ -372,6 +383,7 @@ module discountOffers {
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+      clientSignatures' = clientSignatures,
       keepOffers, clock' = clock, declining' = declining,
       keepRequest, keepMoney, keepSigning, ghost' = ghost,
     }
@@ -412,6 +424,7 @@ module discountOffers {
     link.live, not(stillSending),
     link' = { ...link, live: false },
     agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+      clientSignatures' = clientSignatures,
     keepOffers, keepMoney, keepRequest, keepSigning,
     clock' = clock, sending' = sending, declining' = declining, ghost' = ghost,
   }
@@ -430,6 +443,7 @@ module discountOffers {
     link' = if (MUTANT == "first-batch-keeps-link") link else { ...link, live: false },
     declining' = { phase: "email", start: clock },
     agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+      clientSignatures' = clientSignatures,
     requestOpen' = requestOpen, requestVersion' = requestVersion + 1, keepMoney, clock' = clock,
     sending' = sending, keepSigning, ghost' = ghost,
   }
@@ -533,7 +547,7 @@ module discountOffers {
       issuing.active,
       issuing' = noOp,
       access' = if (writes) access.set(k, { ...noAccess, v: x.v, token: x.token, at: x.at }) else access,
-      agreement' = agreement, abandonedVersions' = abandonedVersions,
+      agreement' = agreement, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
       redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq, countersigning' = countersigning,
       abandoning' = abandoning, signingOn' = signingOn,
       keepOffers, keepMoney, keepFlows, keepRequest, ghost' = ghost,
@@ -565,7 +579,7 @@ module discountOffers {
       redeeming' = noOp,
       access' = if (writes) access.set(k, { ...x, used: true, session: true }) else access,
       ghost' = { ...ghost, badSession: ghost.badSession or (writes and not(signable)) },
-      agreement' = agreement, abandonedVersions' = abandonedVersions,
+      agreement' = agreement, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
       issuing' = issuing, reviewing' = reviewing, signingReq' = signingReq, countersigning' = countersigning,
       abandoning' = abandoning, signingOn' = signingOn,
       keepOffers, keepMoney, keepFlows, keepRequest,
@@ -597,36 +611,43 @@ module discountOffers {
     }
   }
 
-  // The review batch: A1 and A2 ("review-no-guards" drops both) and A3; the offer's review rows replaced by the new ones,
-  // rendered at the read, under this session. A refused batch answers 409 and writes nothing.
+  // The review batch: A1 and A2 ("review-no-guards" drops both) and A3 (software-agreements.ts:310-314: no agreement of the
+  // offer client_signed or executed; "review-no-signed-guard" drops it); the offer's review rows replaced by the new ones,
+  // rendered at the read, under this session. A refused batch answers 409 and writes nothing. A3's condition is also what
+  // the one-live-SOW index (migrations/music/0023_software_signing.sql:13) gives this batch: its delete removes only rows
+  // in review, so its insert of a new SOW fails while a client_signed or executed SOW of the offer exists. The model holds
+  // the two as one condition.
   action reviewBatch = {
     val r = reviewing
     val x = access.get(r.k)
     val a3 = not(agreement.v == r.v and isSigned(agreement.status))
-    val writes = a3 and (MUTANT == "review-no-guards" or (liveSigning(r.v, x.token) and not(x.revoked)))
+    val writes = (a3 or MUTANT == "review-no-signed-guard") and
+      (MUTANT == "review-no-guards" or (liveSigning(r.v, x.token) and not(x.revoked)))
     all {
       reviewing.active,
       reviewing' = noOp,
       agreement' = if (writes) { v: r.v, terms: r.terms, status: "review", session: r.k, executed: false } else agreement,
-      access' = access, abandonedVersions' = abandonedVersions,
+      access' = access, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
       issuing' = issuing, redeeming' = redeeming, signingReq' = signingReq, countersigning' = countersigning,
       abandoning' = abandoning, signingOn' = signingOn,
       keepOffers, keepMoney, keepFlows, keepRequest, ghost' = ghost,
     }
   }
 
-  // Sign, the reads: the session's checks and signAgreements' reads: the offer's agreements are the documents this session
-  // reviewed, still in review (documents all client_signed by this session answer the saved receipt and write nothing).
-  // "sign-guards-at-read" judges the batch's A1 here too (its project condition is the one the reads lack).
-  // "no-sign-guards" checks none of it: the session that reviewed signs the review it holds, unless it is signed already.
+  // Sign, the reads: the session's checks and signAgreements' reads (software-agreements.ts:405-429): the offer's
+  // agreements that are not executed are the documents named, still in review (documents all client_signed answer the
+  // saved receipt and write nothing). The read compares the documents, not the session that reviewed them: only the
+  // batch's A9 does that, so the model's read does not either. "sign-guards-at-read" judges the batch's guards here instead
+  // (A1, whose project condition the reads lack, A2 and A9). "no-sign-guards" checks none of it: the session signs the
+  // offer's documents it holds, unless they are signed already.
   action signRead = {
     nondet k = LINK_IDS.filter(j => access.get(j).session).oneOf()
     val x = access.get(k)
-    val reads = sessionOpens(k) and agreement.v == x.v and agreement.status == "review" and agreement.session == k
+    val reads = sessionOpens(k) and agreement.v == x.v and agreement.status == "review"
     all {
       not(signingReq.active),
-      if (MUTANT == "no-sign-guards") (agreement.v == x.v and agreement.session == k and not(isSigned(agreement.status)))
-      else reads and (MUTANT != "sign-guards-at-read" or liveSigning(x.v, x.token)),
+      if (MUTANT == "no-sign-guards") (agreement.v == x.v and not(isSigned(agreement.status)))
+      else reads and (MUTANT != "sign-guards-at-read" or (liveSigning(x.v, x.token) and agreement.session == k)),
       signingReq' = { ...noOp, active: true, k: k, v: x.v },
       issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, countersigning' = countersigning,
       abandoning' = abandoning, signingOn' = signingOn,
@@ -649,6 +670,7 @@ module discountOffers {
       signingReq.active,
       signingReq' = noOp,
       agreement' = if (writes) { ...agreement, status: "client_signed" } else agreement,
+      clientSignatures' = if (writes) clientSignatures.union(Set(agreement.v)) else clientSignatures,
       ghost' = { ...ghost, badSign: ghost.badSign or (writes and offers.get(s.v).status != "sent") },
       access' = access, abandonedVersions' = abandonedVersions,
       issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, countersigning' = countersigning,
@@ -684,7 +706,7 @@ module discountOffers {
       countersigning' = noOp,
       agreement' = if (writes) { ...agreement, status: "executed", executed: true } else agreement,
       ghost' = { ...ghost, badCountersign: ghost.badCountersign or (writes and not(a10 and a11)) },
-      access' = access, abandonedVersions' = abandonedVersions,
+      access' = access, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
       issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
       abandoning' = abandoning, signingOn' = signingOn,
       keepOffers, keepMoney, keepFlows, keepRequest,
@@ -718,6 +740,7 @@ module discountOffers {
       abandoning' = noOp,
       agreement' = if (writes and agreement.v == v) { ...agreement, status: "abandoned" } else agreement,
       abandonedVersions' = if (writes) abandonedVersions.union(Set(v)) else abandonedVersions,
+      clientSignatures' = clientSignatures,
       offers' =
         if (writes and offers.get(v).status == "sent") offers.set(v, { ...offers.get(v), status: "superseded" }) else offers,
       versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent,
@@ -872,9 +895,14 @@ module discountOffers {
   // 12. An abandoned signing's version has no open or paid first deposit.
   val abandonedHasNoDeposit = abandonedVersions.forall(v => not(depositCounts(v)))
 
+  // 13. Once a version's documents are client_signed they never return to review: they move only to executed or abandoned.
+  //    A review read before the signature cannot replace the signed documents with a new review (A3 in the review batch).
+  val signedStaysSigned = agreement.status != "review" or not(clientSignatures.contains(agreement.v))
+
   val allProperties = and {
     invoicedMatchesSigned, sentTermsFrozen, oneVersionInvoiced, installmentsSum, supersededInert, declinedHasNoOffer,
     sendLinkLive, reviewOfSentOffer, noSessionForDeadOffer, executedStays, executedOnlyWhenSigned, abandonedHasNoDeposit,
+    signedStaysSigned,
   }
 
   // Reachability witness, for a hand run with the negated invariant (docs/plans/2026-11-discount-flow.md, "The model"):
@@ -931,3 +959,4 @@ module discountRedeemNoLiveGuard { import discountOffers(MUTANT = "redeem-no-liv
 module discountAbandonNoStatusGuard { import discountOffers(MUTANT = "abandon-no-status-guard", VERSIONS = 2).* }
 module discountCountersignNoGuards { import discountOffers(MUTANT = "countersign-no-guards", VERSIONS = 2).* }
 module discountAbandonDepositAtRead { import discountOffers(MUTANT = "abandon-deposit-at-read", VERSIONS = 2).* }
+module discountReviewNoSignedGuard { import discountOffers(MUTANT = "review-no-signed-guard", VERSIONS = 2).* }

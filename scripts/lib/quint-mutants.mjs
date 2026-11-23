@@ -56,7 +56,8 @@ export const discountMutants = {
 	discountNoLiveCheck: { property: "sendLinkLive" },
 	discountFirstBatchKeepsLink: { property: "declinedHasNoOffer" },
 	// The live-link check before F9's fix, an equivalent mutant until the signing extension: an abandon revokes the link
-	// with no sending window, so the model now closes a link during a failed send (docs/verification.md).
+	// with no sending window, so the model now closes a link during a failed send. It is killed only because the model
+	// lets the client use a link that only the failed email carried (docs/verification.md).
 	discountAcceptedOnlyCheck: { property: "sendLinkLive" },
 	discountReviewNoGuards: { property: "reviewOfSentOffer" },
 	discountSignGuardsAtRead: { property: "supersededInert" },
@@ -64,6 +65,8 @@ export const discountMutants = {
 	discountAbandonNoStatusGuard: { property: "executedStays" },
 	discountCountersignNoGuards: { property: "executedOnlyWhenSigned" },
 	discountAbandonDepositAtRead: { property: "abandonedHasNoDeposit" },
+	// The review batch without A3 (and so without the one-live-SOW index, which the model's condition stands for too).
+	discountReviewNoSignedGuard: { property: "signedStaysSigned" },
 };
 
 // verification/signin-codes.qnt: studio sign-in codes bound to the browser that asked, with requests whose responses can

@@ -180,7 +180,7 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(12);
+		expect(properties.length).toBeGreaterThanOrEqual(13);
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
@@ -233,6 +233,9 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		});
 		expect(discountMutants.discountAbandonDepositAtRead).toEqual({
 			property: "abandonedHasNoDeposit",
+		});
+		expect(discountMutants.discountReviewNoSignedGuard).toEqual({
+			property: "signedStaysSigned",
 		});
 
 		for (const mutant of [
