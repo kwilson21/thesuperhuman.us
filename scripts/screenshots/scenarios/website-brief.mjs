@@ -30,6 +30,10 @@ const screens = [
 		fill: (page) =>
 			page.locator('[data-step="1"] textarea').fill(brief.purpose),
 	},
+	// The outline's three lane screens, one for each lane. The board's route answers with no cards (see mockBrief).
+	{ step: 9 },
+	{ step: 10 },
+	{ step: 11 },
 	{
 		step: 7,
 		fill: async (page) => {
@@ -71,8 +75,12 @@ async function mockBrief(page, path) {
 	await page.route("**/api/software/brief/suggest", (route) =>
 		route.fulfill({ json: { suggestion: "" } }),
 	);
+	await page.route("**/api/software/brief/board", (route) =>
+		route.fulfill({ json: { cards: [] } }),
+	);
 	await page.addInitScript(() => {
 		localStorage.removeItem("software-brief-draft");
+		localStorage.removeItem("software-brief-board");
 		localStorage.removeItem("software-suggestions");
 	});
 	await page.goto(new URL(path, page.url()).href);
@@ -210,25 +218,32 @@ const clientShots = [
 		prepare: prepareAt("purpose", 0),
 	},
 	{
+		name: "outline-pages",
+		title: "The outline: pages",
+		caption: "The outline's second screen, with no cards from the answers",
+		path: "/software/start",
+		prepare: prepareAt("outline pages", 2),
+	},
+	{
 		name: "today",
 		title: "What you have today",
 		caption: "Fictional current site and existing material, both optional",
 		path: "/software/start",
-		prepare: prepareAt("today", 1),
+		prepare: prepareAt("today", 4),
 	},
 	{
 		name: "keeps-up-to-date",
 		title: "Who keeps it up to date",
 		caption: "Fictional answer: the client keeps the site up to date",
 		path: "/software/start",
-		prepare: prepareAt("keeps up to date", 2),
+		prepare: prepareAt("keeps up to date", 5),
 	},
 	{
 		name: "timing",
 		title: "Timing",
 		caption: "Fictional needed-by date with the website hint",
 		path: "/software/start",
-		prepare: prepareAt("timing", 3, (page) =>
+		prepare: prepareAt("timing", 6, (page) =>
 			page.locator("[name=timingDate]").blur(),
 		),
 	},
@@ -237,28 +252,28 @@ const clientShots = [
 		title: "Budget",
 		caption: "Budget left empty, which is optional",
 		path: "/software/start",
-		prepare: prepareAt("budget", 4),
+		prepare: prepareAt("budget", 7),
 	},
 	{
 		name: "contact",
 		title: "Contact",
 		caption: "Fictional name, email and company",
 		path: "/software/start",
-		prepare: prepareAt("contact", 5),
+		prepare: prepareAt("contact", 8),
 	},
 	{
 		name: "review",
 		title: "Review",
 		caption: "Fictional answers ready to send, including the website questions",
 		path: "/software/start",
-		prepare: prepareAt("review", 6, assertReview),
+		prepare: prepareAt("review", 9, assertReview),
 	},
 	{
 		name: "receipt",
 		title: "Receipt",
 		caption: "Fictional receipt with mocked delivery and no email call",
 		path: "/software/start",
-		prepare: prepareAt("receipt", 6, sendBrief),
+		prepare: prepareAt("receipt", 9, sendBrief),
 	},
 ];
 

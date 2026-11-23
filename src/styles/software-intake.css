@@ -42,31 +42,18 @@
 /* A link that names a path skips the choice screen, so it stays out of sight until the script has moved past it; without scripting it shows, with the page's heading. */
 @media (scripting:enabled){#software-inquiry[data-linked-path]:not([data-ready]) [data-step="0"]{display:none}}
 
-/* The living brief (docs/plans/2026-11-living-brief.md). The board's height is bounded: its head stays put and its cards
-   scroll inside .board-scroll, so however many cards arrive the page never grows with them. On a wide screen it is a
-   panel beside the answers, as tall as the screen at most; below that it follows the step's buttons, with the cards in a
-   box about three fifths of the screen tall, so a card arriving never moves the answer box or Next. */
-.software-intake .brief-board{display:flex;flex-direction:column;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--rule);min-width:0}
-.software-intake .board-scroll{overflow-y:auto;max-height:min(34rem,62vh);max-height:min(34rem,62dvh);padding:.25rem .375rem .5rem;margin-inline:-.375rem}
-@media (min-width:70rem){
-  .software-intake .brief-workspace[data-board-enabled]{display:grid;grid-template-columns:minmax(0,42rem) minmax(18rem,1fr);column-gap:clamp(2rem,4vw,3.5rem);align-items:start}
-  .software-intake .brief-board{position:sticky;top:1.5rem;max-height:calc(100vh - 3rem);max-height:calc(100dvh - 3rem);margin-top:0;padding:0 0 0 2rem;border-top:0;border-left:1px solid var(--rule)}
-  .software-intake .board-scroll{flex:1 1 auto;min-height:0;max-height:none;overscroll-behavior:contain}
-  .software-intake .board-links [data-board-pulse]{display:none}
-}
-.software-intake .board-head{padding-bottom:.25rem;border-bottom:1px solid var(--rule)}
-.software-intake .brief-board h2{margin:0}
-.software-intake .board-explain{color:var(--muted);font-size:.875rem;margin-top:.5rem;max-width:var(--measure-prose)}
-/* Two lines are kept for the status, so a longer message never moves the cards below it. */
-.software-intake .board-status{color:var(--muted);font-size:.875rem;line-height:1.5;min-height:3em;margin-top:.25rem}
-.software-intake [data-board-pause][aria-pressed="true"]{color:var(--accent)}
-.software-intake .board-controls{display:flex;flex-wrap:wrap;gap:0 1.25rem;margin-top:.25rem}
+/* The outline's lane screens (docs/plans/2026-11-living-brief.md): steps of the brief, each with the lane's question, a hint,
+   a status line, the lane's cards, Add, its set-aside list and two controls. The cards sit in a box that scrolls inside, so
+   however many arrive the screen never grows with them and Next stays where it is. */
+.software-intake .board-status{color:var(--muted);font-size:.875rem;line-height:1.5;min-height:1.5em;margin:.25rem 0 .5rem}
+/* The box is about three fifths of the screen's height, at most 34rem on a computer, so a 1280x800 screen shows four or five
+   cards. One neutral hairline below it, drawn as the column's width (the box's side margins only keep the cards' focus rings
+   from being clipped); the first card's own border is the edge above. */
+.software-intake .board-scroll{overflow-y:auto;max-height:min(34rem,60vh);max-height:min(34rem,60dvh);padding:.5rem .375rem;margin-inline:-.375rem;background:linear-gradient(var(--rule),var(--rule)) center bottom/calc(100% - .75rem) 1px no-repeat;overscroll-behavior:contain}
+.software-intake .board-controls{display:flex;flex-wrap:wrap;gap:0 1.25rem;margin-top:.5rem}
 .software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button,.software-intake .board-add{min-height:44px;min-width:44px;text-align:start;text-decoration:underline;text-underline-offset:.2em;cursor:pointer;font-size:.9rem}
 .software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:disabled,.software-intake .board-add:disabled{opacity:.5;cursor:not-allowed}
-.software-intake .board-links{min-height:max(44px,3.1em);margin-top:.25rem;font-size:.875rem}
-.software-intake .board-links a{display:inline-flex;align-items:flex-end;min-height:44px}
-.software-intake .board-lane{margin-top:1.25rem}
-.software-intake .board-lane h3{font-size:1.05rem;font-weight:400;line-height:1.3;padding-bottom:.3rem;border-bottom:1px solid var(--rule);margin-bottom:.5rem}
+.software-intake .board-links{margin-top:.75rem;font-size:.875rem}
 .software-intake .board-cards{list-style:none;margin:0;padding:0;display:grid;gap:.4rem}
 .software-intake .board-why{color:var(--muted);font-size:.875rem}.software-intake .board-full{margin:.25rem 0 .5rem}.software-intake .board-empty{color:var(--muted);font-size:.875rem}
 .software-intake .board-card{border:1px solid var(--field-border);border-radius:3px;padding:.5rem .65rem .1rem;background:var(--paper);min-width:0}
@@ -86,8 +73,6 @@
 .software-intake .board-aside{margin-top:1.25rem;border-block:1px solid var(--rule);padding:.25rem 0}
 .software-intake .board-aside ul{list-style:none;margin:0 0 .5rem;padding:0}
 .software-intake .board-aside li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 1rem;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
-.software-intake .board-held{margin-top:1rem}
-.software-intake .board-foot{color:var(--muted);font-size:.875rem;margin-top:1.25rem;max-width:var(--measure-prose)}
 .software-intake .review-outline{list-style:disc;margin:0 0 .25rem 1.1rem;white-space:normal}
 .software-intake .review-outline li{margin:.15rem 0}
 .software-intake .review-outline-origin{color:var(--muted)}
@@ -98,5 +83,26 @@
   .software-intake .board-card.is-new{animation:board-card-in 180ms var(--ease-site)}
   @keyframes board-card-in{from{opacity:0;transform:translateY(4px)}}
 }
+/* By hand: the field and Add are one bordered control. The wrapper carries the field's border, radius and background and the
+   site's focus ring (while the input has focus); Add is a text button at the right inner edge, like Edit and Remove. */
+.software-intake .board-editor-inline{display:flex;align-items:center;border:1px solid var(--field-border);border-radius:3px;background:var(--paper)}
+.software-intake .board-editor-inline:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:4px}
+.software-intake .board-editor-inline .intake-field{flex:1 1 auto;margin-top:0;min-width:0}
+.software-intake .board-editor-inline input{border:0;border-radius:0;background:transparent}
+@supports selector(:has(*)){.software-intake .board-editor-inline input:focus-visible{outline-color:transparent}}
+.software-intake .board-editor-inline .board-editor-actions{flex:0 0 auto;padding-inline:.25rem .5rem}
+.software-intake .board-editor-inline .board-editor-actions button{min-width:44px;text-align:center;padding-inline:.5rem}
+.software-intake .board-editor-inline .board-editor-actions button:focus-visible{outline-offset:-4px}
+/* A lane of the visitor's own notes: compact rows with the text left and its actions right, a hairline between rows, no box.
+   A newly added note has no accent or border colour, only the short fade-in below. */
+.software-intake .board-cards-rows{gap:0}
+.software-intake .board-cards-rows .board-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 1rem;border:0;border-radius:0;background:none;padding:0}
+.software-intake .board-cards-rows .board-card+.board-card{border-top:1px solid var(--rule)}
+.software-intake .board-cards-rows .board-card-text{flex:1 1 12rem;margin:0;padding-block:.4rem}
+.software-intake .board-cards-rows :is(.board-card-answer,.board-card-reason,.board-card-quote){flex:1 1 100%;order:2;margin-top:0}
+.software-intake .board-cards-rows .board-card-actions{flex:0 0 auto;margin-left:auto}
+.software-intake .board-cards-rows .board-editor{flex:1 1 100%;order:3;padding-bottom:.5rem}
+.software-intake .board-cards-rows .board-card.is-new{border-color:var(--rule)}
+@media (hover:hover) and (pointer:fine){.software-intake .board-editor-inline:hover{border-color:var(--muted)}}
 @media (hover:hover) and (pointer:fine){.software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:not(:disabled):hover,.software-intake .board-add:not(:disabled):hover{color:var(--accent)}}
-@media print{.software-intake .brief-board,.software-intake .board-links{display:none!important}}
+@media print{.software-intake .board-links{display:none!important}}

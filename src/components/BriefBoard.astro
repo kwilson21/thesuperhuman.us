@@ -1,64 +1,48 @@
 ---
-// The living brief's board (docs/plans/2026-11-living-brief.md): the static frame of the outline beside the brief's
-// written answers. src/scripts/brief-board.ts fills it, from src/scripts/software-inquiry.ts. Lane headings are set by the
-// script for the chosen path; the defaults here are the website's.
-import { LANES, addLabels, laneLabels } from "~/lib/brief-board";
-
-interface Props {
-	privacyHref: string;
-}
-
-const { privacyHref } = Astro.props;
+// The outline's three lane screens (docs/plans/2026-11-living-brief.md): steps 9 to 11 of the brief, one for each lane, in
+// lane order (the outline has no purpose screen). src/scripts/brief-board.ts fills them, from src/scripts/software-inquiry.ts, which also sets the heading
+// and the Add labels for the chosen path; the defaults here are the website's. The component sits inside the brief's form.
+import { LANES, LANE_STEPS, addLabels, laneQuestions } from "~/lib/brief-board";
 ---
-<section class="brief-board" data-brief-board data-live="true" hidden aria-labelledby="brief-board-title">
-  <div class="board-head">
-    <h2 id="brief-board-title" tabindex="-1">Your brief so far</h2>
-    {/* The controls come before the status line, so a status that wraps further never moves them. */}
-    <div class="board-controls">
-      <button type="button" data-board-pause aria-pressed="false">Pause the outline</button>
-      <button type="button" data-board-undo disabled>Undo</button>
-      <button type="button" data-board-plain>Use the plain form</button>
-    </div>
-    <p class="board-status" data-board-status></p>
-    <p class="sr-only" data-board-live role="status"></p>
-  </div>
-  {/* The head stays put; the cards scroll inside this region, so the board is never taller than its space on screen. */}
-  <div class="board-scroll" data-board-scroll>
-  {/* True whether the outline is on, paused or stopped, so it never changes and never moves the cards below it. */}
-  <p class="board-explain">While the outline is on, Cloudflare’s AI sketches your project here as you write. Cards marked “From your answers” quote you. Cards marked “Suggestion” or “Suggested question” are ideas until you keep them.</p>
-  {LANES.map((lane) => (
-    <section class="board-lane" data-lane={lane}>
-      <h3 id={`board-lane-${lane}`} data-lane-title>{laneLabels.website[lane]}</h3>
+{/* Said to screen readers when a card is kept, set aside, brought back, removed or undone. */}
+<p class="sr-only" data-board-live role="status"></p>
+{LANES.map((lane, index) => (
+  <section data-step={LANE_STEPS[index]} data-lane-screen={lane} hidden>
+    <h1 tabindex="-1" id={`lane-title-${lane}`} data-lane-title>{laneQuestions.website[lane]}</h1>
+    <p class="intake-intro" data-lane-hint></p>
+    <p class="board-status" role="status" data-lane-status></p>
+    {/* The cards scroll inside this box, so however many arrive the screen never grows and Next stays where it is. */}
+    <div class="board-scroll" role="region" tabindex="0" aria-labelledby={`lane-title-${lane}`} data-lane-region hidden>
       <ul class="board-cards" role="list" data-lane-cards></ul>
-      <p class="board-empty" data-lane-empty>Nothing here yet.</p>
-      <button type="button" class="board-add" data-lane-add>{addLabels.website[lane]}</button>
-      <div class="board-editor" data-lane-editor hidden>
-        <label class="intake-field"><span data-lane-editor-label>{addLabels.website[lane]}</span><input type="text" data-lane-input autocomplete="off" /></label>
-        <div class="board-editor-actions"><button type="button" data-lane-save>Add</button><button type="button" data-lane-cancel>Cancel</button></div>
-      </div>
-      {/* Last in the lane, so the reason never moves Add or the open editor the visitor just used. */}
-      <p class="board-empty board-full" data-lane-full hidden></p>
-    </section>
-  ))}
-  <details class="board-aside" data-board-aside hidden>
-    <summary data-board-aside-summary>Set aside</summary>
-    <ul role="list" data-board-aside-list></ul>
-  </details>
-  <button type="button" class="board-held site-button site-button-outline" data-board-held hidden></button>
-  <p class="board-foot">Only cards from your answers and cards you keep, edit or add go with your brief, and only after you review it. I read every brief myself; the outline only organizes it. <a href={privacyHref}>Privacy</a></p>
-  </div>
-  <template data-card-template>
-    <li class="board-card">
-      <p class="board-card-origin" data-card-origin></p>
-      <p class="board-card-text" data-card-text></p>
-      <p class="board-card-quote" data-card-quote hidden></p>
-      <p class="board-card-reason" data-card-reason hidden></p>
-      <p class="board-card-answer" data-card-answer hidden></p>
-      <div class="board-card-actions" data-card-actions></div>
-      <div class="board-editor" data-card-editor hidden>
-        <label class="intake-field"><span data-card-editor-label></span><input type="text" data-card-input autocomplete="off" /></label>
-        <div class="board-editor-actions"><button type="button" data-card-save>Save</button><button type="button" data-card-cancel>Cancel</button></div>
-      </div>
-    </li>
-  </template>
-</section>
+    </div>
+    <button type="button" class="board-add" data-lane-add>{addLabels.website[lane]}</button>
+    <div class="board-editor" data-lane-editor hidden>
+      <label class="intake-field"><span data-lane-editor-label>{addLabels.website[lane]}</span><input type="text" data-lane-input autocomplete="off" /></label>
+      <div class="board-editor-actions"><button type="button" data-lane-save>Add</button><button type="button" data-lane-cancel>Cancel</button></div>
+    </div>
+    {/* Last after Add, so the reason never moves Add or the open editor the visitor just used. */}
+    <p class="board-empty board-full" data-lane-full hidden></p>
+    <details class="board-aside" data-lane-aside hidden>
+      <summary data-lane-aside-summary>Set aside</summary>
+      <ul role="list" data-lane-aside-list></ul>
+    </details>
+    <div class="board-controls">
+      <button type="button" data-board-undo disabled>Undo</button>
+      <button type="button" data-board-skip>Skip these, no AI outline</button>
+    </div>
+  </section>
+))}
+<template data-card-template>
+  <li class="board-card">
+    <p class="board-card-origin" data-card-origin></p>
+    <p class="board-card-text" data-card-text></p>
+    <p class="board-card-quote" data-card-quote hidden></p>
+    <p class="board-card-reason" data-card-reason hidden></p>
+    <p class="board-card-answer" data-card-answer hidden></p>
+    <div class="board-card-actions" data-card-actions></div>
+    <div class="board-editor" data-card-editor hidden>
+      <label class="intake-field"><span data-card-editor-label></span><input type="text" data-card-input autocomplete="off" /></label>
+      <div class="board-editor-actions"><button type="button" data-card-save>Save</button><button type="button" data-card-cancel>Cancel</button></div>
+    </div>
+  </li>
+</template>

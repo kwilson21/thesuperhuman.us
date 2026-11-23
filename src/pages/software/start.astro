@@ -39,7 +39,9 @@ const selected =
 			? requested
 			: null;
 
-const count = selected === "website" ? 8 : 7;
+// The screens of the longest plan are rendered as dots; the script hides the ones the chosen plan does not use. With the
+// outline the plans have three more screens (its lanes). Website: 11, web app and workflow: 10.
+const count = (selected === "website" ? 8 : 7) + (boardEnabled ? 3 : 0);
 
 const href = (path: string) =>
 	mainSitePath(Astro.request.headers.get("host") ?? Astro.url.host, path);
@@ -48,8 +50,7 @@ const href = (path: string) =>
   <article class="site-shell intake-page software-intake">
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Work with me <span aria-hidden="true">←</span></a></p>
     <p class="intake-muted" data-brief-kicker>{selected ? softwareBriefKickers[selected] : 'Project brief'}</p>
-    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i === 7 && selected !== 'website'}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
-    <div class="brief-workspace" data-board-enabled={boardEnabled ? "true" : undefined}>
+    <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: boardEnabled ? 11 : 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i >= count}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
     <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} data-board={boardEnabled ? "true" : undefined} data-linked-path={selected ?? undefined} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">
@@ -63,7 +64,7 @@ const href = (path: string) =>
       {[1, 2].map(index => <section data-step={index} hidden>
         <h1 tabindex="-1" data-question-title></h1>
         <p class="intake-intro" data-question-hint></p>
-        <p class="intake-footnote brief-footnote"><span data-question-footnote>Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</span> <button type="button" data-examples-toggle aria-expanded="false" aria-controls={`brief-examples-${index}`}>See example answers</button></p>
+        <p class="intake-footnote brief-footnote"><button type="button" data-examples-toggle aria-expanded="false" aria-controls={`brief-examples-${index}`}>See example answers</button></p>
         <ul class="brief-examples" id={`brief-examples-${index}`} role="list" aria-label="Example answers" data-examples-list hidden></ul>
         <div class="intake-field brief-answer">
           <label class="sr-only" for={`brief-answer-${index}`} data-answer-label></label>
@@ -75,7 +76,6 @@ const href = (path: string) =>
           <button type="button" class="sr-only" data-accept hidden></button>
           <p class="intake-muted"><span data-suggestions-disclosure>{boardEnabled ? 'Suggestions and the outline use Cloudflare’s AI, which sees only your written answers and your outline.' : 'Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes.'} <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
         </div>
-        {boardEnabled && <p class="intake-muted board-links"><a href="#brief-board-title" data-board-pulse hidden></a><button type="button" data-board-show hidden>Show the outline</button></p>}
         <p data-form-error={index === 1 ? 'today' : 'firstResult'} hidden></p>
         <button type="button" data-skip hidden={index !== 2}>Skip</button>
       </section>)}
@@ -103,6 +103,7 @@ const href = (path: string) =>
       <section data-step="6" hidden>
         <h1 tabindex="-1">Ready to send?</h1>
         <div class="intake-review"><dl data-review></dl></div>
+        {boardEnabled && <p class="board-links"><button type="button" data-outline-add-back hidden>Add the outline back</button></p>}
         {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to delivery yet. You can try every step; sending is unavailable.</p>}
         <p data-form-error="turnstileToken" hidden></p>
         {boardEnabled && <p data-form-error="outline" hidden></p>}
@@ -116,7 +117,6 @@ const href = (path: string) =>
         <label class="intake-field">What you already have (optional)<textarea name="existing" rows="4" maxlength="2000" placeholder="A logo and about 30 class photos. The About and Pricing pages are still accurate. I like how calm the Example Ceramics site feels."></textarea></label>
         <p data-form-error="existing" hidden></p>
         <button type="button" data-skip>Skip</button>
-        {boardEnabled && <p class="intake-muted board-links"><button type="button" data-board-show hidden>Show the outline</button></p>}
       </section>
       <section data-step="8" hidden>
         <h1 tabindex="-1">Who will keep it up to date?</h1>
@@ -126,14 +126,12 @@ const href = (path: string) =>
         </fieldset>
         <p data-form-error="updates" hidden></p>
         <p class="intake-footnote">Updates after launch are quoted separately, at a fixed price.</p>
-        {boardEnabled && <p class="intake-muted board-links"><button type="button" data-board-show hidden>Show the outline</button></p>}
       </section>
+      {boardEnabled && <BriefBoard />}
       <p data-form-status role="status" tabindex="-1"></p>
       <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Next</button><button type="submit" class="site-button" hidden disabled>Send brief</button></div>
       <p class="intake-reassurance" data-send-reassurance hidden>No booking or payment at this stage.</p>
     </form>
-    {boardEnabled && <BriefBoard privacyHref={href('/privacy#software-briefs')} />}
-    </div>
     <section id="software-success" hidden tabindex="-1" role="status">
       <p class="intake-muted">Project brief · sent</p><h1>Your brief is in.</h1><p class="intake-intro" data-receipt-thanks></p>
       <div class="intake-link-panel max-w-content" data-copy-card>

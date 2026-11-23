@@ -124,6 +124,8 @@ export const boardMutants = {
 	boardOutlineQuote: { property: "outlineGrounded" },
 	boardNoNumberGuard: { property: "newestWins" },
 	boardApplyPaused: { property: "pausedHolds" },
+	boardApplyOnScreen: { property: "onScreenStable" },
+	boardLeaveNoAdd: { property: "leaveKeepsReply" },
 };
 
 // verification/offer-board.qnt: the offer board's Use and Undo, which change the board and the offer editor together, while

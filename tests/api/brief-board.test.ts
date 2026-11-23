@@ -242,6 +242,48 @@ describe("a request the page never sends", () => {
 		expect(counts()).toEqual({});
 	});
 
+	it("drops a purpose card sent as context by a page left open across the change, and goes on", async () => {
+		run.mockResolvedValueOnce({ response: { cards: [] } });
+
+		const response = await POST(
+			context({
+				...body,
+				cards: [
+					cards[0],
+					{
+						ref: "c3",
+						lane: "purpose",
+						text: "Old purpose wording",
+						state: "yours",
+					},
+				],
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(JSON.stringify(run.mock.calls[0])).not.toContain(
+			"Old purpose wording",
+		);
+	});
+
+	it("still bounds the cards it drops: 31 purpose cards are refused", async () => {
+		const response = await POST(
+			context({
+				...body,
+				cards: Array.from({ length: 31 }, (_, i) => ({
+					ref: `c${i}`,
+					lane: "purpose",
+					text: "P",
+					state: "open",
+				})),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(run).not.toHaveBeenCalled();
+	});
+
 	it("reads 7,000 characters in a script of three bytes a character, over 16 KB as JSON", async () => {
 		run.mockResolvedValueOnce({ response: { cards: [] } });
 		const hindi = (length: number) => "किताबें बेचने ".repeat(300).slice(0, length);
@@ -447,7 +489,6 @@ describe("the model", () => {
 		expect(JSON.parse(inputs.messages[1].content)).toEqual({
 			project: "a website",
 			lanes: {
-				purpose: "What it’s for",
 				audience: "Who it’s for",
 				parts: "Pages",
 				questions: "Open questions",
@@ -456,6 +497,13 @@ describe("the model", () => {
 			cards,
 		});
 		expect(inputs.messages[1].content).not.toMatch(/Secret notes|Alex/);
+	});
+
+	it("never asks for a purpose card: the visitor's written answer is the statement of purpose", () => {
+		expect(BOARD_INSTRUCTIONS).not.toMatch(/purpose/i);
+		expect(
+			BOARD_REPLY_SCHEMA.properties.cards.items.properties.lane.enum,
+		).toEqual(["audience", "parts", "questions"]);
 	});
 
 	it("answers the cards, read as untrusted data", async () => {

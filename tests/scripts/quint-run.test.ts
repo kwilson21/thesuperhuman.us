@@ -365,7 +365,7 @@ describe("the brief board model's mutant registry", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties).toHaveLength(7);
+		expect(properties).toHaveLength(9);
 		expect(propertiesWithoutMutant(properties, boardMutants)).toEqual([]);
 	});
 

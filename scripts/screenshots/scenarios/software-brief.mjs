@@ -61,10 +61,15 @@ export default {
 					await page.route("**/api/software/brief/suggest", (route) =>
 						route.fulfill({ json: { suggestion: " in a shared spreadsheet" } }),
 					);
+					// The outline's route answers with no cards, so its screens are the same on every run.
+					await page.route("**/api/software/brief/board", (route) =>
+						route.fulfill({ json: { cards: [] } }),
+					);
 					// Serve only this page's script; other scenarios keep the real test widget.
 					await stubTurnstile(page);
 					await page.addInitScript(() => {
 						localStorage.removeItem("software-brief-draft");
+						localStorage.removeItem("software-brief-board");
 						localStorage.removeItem("software-suggestions");
 					});
 					await page.reload();
@@ -110,13 +115,22 @@ export default {
 					if (target === 2) return;
 					await page.locator('[data-step="2"] [data-skip]').click();
 
-					if (target === 3) return;
-					await page.locator("[data-next]").click();
-
-					if (target === 4) return;
-					await page.locator('[data-step="4"] [data-skip]').click();
+					// The outline's three lane screens follow the written questions: targets 3 to 5.
+					for (let lane = 3; lane < 5; lane++) {
+						if (target === lane) return;
+						await page.locator("[data-next]").click();
+					}
 
 					if (target === 5) return;
+					await page.locator("[data-next]").click();
+
+					if (target === 6) return;
+					await page.locator("[data-next]").click();
+
+					if (target === 7) return;
+					await page.locator('[data-step="4"] [data-skip]').click();
+
+					if (target === 8) return;
 					await page.locator("[name=name]").fill("Alex Example");
 					await page.locator("[name=email]").fill("alex@example.com");
 					await page.locator("[data-next]").click();
@@ -180,7 +194,7 @@ export default {
 				}
 			};
 
-			for (let question = 0; question < 7; question++) {
+			for (let question = 0; question < 10; question++) {
 				steps.push({
 					title: `Brief question ${question + 1}, ${viewport}`,
 					images: [
@@ -269,7 +283,7 @@ export default {
 												json: { ok: false, error: "Try again." },
 											}),
 										);
-									await prepare(page, 6, "workflow", false, async () => {
+									await prepare(page, 9, "workflow", false, async () => {
 										await page.waitForFunction(
 											() =>
 												!!document.querySelector("[name=cf-turnstile-response]")
@@ -340,7 +354,7 @@ export default {
 											},
 										});
 									});
-									await prepare(page, 6, "workflow", false, async () => {
+									await prepare(page, 9, "workflow", false, async () => {
 										await page
 											.locator("[name=cf-turnstile-response]")
 											.waitFor({ state: "attached", timeout: 30_000 });

@@ -14,12 +14,31 @@ import {
 } from "./fields";
 import type { SoftwarePath } from "./software-inquiry";
 
-export const LANES = ["purpose", "audience", "parts", "questions"] as const;
+/**
+ * The outline's lanes, one screen each. The purpose has no lane: the visitor's written answer is the statement of purpose
+ * (docs/plans/2026-11-living-brief.md, "No purpose screen").
+ */
+export const LANES = ["audience", "parts", "questions"] as const;
 
 export type Lane = (typeof LANES)[number];
 
-/** Each lane's heading, by path. */
-export const laneLabels: Record<SoftwarePath, Record<Lane, string>> = {
+/**
+ * The lanes an outline item may name when it is read back: the purpose too, which briefs sent before the purpose lane was
+ * dropped still hold. The server and the owner's page read them as before; the visitor's page never makes one.
+ */
+export const STORED_LANES = ["purpose", ...LANES] as const;
+
+export type StoredLane = (typeof STORED_LANES)[number];
+
+/**
+ * The data-steps of the lane screens in the brief's form (src/components/BriefBoard.astro), in lane order. A step is the
+ * screen's position among the form's sections. Drafts saved before the purpose screen was dropped numbered them 9 to 12
+ * (see `draftSection` in src/scripts/software-inquiry.ts).
+ */
+export const LANE_STEPS = [9, 10, 11] as const;
+
+/** Each lane's heading, by path. The purpose's is for the owner's reading of a stored outline. */
+export const laneLabels: Record<SoftwarePath, Record<StoredLane, string>> = {
 	website: {
 		purpose: "What it’s for",
 		audience: "Who it’s for",
@@ -43,27 +62,248 @@ export const laneLabels: Record<SoftwarePath, Record<Lane, string>> = {
 /** What "Add" asks for in each lane, by path: the label of the visitor's own note. */
 export const addLabels: Record<SoftwarePath, Record<Lane, string>> = {
 	website: {
-		purpose: "Add what it’s for",
 		audience: "Add who it’s for",
 		parts: "Add a page",
 		questions: "Add a question",
 	},
 	webapp: {
-		purpose: "Add what it’s for",
 		audience: "Add who uses it",
 		parts: "Add something people can do",
 		questions: "Add a question",
 	},
 	workflow: {
-		purpose: "Add what should change",
 		audience: "Add who does the work",
 		parts: "Add a step",
 		questions: "Add a question",
 	},
 };
 
+/**
+ * Each lane's screen heading in the outline steps, by path: the lane's question. The outline does not speak as the owner,
+ * so none says "I".
+ */
+export const laneQuestions: Record<SoftwarePath, Record<Lane, string>> = {
+	website: {
+		audience: "Who is it for?",
+		parts: "Which pages does it need?",
+		questions: "What’s still undecided?",
+	},
+	webapp: {
+		audience: "Who will use it?",
+		parts: "What should people be able to do?",
+		questions: "What’s still undecided?",
+	},
+	workflow: {
+		audience: "Who does the work?",
+		parts: "What are the steps today?",
+		questions: "What’s still undecided?",
+	},
+};
+
+/** The hint under a lane's heading when it lists cards, and when it lists none. */
+export const LANE_HINT = "From your answers. Keep, change or add your own.";
+
+export const LANE_HINT_EMPTY = "Add your own, or go on.";
+
+/**
+ * By hand (docs/plans/2026-11-living-brief.md, "By hand"): a lane screen while the outline's AI is off or has stopped. Each
+ * lane's hint says what to list, and the placeholder is one example answer, by path.
+ */
+const QUESTIONS_HINT =
+	"List anything you haven’t settled yet. It’s fine to leave this empty.";
+
+export const byHandHints: Record<SoftwarePath, Record<Lane, string>> = {
+	website: {
+		audience:
+			"List the people you want the site to reach. It keeps the design aimed at them.",
+		parts: "List the pages you have in mind. A rough list is fine.",
+		questions: QUESTIONS_HINT,
+	},
+	webapp: {
+		audience: "List the kinds of people who will use it.",
+		parts: "List the main things people should be able to do.",
+		questions: QUESTIONS_HINT,
+	},
+	workflow: {
+		audience: "List the people or roles who do this today.",
+		parts: "List the steps in the order they happen.",
+		questions: QUESTIONS_HINT,
+	},
+};
+
+/** An example answer for a by-hand field; with keywords it leads once one of them appears in the visitor's written answers. */
+type Example = readonly [text: string, ...keywords: string[]];
+
+const ex = (text: string, keywords = ""): Example => [
+	text,
+	...(keywords ? keywords.split(",").map((word) => word.trim()) : []),
+];
+
+/** A lane's ordered examples and the prompt shown once every one of them is already in the lane. */
+type ExampleList = {
+	readonly examples: readonly Example[];
+	readonly closing: string;
+};
+
+export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
+	website: {
+		audience: {
+			examples: [
+				ex(
+					"Fans who want show dates",
+					"band, music, fan, shows, gig, tour, concert",
+				),
+				ex("Venues that book us", "band, venue, gig, booking"),
+				ex("New customers"),
+				ex("Returning customers"),
+				ex("Press and bloggers"),
+				ex("Partners and suppliers"),
+			],
+			closing: "Another person or group",
+		},
+		parts: {
+			examples: [
+				ex("Shows", "shows, gig, tour, concert"),
+				ex("Music", "music, band, song, album"),
+				ex("Shop", "shop, sell, merch, product"),
+				ex("Mailing list", "mailing, newsletter, subscriber"),
+				ex("Booking", "booking, appointment, reserve, reservation"),
+				ex("Photos", "photo, gallery, portfolio"),
+				ex("Menu", "menu, restaurant, cafe, bakery, food"),
+				ex("Home"),
+				ex("About"),
+				ex("Services"),
+				ex("Contact"),
+				ex("Prices"),
+				ex("Questions and answers"),
+			],
+			closing: "Another page",
+		},
+		questions: {
+			examples: [
+				ex("Do we sell tickets on the site?", "ticket, shows, gig, concert"),
+				ex("Who will add new show dates?", "shows, gig, tour"),
+				ex("Who will write the text?"),
+				ex("Do we have photos to use?"),
+				ex("Do we need a mailing list sign-up?"),
+				ex("Should people be able to pay on the site?"),
+			],
+			closing: "Another open question",
+		},
+	},
+	webapp: {
+		audience: {
+			examples: [
+				ex("Front-desk staff", "desk, reception, clinic, salon, appointment"),
+				ex("Customers"),
+				ex("Staff"),
+				ex("Managers"),
+				ex("Admins"),
+			],
+			closing: "Another kind of user",
+		},
+		parts: {
+			examples: [
+				ex("Book an appointment", "booking, appointment, schedule"),
+				ex("Search past orders", "purchase"),
+				ex("Sign in"),
+				ex("Add a new record"),
+				ex("Search and filter"),
+				ex("Get a reminder"),
+				ex("Export a report"),
+			],
+			closing: "Another thing people can do",
+		},
+		questions: {
+			examples: [
+				ex("Do people need to sign in?"),
+				ex("Who can see what?"),
+				ex("Does it need to work on a phone?"),
+				ex("Where does the data live today?"),
+			],
+			closing: "Another open question",
+		},
+	},
+	workflow: {
+		audience: {
+			examples: [
+				ex("Office manager"),
+				ex("Sales team"),
+				ex("Bookkeeper"),
+				ex("The owner"),
+			],
+			closing: "Another person or role",
+		},
+		parts: {
+			examples: [
+				ex("Copy new orders into the spreadsheet", "spreadsheet"),
+				ex("Check the inbox for new requests"),
+				ex("Enter the details into the system"),
+				ex("Send a confirmation email"),
+				ex("Tell the team it\u2019s done"),
+			],
+			closing: "Another step",
+		},
+		questions: {
+			examples: [
+				ex("Who approves a refund?", "refund, payment, invoice"),
+				ex("What happens when something is missing?"),
+				ex("Which tools have to stay?"),
+				ex("How often does this happen?"),
+			],
+			closing: "Another open question",
+		},
+	},
+};
+
+/** Lower case with accents folded, so "café" and "cafe" are the same word. */
+const folded = (text: string) =>
+	text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+const keywordIn = (answers: string, word: string) => {
+	const key = folded(word);
+
+	// A plain plural (-s, -es), and -ies for a word ending in y.
+	const forms = key.endsWith("y")
+		? `${key.slice(0, -1)}(?:y|ies|ys)`
+		: `${key}(?:s|es)?`;
+
+	return new RegExp(`(?<![\\p{L}\\p{N}])${forms}(?![\\p{L}\\p{N}])`, "u").test(
+		folded(answers),
+	);
+};
+
+/**
+ * The example a by-hand field shows: the first example not yet in the lane, those that fit the visitor's written answers
+ * first (an example with keywords fits when one occurs there as a whole word, a plain plural allowed), then the plain
+ * ones, each in list order. When every example is in the lane (any letter case, set-aside cards included) it is the
+ * lane's closing prompt.
+ */
+export function nextExample(
+	path: SoftwarePath,
+	lane: Lane,
+	writtenAnswers: string,
+	laneCards: readonly string[],
+): string {
+	const { examples, closing } = byHandExamples[path][lane];
+	const have = new Set(laneCards.map((text) => text.trim().toLowerCase()));
+
+	const fits = examples.filter(
+		([, ...words]) =>
+			words.length > 0 && words.some((word) => keywordIn(writtenAnswers, word)),
+	);
+
+	const plain = examples.filter(([, ...words]) => words.length === 0);
+
+	const first = [...fits, ...plain].find(
+		([text]) => !have.has(text.trim().toLowerCase()),
+	);
+
+	return first ? first[0] : closing;
+}
+
 /** The most cards a lane holds, set-aside cards not counted. */
-export const laneLimits: Record<Lane, number> = {
+export const laneLimits: Record<StoredLane, number> = {
 	purpose: 2,
 	audience: 3,
 	parts: 8,
@@ -71,7 +311,7 @@ export const laneLimits: Record<Lane, number> = {
 };
 
 /** The longest text a card in each lane may have. */
-export const textLimits: Record<Lane, number> = {
+export const textLimits: Record<StoredLane, number> = {
 	purpose: 140,
 	audience: 80,
 	parts: 60,
@@ -82,8 +322,8 @@ export const QUOTE_MAX = 160;
 export const REASON_MAX = 100;
 export const ANSWER_MAX = 240;
 
-/** The most items an outline sent with a brief may have: every lane full. */
-export const OUTLINE_MAX = LANES.reduce(
+/** The most items an outline sent with a brief may have: every lane full, the stored purpose lane too. */
+export const OUTLINE_MAX = STORED_LANES.reduce(
 	(sum, lane) => sum + laneLimits[lane],
 	0,
 );
@@ -168,6 +408,28 @@ export type LaneConfig<L extends string> = {
 	readonly stands: (card: BoardCard<L>, answers: string) => boolean;
 };
 
+/**
+ * The reply held for the lane on screen (verification/brief-board.qnt `deferred`): the whole reply, of which only its
+ * additions have been applied. Its changes and withdrawals apply, under the rules of any reply, when the lane is left
+ * (`leaveLane`). Only the newest is held. Kept in memory only: a saved board drops it.
+ */
+export type HeldReply<L extends string = Lane> = {
+	readonly lane: L;
+	readonly n: number;
+	readonly reply: readonly ReplyCard<L>[];
+	readonly refs: readonly string[];
+	/**
+	 * The ideas (lane and words) any delivery added to the lane while it has been on screen, across replies that replaced
+	 * one another, each with the id of the card the delivery added for it: leaving does not add them again, whatever the
+	 * visitor did to those cards (edited, set aside).
+	 */
+	readonly added: readonly {
+		readonly id: string;
+		readonly lane: L;
+		readonly text: string;
+	}[];
+};
+
 export type Board<L extends string = Lane> = {
 	readonly cards: readonly BoardCard<L>[];
 	readonly nextId: number;
@@ -181,6 +443,13 @@ export type Board<L extends string = Lane> = {
 	 * the board and never sent to the model, because a removed note is gone as far as the visitor is concerned.
 	 */
 	readonly removed?: readonly RemovedNote<L>[];
+	/** The reply held for the lane on screen, if any. Never saved. */
+	readonly deferred?: HeldReply<L>;
+	/**
+	 * The ids of the cards each lane listed (set-aside ones not counted) when the visitor last left it. A lane not in it
+	 * has not been visited. Saved with the board.
+	 */
+	readonly seen: Partial<Record<L, readonly string[]>>;
 };
 
 export const emptyBoard = <L extends string = Lane>(): Board<L> => ({
@@ -189,6 +458,7 @@ export const emptyBoard = <L extends string = Lane>(): Board<L> => ({
 	sent: 0,
 	applied: 0,
 	history: [],
+	seen: {},
 });
 
 export const isOwned = (card: Pick<BoardCard, "status">) =>
@@ -199,6 +469,111 @@ export const laneCount = <L extends string>(board: Board<L>, lane: L) =>
 	board.cards.filter(
 		(card) => card.lane === lane && card.status !== "dismissed",
 	).length;
+
+/** Whether a lane lists a card the AI made: any card on the screen that is not the visitor's own note. */
+export const hasAiCard = (board: Board, lane: Lane) =>
+	board.cards.some(
+		(card) =>
+			card.lane === lane &&
+			card.status !== "dismissed" &&
+			card.status !== "wrote",
+	);
+
+/** What a lane screen shows, apart from its cards. */
+export type LaneScreen = {
+	readonly heading: string;
+	readonly hint: string;
+	/** An example answer for the open field; "" with the AI on. */
+	readonly placeholder: string;
+	/** Whether the answer field is open on the screen, with an "Add" button, instead of behind the lane's "Add" link. */
+	readonly fieldOpen: boolean;
+	/** Whether "Skip these, no AI outline" is offered. */
+	readonly skipLink: boolean;
+	/** Whether Undo is on the screen (with the AI on it always is, disabled when there is nothing to undo). */
+	readonly undoShown: boolean;
+	/** Whether a card the visitor wrote says "Your note": not in a lane where every card is the visitor's own, by hand. */
+	readonly ownLabel: boolean;
+};
+
+/** The lane screen as the page draws it: the AI on as it always was, by hand as the design describes. */
+export function laneScreen(input: {
+	readonly path: SoftwarePath;
+	readonly lane: Lane;
+	readonly board: Board;
+	readonly byHand: boolean;
+	/** What Undo would undo, or null when there is nothing to undo. */
+	readonly undoLabel: string | null;
+	/** The visitor's written answers joined, which pick the example the field shows. */
+	readonly answers?: string;
+}): LaneScreen {
+	const { path, lane, board, byHand, undoLabel, answers = "" } = input;
+	const heading = laneQuestions[path][lane];
+
+	if (!byHand)
+		return {
+			heading,
+			hint: laneCount(board, lane) ? LANE_HINT : LANE_HINT_EMPTY,
+			placeholder: "",
+			fieldOpen: false,
+			skipLink: true,
+			undoShown: true,
+			ownLabel: true,
+		};
+
+	return {
+		heading,
+		hint: byHandHints[path][lane],
+		placeholder: nextExample(
+			path,
+			lane,
+			answers,
+			board.cards.filter((card) => card.lane === lane).map((card) => card.text),
+		),
+		fieldOpen: true,
+		skipLink: false,
+		undoShown: undoLabel !== null,
+		ownLabel: hasAiCard(board, lane),
+	};
+}
+
+/**
+ * The note an open "Add" editor holds when the visitor leaves the lane screen (Next, Back or a review Edit link): its
+ * words as Add would take them, or null when the editor is closed or blank. By hand the editor is always open; with the
+ * AI on it is open between "Add" and its Add or Cancel.
+ */
+export function noteOnLeaving(input: {
+	readonly editorOpen: boolean;
+	readonly text: string;
+}): string | null {
+	if (!input.editorOpen) return null;
+
+	return oneLine(input.text) || null;
+}
+
+/**
+ * The board after the visitor leaves with a card's editor still open: the edit (or the answer to a question) as the
+ * editor's own confirm would apply it. Null when nothing is to be applied: the words are those the editor opened with
+ * (so a card reworded under an untouched editor keeps its new words), or confirming them would change nothing (a blank
+ * edit). An emptied answer is applied, as confirming would clear that answer.
+ */
+export function editOnLeaving(input: {
+	readonly board: Board;
+	readonly id: string;
+	readonly mode: "edit" | "answer";
+	/** What the editor holds now. */
+	readonly text: string;
+	/** What the editor held when it opened. */
+	readonly opened: string;
+}): Board | null {
+	const { board, id, mode, text, opened } = input;
+
+	if (text === opened) return null;
+
+	const next =
+		mode === "edit" ? editCard(board, id, text) : answerCard(board, id, text);
+
+	return next === board ? null : next;
+}
 
 // ---- Text ---------------------------------------------------------------------------------------------------------
 
@@ -964,40 +1339,51 @@ export type Applied<L extends string = Lane> = {
 	readonly withdrawn: number;
 };
 
-/**
- * Applies reply number `n` to the board as it is now. Nothing changes when the reply is older than one already applied
- * or the board is paused. Otherwise each reply card that names an unowned card (by its id, or by saying the same idea)
- * updates it, if the reply's request was sent after the card last became unowned; one that names an owned card, or a
- * set-aside idea, is left out. An unowned card the reply leaves out is withdrawn, again only if the request was sent
- * after it last became unowned; a card the reply names in `refs` (or by a card left out below) is not left out. Then each
- * new idea is added at the end of its lane, within the lane's limit as it is after the withdrawals. A card read from the
- * answers is checked against the answers as they are now (`answers`), not as they were sent.
- */
-export function applyReply(
-	board: Board,
-	reply: readonly ReplyCard[],
-	n: number,
-	answers: string,
-	paused: boolean,
-	refs: readonly string[] = [],
-): Applied {
-	return applyReplyIn(BRIEF_LANES, board, reply, n, answers, paused, refs);
-}
+/** What one pass over a reply may do (see applyReply and leaveLane). */
+type Scope<L extends string> = {
+	/** Whether the reply's new cards are added. */
+	readonly add: boolean;
+	/** A lane whose listed cards the pass leaves alone: the lane on screen. */
+	readonly skip: L | null;
+	/** The only lane whose cards the pass may change or withdraw (null: any). */
+	readonly only: L | null;
+	/**
+	 * Ideas the pass does not add as new cards, though the reply carries them (a lane's ideas a delivery already added),
+	 * each with the id of the card the delivery added: no other card is reworded into the idea, and that card may be.
+	 */
+	readonly notAdded: readonly {
+		readonly id: string;
+		readonly lane: L;
+		readonly text: string;
+	}[];
+};
 
-/** applyReply for any set of lanes: the same rules, with the lanes' limits and their own test of whether a card stands. */
-export function applyReplyIn<L extends string>(
+/**
+ * One pass of reply number `n` over the board as it is now: the shared body of `applyReply` and `leaveLane`. Each reply
+ * card that names an unowned card (by its id, or by saying the same idea) updates it, if the reply's request was sent
+ * after the card last became unowned; one that names an owned card, or a set-aside idea, is left out. An unowned card the
+ * reply leaves out is withdrawn, again only if the request was sent after it last became unowned; a card the reply names
+ * in `refs` (or by a card left out below) is not left out. Then, when the scope adds, each new idea is added at the end
+ * of its lane, within the lane's limit as it is after the withdrawals. A card read from the answers is checked against
+ * the answers as they are now (`answers`), not as they were sent. The scope keeps the pass off the cards of one lane, or
+ * on those of one lane only.
+ */
+function reconcile<L extends string>(
 	config: LaneConfig<L>,
 	board: Board<L>,
 	reply: readonly ReplyCard<L>[],
 	n: number,
 	answers: string,
-	paused: boolean,
-	refs: readonly string[] = [],
-): Applied<L> {
-	if (paused || n <= board.applied)
-		return { board, added: 0, updated: 0, withdrawn: 0 };
-
+	refs: readonly string[],
+	scope: Scope<L>,
+): Applied<L> & {
+	readonly addedItems: readonly { id: string; lane: L; text: string }[];
+} {
 	const cards = [...board.cards];
+
+	// Whether the pass may change or withdraw a card of this lane.
+	const touches = (lane: L) =>
+		lane !== scope.skip && (scope.only === null || lane === scope.only);
 
 	// A card named by a reply card that was left out stays, while what it says is still supported: a suggestion, or a
 	// card read from the answers whose passage is still in them. One whose passage the visitor deleted is withdrawn.
@@ -1062,10 +1448,10 @@ export function applyReplyIn<L extends string>(
 		const card = cards[index];
 		named.add(card.id);
 
-		if (!mayChange(card, n)) continue;
+		if (!mayChange(card, n) || !touches(card.lane)) continue;
 
-		// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, a duplicate, or a
-		// new idea earlier in this reply.
+		// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, a duplicate, a
+		// new idea earlier in this reply, or one a delivery added during the visit (`notAdded`).
 		if (
 			cards.some(
 				(other, at) =>
@@ -1075,6 +1461,12 @@ export function applyReplyIn<L extends string>(
 			) ||
 			fresh.some(
 				(other) => other.lane === item.lane && sameIdea(other.text, item.text),
+			) ||
+			scope.notAdded.some(
+				(idea) =>
+					idea.lane === item.lane &&
+					sameIdea(idea.text, item.text) &&
+					idea.id !== card.id,
 			) ||
 			removedIdea(board, item)
 		)
@@ -1100,15 +1492,23 @@ export function applyReplyIn<L extends string>(
 	}
 
 	const kept = cards.filter(
-		(card) => named.has(card.id) || !mayChange(card, n),
+		(card) => named.has(card.id) || !mayChange(card, n) || !touches(card.lane),
 	);
 
 	let nextId = board.nextId,
 		added = 0;
 
-	for (const item of fresh) {
-		// A card reworded later in this reply may now say the new idea.
+	const addedItems: { id: string; lane: L; text: string }[] = [];
+
+	for (const item of scope.add ? fresh : []) {
+		// A pass limited to one lane adds to that lane only: the others took the reply in full when it arrived.
+		if (scope.only !== null && item.lane !== scope.only) continue;
+
+		// A card reworded later in this reply may now say the new idea; an idea a delivery already added is not added again.
 		if (
+			scope.notAdded.some(
+				(idea) => idea.lane === item.lane && sameIdea(idea.text, item.text),
+			) ||
 			kept.some(
 				(card) => card.lane === item.lane && sameIdea(card.text, item.text),
 			) ||
@@ -1118,8 +1518,10 @@ export function applyReplyIn<L extends string>(
 		)
 			continue;
 
+		const id = `c${nextId++}`;
+
 		kept.push({
-			id: `c${nextId++}`,
+			id,
 			lane: item.lane,
 			text: item.text,
 			status: "proposed",
@@ -1131,14 +1533,218 @@ export function applyReplyIn<L extends string>(
 			edited: false,
 		});
 		added++;
+		addedItems.push({ id, lane: item.lane, text: item.text });
 	}
 
 	return {
-		board: { ...board, cards: kept, nextId, applied: n },
+		board: { ...board, cards: kept, nextId },
+		addedItems,
 		added,
 		updated,
 		withdrawn: cards.length - (kept.length - added),
 	};
+}
+
+/**
+ * Applies reply number `n` to the board as it is now (see `reconcile`). Nothing changes when the reply is older than one
+ * already applied or the board is paused. The lane on screen (`onScreen`, null when a written question or another step
+ * is showing) only receives the reply's new cards, at the end of its list: nothing listed there changes or leaves while
+ * the visitor looks at it. The whole reply is held for it (`board.deferred`, replacing an older one) and the rest of it is
+ * applied by `leaveLane`. Every other lane takes the reply in full. A card the reply adds to the lane on screen is
+ * stamped like any other (`since`), so the same reply's held changes cannot reach it.
+ */
+export function applyReply(
+	board: Board,
+	reply: readonly ReplyCard[],
+	n: number,
+	answers: string,
+	paused: boolean,
+	onScreen: Lane | null,
+	refs: readonly string[] = [],
+): Applied {
+	return applyReplyIn(
+		BRIEF_LANES,
+		board,
+		reply,
+		n,
+		answers,
+		paused,
+		refs,
+		onScreen,
+	);
+}
+
+/**
+ * applyReply for any set of lanes: the same rules, with the lanes' limits and their own test of whether a card stands.
+ * `onScreen` is the lane the visitor is looking at, if the board has such a lane (the offer board has none).
+ */
+export function applyReplyIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+	reply: readonly ReplyCard<L>[],
+	n: number,
+	answers: string,
+	paused: boolean,
+	refs: readonly string[] = [],
+	onScreen: L | null = null,
+): Applied<L> {
+	if (paused || n <= board.applied)
+		return { board, added: 0, updated: 0, withdrawn: 0 };
+
+	const result = reconcile(config, board, reply, n, answers, refs, {
+		add: true,
+		skip: onScreen,
+		only: null,
+		notAdded: [],
+	});
+
+	const { addedItems, ...applied } = result;
+
+	return {
+		...applied,
+		board: {
+			...result.board,
+			applied: n,
+			deferred: onScreen
+				? {
+						lane: onScreen,
+						n,
+						reply,
+						refs,
+						// A newer reply for the same lane keeps what the older deliveries added and extends it.
+						added: [
+							...(board.deferred?.lane === onScreen
+								? board.deferred.added
+								: []),
+							...addedItems,
+						],
+					}
+				: result.board.deferred,
+		},
+	};
+}
+
+/**
+ * The visitor leaves `lane`'s screen: the reply held for it is applied now, to that lane's cards only, as any reply is
+ * (owned cards left alone, `since` respected, set-aside ideas not offered again, passages checked against `answers` as
+ * they are now, rewording never into another card's idea), with the new cards the delivery could not add while the lane
+ * was full. Cards it did add are not touched again (their `since` is not before the reply). A held reply is dropped, not applied, when the board is
+ * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
+ * listed before the held reply applied, so a card the leave adds counts as new and one it withdraws as removed. A
+ * idea a delivery added to the lane while it was on screen (any reply's, including one a newer reply replaced) is not
+ * added again, and no card but the one the delivery added for it (known by its id, not by its words) is reworded into it, though a reply still carries it: the held reply is applied whole,
+ * so the card still counts as named, and the visitor may have edited it or set it aside.
+ */
+export function leaveLane(
+	board: Board,
+	lane: Lane,
+	answers: string,
+	paused = false,
+): Board {
+	const { deferred, ...rest } = board;
+
+	let next: Board = rest;
+
+	// What the visitor saw: the lane as it was before the held reply applies, so what the leave adds is new to them and
+	// what it withdraws is removed.
+	const saw = listed(rest, lane);
+
+	if (
+		deferred &&
+		deferred.lane === lane &&
+		!paused &&
+		deferred.n >= board.applied
+	)
+		next = reconcile(
+			BRIEF_LANES,
+			rest,
+			deferred.reply,
+			deferred.n,
+			answers,
+			deferred.refs,
+			{ add: true, skip: null, only: lane, notAdded: deferred.added },
+		).board;
+
+	return {
+		...next,
+		seen: { ...next.seen, [lane]: saw },
+	};
+}
+
+/** The ids of the cards a lane lists: all but the set-aside ones. */
+const listed = (board: Board, lane: Lane) =>
+	board.cards
+		.filter((card) => card.lane === lane && card.status !== "dismissed")
+		.map((card) => card.id);
+
+/** How a lane differs from when the visitor last left it: cards that are new, and cards that are gone. */
+export type LaneChanges = { readonly added: number; readonly removed: number };
+
+/** What changed in a lane since it was last left; zeros when it has not been visited. */
+export function laneChanges(board: Board, lane: Lane): LaneChanges {
+	const before = board.seen[lane];
+
+	if (!before) return { added: 0, removed: 0 };
+	const now = listed(board, lane);
+
+	return {
+		added: now.filter((id) => !before.includes(id)).length,
+		removed: before.filter((id) => !now.includes(id)).length,
+	};
+}
+
+/**
+ * The visitor's own action (Keep, Edit, Answer, Not this, Bring back, Add, Remove, Undo) took the board from `before` to
+ * `after`: each visited lane's last-seen list takes up that action's changes to what the lane lists, so the lane's status
+ * line only ever counts what replies changed. A card the visitor put on the list is not "new" and one they took off is
+ * not "removed"; what replies changed before the action stays counted.
+ */
+export function ownChange(before: Board, after: Board): Board {
+	const changed = LANES.flatMap((lane): [Lane, readonly string[]][] => {
+		const last = after.seen[lane];
+
+		if (!last) return [];
+		const was = listed(before, lane);
+		const now = listed(after, lane);
+		const gone = was.filter((id) => !now.includes(id));
+		const put = now.filter((id) => !was.includes(id));
+
+		return gone.length || put.length
+			? [[lane, [...last.filter((id) => !gone.includes(id)), ...put]]]
+			: [];
+	});
+
+	return changed.length
+		? { ...after, seen: { ...after.seen, ...Object.fromEntries(changed) } }
+		: after;
+}
+
+/** The line a lane shows under its hint after an answer changed: "" for no change, else its non-zero parts. */
+export function laneChangesLine(changes: LaneChanges): string {
+	const parts = [
+		changes.added > 0 ? `${changes.added} new` : "",
+		changes.removed > 0 ? `${changes.removed} removed` : "",
+	].filter(Boolean);
+
+	return parts.length ? `${parts.join(", ")} since you last looked` : "";
+}
+
+/**
+ * The open cards read from the answers that their lane has not shown the visitor: still unowned, still grounded in the
+ * answers, and not in the lane's last-seen list (every one, for a lane never visited). They are sent unless removed, so
+ * the review step lists them.
+ */
+export function unseenFromAnswers(board: Board, answers: string): BoardCard[] {
+	return LANES.flatMap((lane) =>
+		board.cards.filter(
+			(card) =>
+				card.lane === lane &&
+				card.status === "proposed" &&
+				card.basis === "said" &&
+				standsOn(card, answers) &&
+				!(board.seen[lane] ?? []).includes(card.id),
+		),
+	);
 }
 
 // ---- The visitor's actions ----------------------------------------------------------------------------------------
@@ -1591,7 +2197,7 @@ export const answerText = (
 export type OutlineOrigin = "answers" | "kept" | "edited" | "wrote";
 
 export type OutlineItem = {
-	readonly lane: Lane;
+	readonly lane: StoredLane;
 	readonly text: string;
 	readonly origin: OutlineOrigin;
 	readonly quote?: string;
@@ -1650,7 +2256,7 @@ export function briefOutline(board: Board, answers: string): OutlineItem[] {
 }
 
 const outlineItemFields = {
-	lane: oneOf(LANES),
+	lane: oneOf(STORED_LANES),
 	text: text(textLimits.purpose),
 	origin: oneOf(["answers", "kept", "edited", "wrote"]),
 	quote: text(QUOTE_MAX),
@@ -1685,7 +2291,7 @@ function readOutlineItems(raw: RawValue): OutlineItem[] | null {
 
 /** The sentence a visitor sees when the outline sent does not match the brief. */
 export const OUTLINE_CHANGED =
-	"Your brief outline no longer matches your answers. Go back to your first answer, check the outline and send again.";
+	"Your brief outline no longer matches your answers. Go back to the outline screens, check them and send again.";
 
 /**
  * The outline sent with a brief, read on the server: undefined when none was sent; the items when each is within its
@@ -1703,7 +2309,7 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 
 	if (!read) return { ok: false, error: OUTLINE_CHANGED };
 
-	const counts: Record<Lane, number> = {
+	const counts: Record<StoredLane, number> = {
 		purpose: 0,
 		audience: 0,
 		parts: 0,
@@ -1802,7 +2408,7 @@ const savedCardFields = {
 		Schema.isPattern(/^c\d{1,6}$/, { message: "Not a card id." }),
 	),
 	lane: oneOf(LANES),
-	text: text(textLimits.purpose),
+	text: text(textLimits.questions),
 	status: oneOf(["proposed", "kept", "edited", "dismissed", "wrote"]),
 	basis: oneOf(["said", "suggested", "none"]),
 	quote: text(QUOTE_MAX),
@@ -1831,17 +2437,45 @@ function savedCards(board: Board) {
 	);
 }
 
-/** What a page saves: each path's cards, and whether the board is paused or set aside for the plain form. */
+/** What a page saves: each path's cards, and whether the outline is stopped (a page saves "plain" for a skipped outline, "paused" from before it). */
 export const savedBoards = (saved: SavedBoards) => ({
 	boards: Object.fromEntries(
 		Object.entries(saved.boards).map(([path, board]) => [
 			path,
-			{ cards: savedCards(board).map(({ since: _since, ...card }) => card) },
+			{
+				cards: savedCards(board).map(({ since: _since, ...card }) => card),
+				seen: board.seen,
+			},
 		]),
 	),
 	paused: saved.paused,
 	plain: saved.plain,
 });
+
+/**
+ * The last-seen lists read back: for each lane, its distinct card ids, at most the lane's limit plus the history's length
+ * (Undo can leave a lane over its limit for a while, one card per step). Cutting to the limit would make a seen card
+ * come back as new; the larger bound only stops a list that is not one this page saved.
+ */
+function readSeen(raw: RawValue): Board["seen"] {
+	const seen: Partial<Record<Lane, readonly string[]>> = {};
+
+	for (const lane of LANES) {
+		const ids = listOf(ownField(raw, lane), SAVED_MAX);
+
+		if (!ids) continue;
+
+		seen[lane] = [
+			...new Set(
+				ids.filter(
+					(id): id is string => Predicate.isString(id) && /^c\d{1,6}$/.test(id),
+				),
+			),
+		].slice(0, laneLimits[lane] + HISTORY_MAX);
+	}
+
+	return seen;
+}
 
 /**
  * The boards read back from storage, which anything may have written: each path's cards that are well formed (a lane's
@@ -1898,12 +2532,26 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 			});
 		}
 
+		const seen = readSeen(
+			ownField(ownField(ownField(raw, "boards"), path), "seen"),
+		);
+
+		// The next id is above every id the page remembers: a withdrawn card's id can still be in a last-seen list, and a
+		// new card that took it would count as already seen.
 		const highest = Math.max(
 			0,
 			...cards.map((card) => Number(card.id.slice(1))),
+			...Object.values(seen).flatMap((ids) =>
+				(ids ?? []).map((id) => Number(id.slice(1))),
+			),
 		);
 
-		boards[path] = { ...emptyBoard(), cards, nextId: highest + 1 };
+		boards[path] = {
+			...emptyBoard(),
+			cards,
+			nextId: highest + 1,
+			seen,
+		};
 	}
 
 	return {

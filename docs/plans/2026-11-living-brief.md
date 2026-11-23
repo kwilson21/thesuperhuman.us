@@ -3,30 +3,61 @@
 Status: on from the merge of PR #362. Live interpretation is behind `SOFTWARE_BOARD_ENABLED`, `"true"` in
 `wrangler.jsonc`; `"false"` turns it off. On November 22, 2026 the owner approved moving the board to a faster model and
 switching it on; the order and the limits were decided under his delegation (`docs/prelaunch-qa-2026-11-22-board-on.md`).
-Built on PR #286 (example answers and the contact confirmation), which it does not change.
+Built on PR #286 (example answers and the contact confirmation), which it does not change. On November 22, 2026 the
+owner approved showing the outline as its own steps (sections 1 and 4, and rule 6 of section 2), replacing the board beside the answer box.
 
 Inspired by "Beyond Taking Turns": instead of a chatbot that waits for its turn, the visitor and the system shape one
-shared artifact at the same time. The visitor keeps writing; a board beside the answer boxes fills in an outline of the
-project; the visitor keeps, edits, answers or sets aside what appears, and their choices always win.
+shared artifact at the same time. The visitor keeps writing; an outline of the project fills in behind the written
+questions and is shown on three screens of its own, one for each lane; the visitor keeps, edits, answers or sets aside
+what appears, and their choices always win.
 
 ## 1. What the visitor sees
 
-The project brief at `/software/start` keeps every step it has today. On the written questions (and the website's two
-extra steps) a board titled "Your brief so far" sits beside the answer box on a computer and below the step's buttons
-on a phone; the page calls its AI "the outline", apart from the answer boxes' "suggestions". The review step lists the
-outline as it will be sent. The board's height is bounded: on a computer it is a sticky panel no taller than the
-screen, with its heading, status and controls fixed and the cards scrolling inside; on a phone the cards scroll in a box
-about three fifths of the screen tall. However many cards arrive, the page does not grow. It has four lanes, named for
-the chosen path:
+The project brief at `/software/start` is a step-by-step brief. The written questions (and the website's two extra
+steps) are one column: the heading, a hint, "See example answers", the answer box, and under it the AI line with Privacy
+and "Turn off". While the outline is part of the brief, three screens follow the written questions, one for each lane of
+the outline, in lane order. The plans, with the outline in them, are:
+
+- Website: path, purpose, the three lane screens, what you have today, who updates it, timing, budget, contact, review
+  (11 dots).
+- Web app and workflow: path, two written questions, the three lane screens, timing, budget, contact, review (10 dots).
+
+The lane screens are in the plan whatever the cards are, so the dots never change because an answer changed. The page
+calls its AI "the outline", apart from the answer boxes' "suggestions". The review step lists the outline as it will be
+sent. The lanes, named for the chosen path:
 
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|
-| `purpose` | What it’s for | What it’s for | What should change |
 | `audience` | Who it’s for | Who uses it | Who does the work |
 | `parts` | Pages | What people can do | Steps today |
 | `questions` | Open questions | Open questions | Open questions |
 
-Every item on the board is a card with a visible origin, in words and in outline, never colour alone:
+A lane screen has the lane's question as its heading (below), a one-line hint, a status line, the lane's cards in a list
+that scrolls inside a bounded box, about three fifths of the screen's height and at most 34rem, with one hairline below it
+(however many cards arrive, the page does not grow; a card the visitor adds or brings back is scrolled into view), the lane's "Add" control, the
+lane's own "Set aside" list, Undo, and one link, "Skip these, no AI outline". The outline does not speak as the owner, so
+no heading says "I".
+
+Words left in an open editor when the visitor leaves a lane screen (Next, Back or a review Edit link) are applied as if
+they had confirmed them, with the AI on or off: the open "Add" field adds its note, and a card being edited in place
+takes its edit or answer. A blank "Add" editor adds nothing. An editor left unchanged (its words are those it opened
+with) is closed without applying anything, so a card the outline reworded meanwhile keeps its new words. Emptying an
+answer and leaving clears that answer, as confirming would. If a note cannot be added (the list is full) the visitor
+stays on the screen and sees the usual reason, so nothing typed is dropped. "Skip these, no AI outline" applies what it
+can, drops what a full list refuses without showing a refusal, closes every editor and never blocks.
+
+| Lane | Website | Web app | Workflow |
+|---|---|---|---|
+| `audience` | Who is it for? | Who will use it? | Who does the work? |
+| `parts` | Which pages does it need? | What should people be able to do? | What are the steps today? |
+| `questions` | What’s still undecided? | What’s still undecided? | What’s still undecided? |
+
+The hint with cards is "From your answers. Keep, change or add your own." and with none "Add your own, or go on." An empty
+lane shows its question and Add. The status line (readable by screen readers) says "Reading your answers…" while a
+request waits or is in flight; after an answer changed, it says what is different in the lane since the visitor last left
+it, for example "1 new, 1 removed since you last looked", only the parts that are not zero.
+
+Every item is a card with a visible origin, in words and in outline, never colour alone:
 
 | Origin | Label | Outline | Sent with the brief? |
 |---|---|---|---|
@@ -37,16 +68,93 @@ Every item on the board is a card with a visible origin, in words and in outline
 | A note the visitor added | “Your note” | solid | Yes |
 | A question the visitor answered | the answer under the question | solid | Yes, with the answer |
 
-Actions on a card: Keep, Edit, Not this (sets it aside), and on a question, Answer. Set-aside cards go to a closed
-"Set aside" list with Bring back (an edited card comes back as edited). Each lane has "Add" for the visitor's own note.
-Add and Bring back are never disabled: on a full list they say why ("“Pages” is full. Use Not this on one of its cards,
-or remove a note, then try again.") after the control and to screen readers. A short explanation at the top of the cards says what
-the labels mean and is true whether the outline is on, paused or stopped, so it never changes.
-The board header holds a status line (readable by screen readers; changes that matter are also announced), "Pause the
-outline" (one toggle, `aria-pressed`), and Undo, whose accessible name and tooltip say what it will undo; Ctrl or Cmd+Z
-inside the board does the same. "Use the plain form" hides the board and sends no outline; "Show the outline" on each
-step with the board brings it back. The existing "Turn off" for AI suggestions also stops the outline's AI; the board
-then works by hand.
+Actions on a card: Keep, Edit, Not this (sets it aside), and on a question, Answer. Set-aside cards go to the lane's
+closed "Set aside" list with Bring back (an edited card comes back as edited). Each lane has "Add" for the visitor's own
+note. Add and Bring back are never disabled: on a full list they say why ("“Pages” is full. Use Not this on one of its
+cards, or remove a note, then try again.") after the control and to screen readers. Undo's accessible name and tooltip
+say what it will undo; Ctrl or Cmd+Z inside a lane screen does the same.
+
+The review step lists the outline as it will be sent and, when a card read from the answers arrived in a lane after the
+visitor last left it, a group "New since you last looked" with each such card and a link to its lane screen. Next is
+never blocked.
+
+**Without the AI.** "Turn off" under an answer box stops the outline's AI; the three lane screens stay and work by hand.
+"Skip these, no AI outline" on a lane screen takes the three screens out of the plan, sends no outline and stops its
+requests; the review step then offers "Add the outline back", which restores the three screens and the cards. At a limit,
+after three failures or with the switch off on the server, the lane screens work by hand. With
+`SOFTWARE_BOARD_ENABLED` off the page has no lane screens.
+
+**No purpose screen** (owner decision, 2026-11-23). Going from the written question "What’s the website for?" to a lane
+screen "Is this what it’s for?" asked the same thing twice. The purpose lane therefore has no screen on any path, with
+the AI on or off: the visitor's own written answer is the statement of purpose. The outline's screens are three
+(`audience`, `parts`, `questions`), the review step lists those three lanes, and a purpose card is neither asked for,
+shown nor sent. Briefs already stored
+with purpose cards still show them to the owner, who sees them under "What it’s for" ("What should change" for a
+workflow). The model is no longer asked for a purpose card and its reply schema has no `purpose` lane; the server still
+reads a purpose item in a stored or older outline sent with a brief, and the visitor's page drops purpose cards from a
+saved draft without sending them.
+
+**By hand** (owner decision, 2026-11-23). The outline is context the owner needs and a way for the visitor to order
+their thoughts, so with no AI its screens are ordinary questions of the brief, not an optional extra. A lane screen is
+by hand while the outline's AI is turned off or has stopped asking (a limit, three failures, the server switch); it is
+not by hand while the visitor has skipped the outline, because the screens are then out of the plan. By hand:
+
+- The heading is the lane's question as above.
+- The hint is the lane's own by-hand hint (below) in place of "From your answers…" and "Add your own, or go on."
+- The answer field is open on the screen with an example placeholder; it is not behind the lane's "Add" link. The field and
+  "Add" are one bordered control: a wrapper carries the field's border, radius and background, the field is borderless
+  inside it, and "Add" sits at its right inner edge as an underlined text button in the style of Edit and Remove, with a
+  44px target and never over typed text. The wrapper shows the site's focus ring while the field has focus, and Add shows
+  its own focus. The field's label is read by screen readers but not shown, since the heading and hint say what to type.
+  Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds nothing and
+  Next is never blocked. The AI-on editor is unchanged.
+- The example changes as notes are added (no AI is involved): see the examples below.
+- The field cannot be closed, so Escape keeps its words. A switch to by hand while the visitor is typing keeps the words
+  and the focus. Enter that confirms a word in an input method adds nothing.
+- There is no "Skip these, no AI outline" link. Undo shows only when there is something to undo.
+- The status line is empty in a lane with no card the AI made. In a lane that has one (the AI stopped part-way), it
+  keeps the one sentence that says the outline stopped, so the visitor knows why nothing new arrives.
+- A card the visitor wrote shows no "Your note" label in a lane where every card is the visitor's own. Such a note is a
+  compact row: its text on the left, Edit and Remove on the right (under the text on a narrow screen), a hairline
+  between rows and no box around each note. A newly added note gets no accent edge or border colour, only the short
+  fade-in (not with reduced motion); the AI-on boxed cards keep their new-card outline.
+
+| Lane | Website | Web app | Workflow |
+|---|---|---|---|
+| `audience` hint | List the people you want the site to reach. It keeps the design aimed at them. | List the kinds of people who will use it. | List the people or roles who do this today. |
+| `parts` hint | List the pages you have in mind. A rough list is fine. | List the main things people should be able to do. | List the steps in the order they happen. |
+| `questions` hint | List anything you haven’t settled yet. It’s fine to leave this empty. | (same) | (same) |
+
+**The example in the field.** Each lane and path has an ordered list of examples, and an example may carry keywords.
+The candidates are the examples with no keywords plus those with a keyword that occurs as a whole word in the visitor's
+written answers (case-insensitive, accents ignored, a plain plural allowed, and -ies for a word ending in y). Everyday verbs such as show, order, store and book are deliberately not keywords (the plural "shows" is one, so "upcoming shows" matches and "show my work" does not). Keyword-matched examples come first, in list order, then the
+plain ones in list order. The placeholder is the first candidate not already in the lane (compared trimmed and
+case-insensitively with every card in that lane, set-aside ones included); when none is left it is the lane's closing
+prompt. It is recomputed after every add, edit, remove and undo, and when the screen is shown. Examples are `text | keywords`.
+
+| Path / lane | Examples, in order | Closing prompt |
+|---|---|---|
+| Website / `audience` | Fans who want show dates \| band, music, fan, shows, gig, tour, concert; Venues that book us \| band, venue, gig, booking; New customers; Returning customers; Press and bloggers; Partners and suppliers | Another person or group |
+| Website / `parts` | Shows \| shows, gig, tour, concert; Music \| music, band, song, album; Shop \| shop, sell, merch, product; Mailing list \| mailing, newsletter, subscriber; Booking \| booking, appointment, reserve, reservation; Photos \| photo, gallery, portfolio; Menu \| menu, restaurant, cafe, bakery, food; Home; About; Services; Contact; Prices; Questions and answers | Another page |
+| Website / `questions` | Do we sell tickets on the site? \| ticket, shows, gig, concert; Who will add new show dates? \| shows, gig, tour; Who will write the text?; Do we have photos to use?; Do we need a mailing list sign-up?; Should people be able to pay on the site? | Another open question |
+| Web app / `audience` | Front-desk staff \| desk, reception, clinic, salon, appointment; Customers; Staff; Managers; Admins | Another kind of user |
+| Web app / `parts` | Book an appointment \| booking, appointment, schedule; Search past orders \| purchase; Sign in; Add a new record; Search and filter; Get a reminder; Export a report | Another thing people can do |
+| Web app / `questions` | Do people need to sign in?; Who can see what?; Does it need to work on a phone?; Where does the data live today? | Another open question |
+| Workflow / `audience` | Office manager; Sales team; Bookkeeper; The owner | Another person or role |
+| Workflow / `parts` | Copy new orders into the spreadsheet \| spreadsheet; Check the inbox for new requests; Enter the details into the system; Send a confirmation email; Tell the team it’s done | Another step |
+| Workflow / `questions` | Who approves a refund? \| refund, payment, invoice; What happens when something is missing?; Which tools have to stay?; How often does this happen? | Another open question |
+
+The status line while the outline is retrying after a failed update says "The outline couldn’t update just now. Trying
+again shortly." only while a retry is in fact coming; a request in flight says "Reading your answers…".
+
+**Approaches considered.** The owner's feedback on the first page, with the outline in a board beside the answer box, was
+that it was too much at once.
+
+| Approach | Trade-off | Outcome |
+|---|---|---|
+| Keep the board on the answer screens, under the box (a sideways strip or a short list) | Smallest change, but the outline still competes with the writing | Rejected by the owner |
+| One outline screen after the written answers, four lanes side by side | One extra step; sideways scrolling on narrow screens | Not chosen |
+| One screen per lane, each phrased as a question | Reads like the rest of the brief; three extra steps | Chosen |
 
 ## 2. The rules
 
@@ -80,13 +188,30 @@ then works by hand.
    that brings a kept card back to a lane a reply has since filled withdraws the lane's newest open card (suggestions
    before cards read from the answers) and says so.
 5. **Old replies never apply.** Requests are numbered. A reply applies only when its number is higher than the last one
-   applied, the board is not paused or off, and the path has not changed since it was sent.
-6. **Nothing moves under the visitor.** While focus is inside the board, a fine pointer is over it, or a finger has
-   touched or scrolled it in the last three seconds, or one of its editors is open, replies are held and a "Show 2
-   updates" button appears at the end of the board; they apply when the visitor leaves the board, the board has been
-   still, or the visitor asks, and their arrival is announced. A scroll the page makes itself (moving focus) does not
-   count. New cards are added at the end of their lane. The board is never above the answer box, so the box never
-   moves; a hidden board (another step, the review) asks nothing and applies nothing.
+   applied, the outline is not paused (the model's word for skipped or turned off) or off, and the path has not changed since
+   it was sent.
+6. **Nothing moves under the visitor.** The lane on screen only receives the reply's new cards, at the end of its list;
+   the cards already listed there do not change or leave while the visitor looks at them. The rest of that reply (its
+   changes to listed cards and its withdrawals) is held, one reply at a time (a newer one replaces it), and applied when
+   the visitor leaves the screen, by `leaveLane`, under rules 2, 4 and 5 and against the board as it is at that moment:
+   owned cards are left alone, a card made unowned after the reply's request was sent is left alone, a passage is checked
+   against the answers as they are then, and a held reply is dropped when the outline is paused or a newer reply has been
+   applied. It also adds, to the lane being left only, the new cards the delivery could not add (a full lane, where the
+   reply rewords every open card, would otherwise be left empty): leaving a lane gives it what an off-screen delivery of
+   the same reply would have. It neither adds an idea that a delivery added to that lane while it was on screen (any reply's,
+   including one a newer reply replaced, and however the visitor then edited or set aside the card), nor rewords another
+   card into it, so the visitor's edit is never undone by a second card in the original wording. A card the reply adds to the lane on screen is stamped like any other, so the same reply's held changes
+   cannot touch it. Every other lane takes a reply in full when it arrives, and so does every lane while a written
+   question or the review is showing. Each lane remembers the cards it listed (set-aside ones not counted) when the
+   visitor last left it, which is what the status line and "New since you last looked" are read from. The visitor's own
+   actions on a lane (Keep, Edit, Answer, Not this, Bring back, Add, Remove, Undo) update that list too, so the status
+   line counts only what replies changed. A restored page numbers its next card above every id in the cards and in the
+   last-seen lists, and keeps each list up to the lane's limit plus the history's length (Undo can leave a lane over its
+   limit for a while), so a new card is never taken for one already seen. Going back to edit
+   an answer therefore changes nothing the visitor is looking at: the steps are fixed, a kept, edited, answered or added
+   card is never changed, a kept card whose passage was deleted is sent as kept without the passage, and an open card read
+   from the answers is withdrawn when its passage goes. The held reply is kept in memory only: a saved draft keeps the
+   cards and each lane's last-seen list, and a restored page starts without one.
 7. **No commitments.** The model is told, and the server and the browser check, that cards carry no prices, dates,
    durations, promises or links, and never speak for the owner. A card with a currency amount, a spelled-out sum, cost
    words ("costs about", "affordable", "fixed price"), a date or deadline ("by March", "next month", "2027-01-15"), a time
@@ -130,22 +255,25 @@ stateDiagram-v2
     idle --> waiting: the visitor writes (1.5 s pause), or keeps, edits, answers, sets aside or adds a card (8 s pause)
     waiting --> waiting: more writing resets the 1.5 s pause
     waiting --> sending: 1.5 s without writing, at least 4 s since the last send, six words or more
-    sending --> held: reply n arrives, newer than the last applied, the visitor in the board
-    sending --> idle: reply n applied (or dropped as old, paused, off or another path)
-    held --> idle: the visitor leaves the board, it has been still for 3 s, or Show updates
+    sending --> idle: reply n applied (to the lane on screen, its additions only), or dropped as old, skipped, off or another path
     sending --> backoff: no answer, a 503 or 409 busy, a 429 busy (a per-minute limit), a timeout or an unreadable reply
     backoff --> waiting: 20 s later, if still dirty (writing does not cut the wait short)
     sending --> stopped: a 429 limit (for today), a 503 off, a 400, three failures in a row, or no pass
-    idle --> paused: Pause
-    paused --> waiting: Resume
+    idle --> stopped: "Skip these, no AI outline"
+    stopped --> waiting: "Add the outline back"
 ```
+
+Requests follow the writing, not the board. The page asks for the outline while a written question is showing and while
+a lane screen is showing (after a card action, 8 seconds); it asks nothing on the other steps, and moving between steps
+does not abort a request. A reply is applied when it arrives (rule 6 says how, for the lane on screen), whichever step is
+showing, and held changes for a lane are applied when it is left.
 
 One request is in flight at a time, and a page makes at most 24; after the last, the status says the page's limit was
 reached. A reply changes only open cards, so applying one never makes the board dirty, and spacing alone does not
-either. A request that Pause, the plain form, a path change or leaving the step aborts is asked again later. The page
-fits each request to the route's 7,000-character limit (a body of up to 32 KB, so a script of three bytes a character
-fits) by leaving out set-aside cards, then the visitor's own, never the open ones. The reconciliation does not rely on
-any of that: the Quint model lets any number of requests overlap and arrive in any order.
+either. A request that a skip, a path change or leaving the brief aborts is asked again later. The page fits each request
+to the route's 7,000-character limit (a body of up to 32 KB, so a script of three bytes a character fits) by leaving out
+set-aside cards, then the visitor's own, never the open ones. The reconciliation does not rely on any of that: the Quint
+model lets any number of requests overlap and arrive in any order.
 
 ## 5. Interpretation on the server
 
@@ -222,7 +350,14 @@ owner's request page and notice, and in the visitor's copy. Without an outline, 
 ## 9. Verification
 
 - `verification/brief-board.qnt`: the reconciliation in section 2 with an adversarial model (any reply, any order, any
-  overlap), visitor actions including Undo and Pause, and seven properties, each with a mutant that breaks it.
-- Unit tests for the shared module, route tests on the golden harness's fakes (D1, rate limits, AI), the inquiry route
-  with and without an outline, the existing brief-flow tests unchanged, and Playwright runs of the page with a scripted
-  model (`scripts/screenshots/brief-board-script.mjs`) that answers late and out of order.
+  overlap), visitor actions including Undo, pausing and moving between the lane screens and a written question, and nine
+  properties, each with a mutant that breaks it. The eighth, `onScreenStable`, says no card listed on the lane on screen
+  is changed or withdrawn by a delivery; its mutant applies the whole reply to that lane. The ninth, `leaveKeepsReply`,
+  says leaving a lane gives it every idea the held reply names that the answers support, as an off-screen delivery of the
+  same reply would have; its mutant applies only the held changes and withdrawals. The held reply is a single
+  slot, `deferred`, that `deliver` fills for the lane on screen and `moveScreen` applies to the lane being left.
+- Unit tests for the shared module (including `applyReply` with the lane on screen, `leaveLane`, the last-seen lists and
+  the saved board), a seeded random walk of its properties on the real code (`tests/lib/brief-board-walk.test.ts`), route
+  tests on the golden harness's fakes (D1, rate limits, AI), the inquiry route with and without an outline, the
+  brief-flow tests, and Playwright runs of the page with a scripted model (`scripts/screenshots/brief-board-script.mjs`)
+  that answers late and out of order.

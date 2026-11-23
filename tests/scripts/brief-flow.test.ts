@@ -1,6 +1,18 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { setupSuggestionPass } from "~/scripts/brief-suggestion-pass";
+import {
+	type BriefBoardCore,
+	type InterpretAnswer,
+	createBriefBoardCore,
+} from "~/scripts/brief-board-core";
+import {
+	BOARD_STORAGE_KEY,
+	laneChanges,
+	laneFull,
+	laneLabels,
+	setAside,
+} from "~/lib/brief-board";
 
 class Node extends EventTarget {
 	dataset: Record<string, string> = {};
@@ -30,6 +42,9 @@ class Node extends EventTarget {
 	focus = vi.fn();
 	getAttribute(key: string) {
 		return key === "name" ? this.name : (this.attrs[key] ?? null);
+	}
+	hasAttribute(key: string) {
+		return key in this.attrs;
 	}
 	setAttribute(key: string, value: string) {
 		this.attrs[key] = value;
@@ -90,6 +105,8 @@ let form: Node & { elements: Elements },
 	dots: Node[],
 	kicker: Node;
 
+let core: BriefBoardCore;
+
 let observed: (records: { target: Node }[]) => void = () => {};
 
 const make = (name = "", type = "", value = "") => {
@@ -120,7 +137,10 @@ function fill(name: string, value: string) {
 	node.value = value;
 	node.setSelectionRange(value.length, value.length);
 	fire(node, "input");
-	fire(form, "input");
+	// The page listens on the form, where an input event arrives with the box as its target.
+	const message = new Event("input");
+	Object.defineProperty(message, "target", { value: node });
+	form.dispatchEvent(message);
 
 	return node;
 }
@@ -169,12 +189,21 @@ async function setup(
 	requestedPath?: string,
 	startSuggestionPass = grantedPass,
 	linkedPath: string | null | undefined = requestedPath,
+	// With the board, the page has the outline's three lane screens (data-step 9 to 11) and answers the board's route
+	// with `interpret`; without it the page is as the server renders it with the switch off.
+	board?: {
+		interpret: (body: string, signal: AbortSignal) => Promise<InterpretAnswer>;
+		// The page's board refuses to leave a lane screen with words it cannot add; the core alone has no editors.
+		leaveField?: (core: BriefBoardCore) => boolean;
+	},
 ) {
 	form = Object.assign(new Node(), { elements: [] });
 	form.dataset.available = "false";
 
 	if (linkedPath) form.dataset.linkedPath = linkedPath;
-	steps = Array.from({ length: 9 }, () => new Node());
+
+	if (board) form.dataset.board = "true";
+	steps = Array.from({ length: board ? 12 : 9 }, () => new Node());
 	controls = [];
 
 	for (const section of steps) section.nodes.h1 = new Node();
@@ -186,13 +215,13 @@ async function setup(
 		box.name = "";
 		box.required = index === 1;
 		box.section = section;
+		box.attrs["data-answer"] = "";
 		controls.push(box);
 
 		for (const selector of [
 			"[data-accept-hint]",
 			"[data-answer-label]",
 			"[data-question-hint]",
-			"[data-question-footnote]",
 			"[data-accept]",
 			"[data-suggestions-toggle]",
 			"[data-suggestions-disclosure]",
@@ -277,6 +306,14 @@ async function setup(
 		form.nodes[`[data-form-error="${node.name}"]`] = error;
 	}
 
+	if (board) {
+		for (const i of [9, 10, 11])
+			steps[i].nodes["[data-board-skip]"] = new Node();
+		form.nodes["[data-outline-add-back]"] = Object.assign(new Node(), {
+			hidden: true,
+		});
+	}
+
 	form.querySelector = (selector: string): Node | null => {
 		// A question's error paragraph follows the question it is configured for.
 		const match = selector.match(/^\[data-form-error="(.+)"\]$/);
@@ -309,6 +346,9 @@ async function setup(
 			return steps.slice(1, 3).map((node) => node.nodes["[data-answer]"]);
 
 		if (selector === "[data-skip]") return skips;
+
+		if (selector === "[data-board-skip]")
+			return steps.slice(9).map((node) => node.nodes[selector]);
 
 		if (
 			[
@@ -374,7 +414,7 @@ async function setup(
 		},
 	);
 	// The progress dots mirror the page: eight items, each with a visually hidden label.
-	dots = Array.from({ length: 8 }, () => {
+	dots = Array.from({ length: board ? 11 : 8 }, () => {
 		const item = new Node();
 		item.nodes[".sr-only"] = new Node();
 
@@ -388,7 +428,8 @@ async function setup(
 			selector === ".intake-progress li" ? dots : [],
 		getElementById: () => new Node(),
 		createElement: () => new Node(),
-		createTextNode: () => new Node(),
+		createTextNode: (text: string) =>
+			Object.assign(new Node(), { textContent: text }),
 	});
 	vi.stubGlobal("localStorage", {
 		getItem: (key: string) => store.get(key) ?? null,
@@ -401,7 +442,24 @@ async function setup(
 	);
 	const { setupSoftwareInquiry } = await import("~/scripts/software-inquiry");
 	// SAFETY: setupSoftwareInquiry and the helpers it passes form to read only dataset, id, elements, getAttribute, querySelector, querySelectorAll and addEventListener from form; the fake Node supplies each except id, which reads undefined, and its elements is a plain array, so form cannot be typed as an HTMLFormElement.
-	setupSoftwareInquiry(form as never, startSuggestionPass);
+	setupSoftwareInquiry(
+		form as never,
+		startSuggestionPass,
+		board
+			? (options) => {
+					core = createBriefBoardCore({
+						...options,
+						interpret: board.interpret,
+					});
+
+					const { leaveField } = board;
+
+					return leaveField
+						? { ...core, leaveField: () => leaveField(core) }
+						: core;
+				}
+			: undefined,
+	);
 }
 
 // Every flow can schedule suggestions; keep old forms from calling the next test's fetch.
@@ -1280,9 +1338,6 @@ it("walks a website brief through its own screens, the link and notes, updates, 
 	expect(dots[0].attrs["aria-current"]).toBeUndefined();
 	expect(current()).toBe(1);
 	expect(steps[1].nodes.h1.textContent).toBe("What’s the website for?");
-	expect(steps[1].nodes["[data-question-footnote]"].textContent).toBe(
-		"Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details.",
-	);
 	click("[data-next]");
 	expect(current()).toBe(1);
 	expect(steps[1].nodes["[data-form-error]"].textContent).toBe(
@@ -1494,9 +1549,6 @@ it("shows the web app brief with seven screens, its own first question and no ti
 	expect(dots[0].nodes[".sr-only"].textContent).toBe("Question 1 of 7");
 	expect(steps[1].nodes.h1.textContent).toBe(
 		"What should the app let people do?",
-	);
-	expect(steps[1].nodes["[data-question-footnote]"].textContent).toBe(
-		"Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.",
 	);
 	fill("appGoal", "Let my students book and pay for lessons.");
 	click("[data-next]");
@@ -1734,17 +1786,18 @@ it.each([
 );
 
 it.each([
+	["webapp", 7],
 	["workflow", 7],
 	["website", 8],
 ])(
-	"ignores a saved step past the last screen of a %s draft",
+	"opens the first written question for a saved step past the last screen of a %s draft",
 	async (path, step) => {
 		store.set(
 			"software-brief-draft",
 			JSON.stringify({ answers: { path }, step }),
 		);
 		await setup();
-		expect(current()).toBe(0);
+		expect(current()).toBe(1);
 	},
 );
 
@@ -1852,4 +1905,832 @@ it("does not jump when an invalid control belongs to a section outside the curre
 	observed([{ target: url }]);
 	expect(current()).toBe(1);
 	expect(url.focus).not.toHaveBeenCalled();
+});
+
+it("no longer says the footnote sentence on any path, and keeps the example answers toggle", () => {
+	for (const file of [
+		"src/pages/software/start.astro",
+		"src/scripts/software-inquiry.ts",
+	])
+		expect(readFileSync(file, "utf8")).not.toContain("Plain language is fine");
+	expect(readFileSync("src/pages/software/start.astro", "utf8")).toContain(
+		"See example answers",
+	);
+});
+
+// ---- The outline as its own steps (docs/plans/2026-11-outline-steps-build.md, Task 3) -----------------------------
+
+const ANSWER =
+	"A home for my band on the web. Fans should hear new music, see upcoming shows near them and join the mailing list.";
+
+const said = (lane: string, text: string, quote: string, ref = "") => ({
+	ref,
+	lane,
+	text,
+	basis: "said",
+	quote,
+});
+
+const FIRST_REPLY = [
+	said("audience", "Fans", "Fans should hear new music"),
+	said("parts", "Music", "hear new music, see upcoming shows"),
+	said("parts", "Shows", "see upcoming shows near them"),
+	said("parts", "Mailing list", "join the mailing list"),
+	{
+		ref: "",
+		lane: "questions",
+		text: "Who will add new show dates?",
+		basis: "suggested",
+		reason: "Show dates change often",
+	},
+];
+
+let bodies: { path: string; cards: { ref: string; text: string }[] }[] = [];
+let waiting: ((answer: InterpretAnswer) => void)[] = [];
+
+// SAFETY: the route's JSON is read from anything by the board (readBoardAnswer), so the test may hand it any shape.
+const answer = (cards: unknown[]): InterpretAnswer => ({
+	status: 200,
+	json: { cards, refs: [] } as never,
+});
+
+// The route answers when the test says so, so a reply can land on any screen.
+const route = {
+	interpret: (body: string) => {
+		bodies.push(JSON.parse(body));
+
+		return new Promise<InterpretAnswer>((resolve) => waiting.push(resolve));
+	},
+};
+
+const reply = async (cards: unknown[]) => {
+	waiting.shift()!(answer(cards));
+	await vi.advanceTimersByTimeAsync(0);
+};
+
+const boardSetup = async (
+	path: string | undefined = "website",
+	board: Parameters<typeof setup>[3] = route,
+) => {
+	bodies = [];
+	waiting = [];
+	await setup(path, grantedPass, path, board);
+};
+
+const savedBoard = () =>
+	JSON.parse(store.get(BOARD_STORAGE_KEY) ?? "null")?.boards?.website;
+
+const listed = (lane: string) =>
+	core
+		.board()
+		.cards.filter((card) => card.lane === lane && card.status !== "dismissed")
+		.map((card) => card.text);
+
+const textOf = (node: Node): string =>
+	node.textContent + node.children.map(textOf).join("");
+
+const reviewRows = () => form.nodes["[data-review]"].children;
+
+const groupAfter = (title: string) => {
+	const at = reviewRows().findIndex((node) => node.textContent === title);
+
+	return at < 0 ? null : textOf(reviewRows()[at + 1]);
+};
+
+// Fills what the later steps need, then presses Next up to the review.
+function toReview() {
+	fill("name", "Alex");
+	fill("email", "alex@example.com");
+	choose("updates", "self");
+
+	for (let i = 0; i < 20 && current() !== 6; i++) click("[data-next]");
+}
+
+const buttonsIn = (node: Node): Node[] =>
+	node.children.flatMap((child) => [
+		...(child.type === "button" ? [child] : []),
+		...buttonsIn(child),
+	]);
+
+const visit = () => {
+	const seen = [current()];
+
+	for (let i = 0; i < 20 && current() !== 6; i++) {
+		click("[data-next]");
+		seen.push(current());
+	}
+
+	return seen;
+};
+
+/** A second request waits for the four seconds between requests. */
+const SECOND = 4500;
+
+/** Asks the board once and lets the reply arrive: the answers written, a pause, the route's answer. */
+async function readAnswers(cards: unknown[] = FIRST_REPLY) {
+	await vi.advanceTimersByTimeAsync(1600);
+	await reply(cards);
+}
+
+it("builds each path's plan from its written questions, the outline's lane screens and the rest", async () => {
+	const { briefPlan } = await import("~/scripts/software-inquiry");
+
+	expect(briefPlan("website", true)).toEqual([
+		0, 1, 9, 10, 11, 7, 8, 3, 4, 5, 6,
+	]);
+	expect(briefPlan("webapp", true)).toEqual([0, 1, 2, 9, 10, 11, 3, 4, 5, 6]);
+	expect(briefPlan("workflow", true)).toEqual([0, 1, 2, 9, 10, 11, 3, 4, 5, 6]);
+	expect(briefPlan("website", false)).toEqual([0, 1, 7, 8, 3, 4, 5, 6]);
+	expect(briefPlan("webapp", false)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+});
+
+it("walks the website's eleven screens with the outline in them, and the dots follow the plan", async () => {
+	await boardSetup("website");
+	expect(visibleDots()).toEqual(Array(11).fill(false));
+	fill("purpose", ANSWER);
+	fill("name", "Alex");
+	fill("email", "alex@example.com");
+	choose("updates", "self");
+	expect(visit()).toEqual([1, 9, 10, 11, 7, 8, 3, 4, 5, 6]);
+	expect(dots[1].nodes[".sr-only"].textContent).toBe("Question 2 of 11");
+	expect(dots[10].attrs["aria-current"]).toBe("step");
+});
+
+it("walks the web app and workflow's ten screens with the outline in them", async () => {
+	for (const [path, key] of [
+		["webapp", "appGoal"],
+		["workflow", "today"],
+	]) {
+		await boardSetup(path);
+		expect(visibleDots()).toEqual([...Array(10).fill(false), true]);
+		fill(key, ANSWER);
+		fill("name", "Alex");
+		fill("email", "alex@example.com");
+		expect(visit()).toEqual([1, 2, 9, 10, 11, 3, 4, 5, 6]);
+		expect(dots[2].nodes[".sr-only"].textContent).toBe("Question 3 of 10");
+	}
+});
+
+it("focuses each lane screen's heading as the steps change", async () => {
+	await boardSetup("webapp");
+	fill("appGoal", ANSWER);
+	click("[data-next]");
+	click("[data-next]");
+	expect(current()).toBe(9);
+	expect(steps[9].nodes.h1.focus).toHaveBeenCalled();
+});
+
+it("keeps the website without lane screens when the server switch is off", () => {
+	choose("path", "website");
+	expect(current()).toBe(1);
+	fill("purpose", ANSWER);
+	click("[data-next]");
+	expect(current()).toBe(7);
+	expect(visibleDots()).toEqual(Array(8).fill(false));
+});
+
+it("records what a lane listed when the visitor leaves it, by Next, Back, Ctrl+Enter or a skip", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	expect(savedBoard().seen).toEqual({});
+	click("[data-next]");
+	expect(current()).toBe(9);
+	expect(savedBoard().seen).toEqual({});
+	click("[data-next]");
+	expect(savedBoard().seen.audience).toEqual(["c1"]);
+	click("[data-back]");
+	expect(current()).toBe(9);
+	expect(savedBoard().seen.parts).toEqual(["c2", "c3", "c4"]);
+	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
+	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
+	expect(current()).toBe(11);
+	fire(steps[11].nodes["[data-board-skip]"], "click");
+	expect(savedBoard().seen.questions).toEqual(["c5"]);
+});
+
+it("holds a reply for the lane on screen, updates the others and lists unseen cards in the review", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	// The first answer is edited and Next pressed at once: the second request is sent from the first lane screen.
+	fill("purpose", `${ANSWER} We also sell merch at shows.`);
+	click("[data-next]");
+	await vi.advanceTimersByTimeAsync(SECOND);
+	expect(bodies).toHaveLength(2);
+	click("[data-next]");
+	expect(current()).toBe(10);
+
+	// The reply lands one screen later, on the pages lane.
+	await reply([
+		said("audience", "Fans", "Fans should hear new music", "c1"),
+		said("audience", "Visitors hear new music", "Fans should hear new music"),
+		said("parts", "New music", "hear new music, see upcoming shows", "c2"),
+		said("parts", "Mailing list", "join the mailing list", "c4"),
+		said("parts", "Shop", "We also sell merch at shows"),
+		{
+			ref: "c5",
+			lane: "questions",
+			text: "Who will add new show dates?",
+			basis: "suggested",
+			reason: "Show dates change often",
+		},
+	]);
+	// Nothing listed on the lane on screen changed or left; what the reply adds there came at the end.
+	expect(listed("parts")).toEqual(["Music", "Shows", "Mailing list", "Shop"]);
+	// Another lane took the reply in full.
+	expect(listed("audience")).toEqual(["Fans", "Visitors hear new music"]);
+	click("[data-next]");
+	expect(listed("parts")).toEqual(["New music", "Mailing list", "Shop"]);
+	toReview();
+	expect(current()).toBe(6);
+	expect(groupAfter("New since you last looked")).toContain(
+		`${laneLabels.website.audience}: Visitors hear new music`,
+	);
+	expect(groupAfter("New since you last looked")).not.toContain("Shop");
+	const row = reviewRows().find((node) => node.textContent === "Brief outline");
+	expect(row).toBeDefined();
+});
+
+it("sends the visitor to a card's lane screen from the review, and stops listing it once they have looked", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([FIRST_REPLY[0]]);
+	// A request sent from the first lane screen is answered after the visitor has left that lane.
+	fill("purpose", `${ANSWER} We also sell merch at shows.`);
+	click("[data-next]");
+	await vi.advanceTimersByTimeAsync(SECOND);
+	click("[data-next]");
+	await reply([
+		FIRST_REPLY[0],
+		said("audience", "Venues", "see upcoming shows near them"),
+	]);
+	toReview();
+	expect(groupAfter("New since you last looked")).toContain("Venues");
+
+	const at = reviewRows().findIndex(
+		(node) => node.textContent === "New since you last looked",
+	);
+
+	fire(buttonsIn(reviewRows()[at + 1])[0], "click");
+	expect(current()).toBe(9);
+	click("[data-next]");
+	toReview();
+	expect(groupAfter("New since you last looked")).toBeNull();
+});
+
+it("shows what changed in a lane after the visitor went back and edited an answer", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	toReview();
+
+	// Back to the first written question, edit, and read again while the pages lane is not on screen.
+	while (current() !== 1) click("[data-back]");
+	fill("purpose", `${ANSWER} We also sell merch at shows.`);
+	await vi.advanceTimersByTimeAsync(SECOND);
+	await reply([
+		...FIRST_REPLY.filter((card) => card.text !== "Shows"),
+		said("parts", "Shop", "We also sell merch at shows"),
+	]);
+	click("[data-next]");
+	click("[data-next]");
+	expect(current()).toBe(10);
+	expect(core.statusLine("parts")).toBe(
+		"1 new, 1 removed since you last looked",
+	);
+
+	// The visitor's own actions are not what the edited answer changed: the line still counts only the reply's.
+	const open = core.board().cards.find((c) => c.lane === "parts");
+	expect(open).toBeDefined();
+	core.change(setAside(core.board(), open!.id));
+	expect(core.tryAddNote("parts", "Press kit")).toBe(true);
+	expect(laneChanges(core.board(), "parts")).toEqual({ added: 1, removed: 1 });
+});
+
+it("skips the outline from the second lane screen: Back reaches the last written question, the dots drop by three and nothing is asked", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	// A request is on its way when the visitor skips.
+	fill("purpose", `${ANSWER} We also sell merch at shows.`);
+	click("[data-next]");
+	await vi.advanceTimersByTimeAsync(SECOND);
+	click("[data-next]");
+	expect(current()).toBe(10);
+	const asked = bodies.length;
+	const before = core.board().cards;
+	fire(steps[10].nodes["[data-board-skip]"], "click");
+	expect(current()).toBe(7);
+	expect(visibleDots()).toEqual([
+		...Array(8).fill(false),
+		...Array(3).fill(true),
+	]);
+	expect(core.outline()).toBeUndefined();
+	click("[data-back]");
+	expect(current()).toBe(1);
+	expect(dots[1].nodes[".sr-only"].textContent).toBe("Question 2 of 8");
+	// The late reply is dropped, and no later change asks again.
+	await reply([said("parts", "Shop", "We also sell merch at shows")]);
+	expect(core.board().cards).toEqual(before);
+	fill(
+		"purpose",
+		`${ANSWER} We also sell merch at shows and photos from tour.`,
+	);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked);
+	fill("name", "Alex");
+	fill("email", "alex@example.com");
+	choose("updates", "self");
+	expect(visit()).toEqual([1, 7, 8, 3, 4, 5, 6]);
+});
+
+it("skips from a full lane with words in the Add editor: the visitor lands on the step after the lanes, with nothing refused", async () => {
+	// Leaving a lane screen is refused while the outline is on, as a full list refuses its open editor's words.
+	await boardSetup("website", {
+		...route,
+		leaveField: (board) => current() < 9 || board.skipped(),
+	});
+	fill("purpose", ANSWER);
+	await readAnswers();
+	expect(core.tryAddNote("audience", "Venues")).toBe(true);
+	expect(core.tryAddNote("audience", "Press")).toBe(true);
+	click("[data-next]");
+	expect(current()).toBe(9);
+	click("[data-next]");
+	expect(current()).toBe(9);
+	fire(steps[9].nodes["[data-board-skip]"], "click");
+	expect(current()).toBe(7);
+	expect(core.skipped()).toBe(true);
+});
+
+it("offers to add the outline back from the review after a skip, with the three screens and the cards", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	click("[data-next]");
+	click("[data-next]");
+	fire(steps[10].nodes["[data-board-skip]"], "click");
+	toReview();
+	expect(current()).toBe(6);
+	expect(form.nodes["[data-outline-add-back]"].hidden).toBe(false);
+	expect(
+		reviewRows().some((node) => node.textContent === "Brief outline"),
+	).toBe(false);
+	const cards = core.board().cards.length;
+	fire(form.nodes["[data-outline-add-back]"], "click");
+	expect(current()).toBe(6);
+	expect(visibleDots()).toEqual(Array(11).fill(false));
+	expect(dots[10].attrs["aria-current"]).toBe("step");
+	expect(form.nodes["[data-outline-add-back]"].hidden).toBe(true);
+	expect(core.board().cards).toHaveLength(cards);
+	expect(
+		reviewRows().some((node) => node.textContent === "Brief outline"),
+	).toBe(true);
+
+	while (current() !== 1) click("[data-back]");
+	expect(visit().slice(0, 5)).toEqual([1, 9, 10, 11, 7]);
+});
+
+it("asks again after the outline is added back, though nothing was written since the skip", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	click("[data-next]");
+	click("[data-next]");
+	fire(steps[10].nodes["[data-board-skip]"], "click");
+	const asked = bodies.length;
+	toReview();
+	// Skipped: nothing is asked, however long the visitor waits on a question.
+	click("[data-back]");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked);
+	toReview();
+	fire(form.nodes["[data-outline-add-back]"], "click");
+	expect(bodies).toHaveLength(asked);
+
+	// A written question is next showing: one request goes out, with no edit.
+	while (current() !== 1) click("[data-back]");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked + 1);
+});
+
+it("asks again when suggestions are turned back on, though nothing was written while they were off", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	const asked = bodies.length;
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked);
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked + 1);
+});
+
+it("keeps the lane screens when suggestions are turned off, and asks nothing", async () => {
+	await boardSetup("website");
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(0);
+	click("[data-next]");
+	expect(current()).toBe(9);
+	// By hand, and no card was made by the AI in this lane: nothing to say.
+	expect(core.statusLine("audience")).toBe("");
+	expect(visibleDots()).toEqual(Array(11).fill(false));
+});
+
+it("reads a draft saved by the old page: its step from the old plan, its plain flag and its cards", async () => {
+	const draft = (step: number) =>
+		JSON.stringify({
+			answers: {
+				path: "website",
+				purpose: ANSWER,
+				timing: "flexible",
+				updates: "self",
+			},
+			step,
+			submissionId: "00000000-0000-4000-8000-000000000001",
+		});
+
+	const board = (extra: { paused: boolean; plain: boolean }) =>
+		JSON.stringify({
+			boards: {
+				website: {
+					cards: [
+						{
+							id: "c1",
+							lane: "purpose",
+							text: "A home for my band on the web",
+							status: "proposed",
+							basis: "said",
+							quote: "A home for my band on the web",
+							reason: "",
+							answer: "",
+						},
+						{
+							id: "c2",
+							lane: "audience",
+							text: "Fans",
+							status: "kept",
+							basis: "said",
+							quote: "Fans should hear new music",
+							reason: "",
+							answer: "",
+						},
+					],
+				},
+			},
+			...extra,
+		});
+
+	// The old plan's fourth screen is "who keeps it up to date" (data-step 8), whichever plan the draft opens in.
+	for (const [flags, dotCount] of [
+		[{ paused: false, plain: true }, 8],
+		[{ paused: true, plain: false }, 8],
+		[{ paused: false, plain: false }, 11],
+	] as const) {
+		store.set("software-brief-draft", draft(3));
+		store.set(BOARD_STORAGE_KEY, board(flags));
+		await boardSetup(undefined);
+		expect(current()).toBe(8);
+		expect(visibleDots().filter((hidden) => !hidden)).toHaveLength(dotCount);
+		// The purpose card (c1) is not the outline's any more: only the audience card stays.
+		expect(core.board().cards.map((card) => card.id)).toEqual(["c2"]);
+		expect(core.board().seen).toEqual({});
+		expect(core.skipped()).toBe(dotCount === 8);
+	}
+
+	// A step index beyond the plan opens the first written question.
+	store.set("software-brief-draft", draft(40));
+	store.set(BOARD_STORAGE_KEY, board({ paused: false, plain: true }));
+	await boardSetup(undefined);
+	expect(current()).toBe(1);
+	store.set("software-brief-draft", draft(40));
+	store.set(BOARD_STORAGE_KEY, board({ paused: false, plain: false }));
+	await boardSetup(undefined);
+	expect(current()).toBe(1);
+});
+
+it("opens the first written question, path kept, when an unlinked visit's saved screen is not in the plan", async () => {
+	const base = {
+		answers: {
+			path: "website",
+			purpose: ANSWER,
+			timing: "flexible",
+			updates: "self",
+		},
+		submissionId: "00000000-0000-4000-8000-000000000001",
+	};
+
+	for (const saved of [{ step: 40 }, { section: 40 }, { section: 9 }]) {
+		store.set("software-brief-draft", JSON.stringify({ ...base, ...saved }));
+		store.set(
+			BOARD_STORAGE_KEY,
+			JSON.stringify({ boards: {}, paused: false, plain: true }),
+		);
+		bodies = [];
+		waiting = [];
+		await setup(undefined, grantedPass, undefined, route);
+		expect(current()).toBe(1);
+		expect(
+			controls.find((c) => c.name === "path" && c.value === "website")?.checked,
+		).toBe(true);
+	}
+});
+
+it("says the outline could not update while it backs off after a failed request, and reading while one is out", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(1);
+	expect(core.statusLine("audience")).toBe("Reading your answers\u2026");
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.statusLine("audience")).toBe(
+		"The outline couldn\u2019t update just now. Trying again shortly.",
+	);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(2);
+	expect(core.statusLine("audience")).toBe("Reading your answers\u2026");
+});
+
+it("resumes a draft saved by this page on the screen it was left on, lane screens included", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	click("[data-next]");
+	click("[data-next]");
+	expect(current()).toBe(10);
+	await boardSetup(undefined);
+	expect(current()).toBe(10);
+	expect(core.board().cards.length).toBeGreaterThan(0);
+});
+
+it("says a full list is full after Add and after Bring back, until there is room", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	const parts = laneLabels.website.parts;
+
+	// Three cards came from the answers; five notes fill the list.
+	for (let n = 1; n <= 5; n++)
+		expect(core.tryAddNote("parts", `Page ${n}`)).toBe(true);
+	expect(core.fullNote("parts")).toBe("");
+	expect(core.tryOpenAdd("parts")).toBe(false);
+	expect(core.fullNote("parts")).toBe(laneFull(parts));
+
+	// A set-aside card cannot come back to a full list, and the reason follows the control.
+	const music = core.board().cards.find((card) => card.text === "Music")!;
+	core.change(setAside(core.board(), music.id));
+	expect(core.tryAddNote("parts", "Extra")).toBe(true);
+	expect(core.tryBringBack(music.id)).toBe(false);
+
+	const aside = () => core.board().cards.find((card) => card.id === music.id)!;
+	expect(core.fullNoteFor(aside())).toBe(laneFull(parts));
+	expect(core.tryAddNote("parts", "One more")).toBe(false);
+
+	// Undo of the addition frees a place: the reasons go.
+	core.undoLast();
+	expect(core.fullNoteFor(aside())).toBe("");
+	expect(core.fullNote("parts")).toBe("");
+	expect(core.tryBringBack(music.id)).toBe(true);
+});
+
+// ---- By hand (docs/plans/2026-11-living-brief.md, "By hand") ---------------------------------------------------
+
+const stopped =
+	"The outline isn’t available right now. You can add your own notes.";
+
+/** Three failed requests in a row stop the outline for the page. */
+async function failThrice() {
+	for (let i = 0; i < 3; i++) {
+		fill("purpose", `${ANSWER} ${"more ".repeat(i + 1)}`);
+		await vi.advanceTimersByTimeAsync(30000);
+		waiting.shift()!({ status: 500, json: null });
+		await vi.advanceTimersByTimeAsync(0);
+	}
+}
+
+const toggleSuggestions = () =>
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+
+it("is by hand while the AI is off or has stopped, and not while it is on, retrying or skipped", async () => {
+	await boardSetup("website");
+	expect(core.byHand()).toBe(false);
+	toggleSuggestions();
+	expect(core.byHand()).toBe(true);
+	toggleSuggestions();
+	expect(core.byHand()).toBe(false);
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	// One failure is only a retry coming.
+	expect(core.byHand()).toBe(false);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.byHand()).toBe(true);
+
+	// A skipped outline is out of the plan, so it is not by hand.
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	click("[data-next]");
+	fire(steps[9].nodes["[data-board-skip]"], "click");
+	expect(core.byHand()).toBe(false);
+});
+
+it.each([
+	["a limit", { status: 429, json: { reason: "limit" } }],
+	["the server switch", { status: 403, json: { reason: "off" } }],
+	["an unreadable brief", { status: 400, json: null }],
+])("is by hand after %s", async (_label, answer) => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	// SAFETY: the route answers are plain JSON, which the board reads as unknown.
+	waiting.shift()!(answer as never);
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.byHand()).toBe(true);
+});
+
+it("says nothing by hand in a lane the AI made no card in, and keeps the sentence that says it stopped in a lane it did", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([said("parts", "Shows", "see upcoming shows near them")]);
+	await failThrice();
+	expect(core.byHand()).toBe(true);
+	expect(core.statusLine("parts")).toBe(stopped);
+	expect(core.statusLine("audience")).toBe("");
+	expect(core.statusLine("questions")).toBe("");
+	// The visitor's own note is not a card the AI made.
+	expect(core.tryAddNote("audience", "Fans")).toBe(true);
+	expect(core.statusLine("audience")).toBe("");
+});
+
+it("says nothing by hand with suggestions off in a lane with no AI card, and keeps the sentence in one that has one", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([said("parts", "Shows", "see upcoming shows near them")]);
+	toggleSuggestions();
+	expect(core.statusLine("parts")).toBe(
+		"Suggestions are off, so the outline is too. You can still add your own notes.",
+	);
+	expect(core.statusLine("audience")).toBe("");
+});
+
+it("keeps the AI-on status line as it was while the AI is on", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(core.statusLine("audience")).toBe("Reading your answers…");
+});
+
+it("says the outline could not update only while a retry is coming", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.statusLine("audience")).toBe(
+		"The outline couldn’t update just now. Trying again shortly.",
+	);
+	// The answers drop under the minimum: nothing will be asked, so nothing is retrying.
+	fill("purpose", "A band site.");
+	expect(core.statusLine("audience")).toBe("");
+	// Enough words again: the retry is coming again.
+	fill("purpose", ANSWER);
+	expect(core.statusLine("audience")).toBe(
+		"The outline couldn’t update just now. Trying again shortly.",
+	);
+});
+
+it("keeps three lane screens with the AI on or off", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	toggleSuggestions();
+	expect(visit().slice(0, 5)).toEqual([1, 9, 10, 11, 7]);
+});
+
+it("restores a draft left on the old purpose screen, with its purpose cards, without error and without sending them", async () => {
+	const draft = JSON.stringify({
+		answers: {
+			path: "website",
+			purpose: ANSWER,
+			timing: "flexible",
+			updates: "self",
+		},
+		step: 2,
+		section: 9,
+		submissionId: "00000000-0000-4000-8000-000000000001",
+	});
+
+	const card = (id: string, lane: string, text: string, status: string) => ({
+		id,
+		lane,
+		text,
+		status,
+		basis: "said",
+		quote: "A home for my band on the web",
+		reason: "",
+		answer: "",
+	});
+
+	store.set("software-brief-draft", draft);
+	store.set(
+		BOARD_STORAGE_KEY,
+		JSON.stringify({
+			boards: {
+				website: {
+					cards: [
+						card("c1", "purpose", "A home for my band on the web", "kept"),
+						card("c2", "audience", "Fans", "kept"),
+						card("c3", "purpose", "Sell music", "wrote"),
+					],
+					seen: { purpose: ["c1"], audience: ["c2"] },
+				},
+			},
+			paused: false,
+			plain: false,
+		}),
+	);
+	await boardSetup(undefined);
+	// The old purpose screen is gone: the first written question opens.
+	expect(current()).toBe(1);
+	expect(core.board().cards.map((c) => c.id)).toEqual(["c2"]);
+	expect(core.outline()?.map((item) => item.lane)).toEqual(["audience"]);
+	expect(core.board().nextId).toBe(3);
+	toReview();
+	expect(JSON.stringify(savedBoard())).not.toContain('purpose"');
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(JSON.stringify(bodies)).not.toContain("A home for my band");
+	expect(JSON.stringify(bodies)).not.toContain("Sell music");
+});
+
+it("lists only the three lanes in the review", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers([
+		said("audience", "Fans", "Fans should hear new music"),
+		said(
+			"purpose",
+			"A home for my band on the web",
+			"A home for my band on the web",
+		),
+	]);
+	toReview();
+
+	const outline = reviewRows().find(
+		(node) => node.textContent === "Brief outline",
+	);
+
+	expect(outline).toBeDefined();
+	expect(groupAfter("Brief outline")).toContain("Fans");
+	expect(groupAfter("Brief outline")).not.toContain("A home for my band");
+	expect(JSON.stringify(core.outline())).not.toContain("purpose");
+});
+
+it.each([
+	["the old purpose screen", { section: 9 }, 1],
+	["the old audience screen", { section: 10 }, 9],
+	["the old pages screen", { section: 11 }, 10],
+	["the old questions screen", { section: 12 }, 11],
+	["a screen before the outline", { section: 7 }, 7],
+	["a screen this page numbered", { section: 9, outlineScreens: 3 }, 9],
+])(
+	"opens a draft saved on %s on the screen this page has for it",
+	async (_label, saved, expected) => {
+		store.set(
+			"software-brief-draft",
+			JSON.stringify({
+				answers: {
+					path: "website",
+					purpose: ANSWER,
+					timing: "flexible",
+					updates: "self",
+				},
+				submissionId: "00000000-0000-4000-8000-000000000001",
+				...saved,
+			}),
+		);
+		await boardSetup(undefined);
+		expect(current()).toBe(expected);
+	},
+);
+
+it("saves the screen with the number of outline screens, so the next page reads it as its own", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	click("[data-next]");
+	expect(JSON.parse(store.get("software-brief-draft") ?? "null")).toMatchObject(
+		{
+			section: 9,
+			outlineScreens: 3,
+		},
+	);
 });

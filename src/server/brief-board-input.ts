@@ -32,7 +32,8 @@ const BoardRequestSchema = Schema.Struct({
 	cards: Schema.Array(
 		Schema.Struct({
 			ref: Schema.String.check(Schema.isMaxLength(12)),
-			lane: Schema.Literals(LANES),
+			// A page left open across the change that removed the purpose lane may still send one; it is dropped below.
+			lane: Schema.Literals(["purpose", ...LANES]),
 			text: Schema.String.check(
 				Schema.isMaxLength(textLimits.questions + ANSWER_MAX + 12),
 			),
@@ -50,7 +51,11 @@ export function readBoardInput(
 
 	if (Result.isFailure(read)) return { ok: false };
 
-	const { path, cards } = read.success;
+	const { path } = read.success;
+
+	const cards = read.success.cards.flatMap((card) =>
+		card.lane === "purpose" ? [] : [{ ...card, lane: card.lane }],
+	);
 
 	const answers = Object.fromEntries(
 		boardAnswerKeys[path].map((key) => [
