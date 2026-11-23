@@ -38,6 +38,11 @@ that scrolls inside a bounded box, about three fifths of the screen's height and
 lane's own "Set aside" list, Undo, and one link, "Skip these, no AI outline". The outline does not speak as the owner, so
 no heading says "I".
 
+Words left in an open editor when the visitor leaves a lane screen (Next, Back or a review Edit link) are applied as if
+they had confirmed them, with the AI on or off: the open "Add" field adds its note, and a card being edited in place
+takes its edit or answer. A blank or unchanged editor does nothing. If the words cannot be applied (the list is full) the
+visitor stays on the screen and sees the usual reason, so nothing typed is dropped.
+
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|
 | `audience` | Who is it for? | Who will use it? | Who does the work? |
@@ -80,7 +85,7 @@ after three failures or with the switch off on the server, the lane screens work
 screen "Is this what it’s for?" asked the same thing twice. The purpose lane therefore has no screen on any path, with
 the AI on or off: the visitor's own written answer is the statement of purpose. The outline's screens are three
 (`audience`, `parts`, `questions`), the review step lists those three lanes, and a purpose card is neither asked for,
-shown nor sent. Wherever this document says four lane screens or lists `L1..L4`, read three. Briefs already stored
+shown nor sent. Briefs already stored
 with purpose cards still show them to the owner, who sees them under "What it’s for" ("What should change" for a
 workflow). The model is no longer asked for a purpose card and its reply schema has no `purpose` lane; the server still
 reads a purpose item in a stored or older outline sent with a brief, and the visitor's page drops purpose cards from a
@@ -97,10 +102,8 @@ not by hand while the visitor has skipped the outline, because the screens are t
   the site's outlined button on the same row, to the field's right (below it at full width when the row is too narrow),
   and the field's label is read by screen readers but not shown, since the heading and hint say what to type. Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds
   nothing and Next is never blocked.
-- Words left in the open field when the visitor leaves the screen (Next, Back or a review Edit link) are added as a
-  note, as Add would add them. If the list is full the visitor stays on the screen and sees the usual reason, so the
-  words are never dropped. A switch to by hand while the visitor is typing keeps the words and the focus. Enter that
-  confirms a word in an input method adds nothing.
+- The field cannot be closed, so Escape keeps its words. A switch to by hand while the visitor is typing keeps the words
+  and the focus. Enter that confirms a word in an input method adds nothing.
 - There is no "Skip these, no AI outline" link. Undo shows only when there is something to undo.
 - The status line is empty in a lane with no card the AI made. In a lane that has one (the AI stopped part-way), it
   keeps the one sentence that says the outline stopped, so the visitor knows why nothing new arrives.
@@ -127,7 +130,7 @@ that it was too much at once.
 |---|---|---|
 | Keep the board on the answer screens, under the box (a sideways strip or a short list) | Smallest change, but the outline still competes with the writing | Rejected by the owner |
 | One outline screen after the written answers, four lanes side by side | One extra step; sideways scrolling on narrow screens | Not chosen |
-| One screen per lane, each phrased as a question | Reads like the rest of the brief; four extra steps | Chosen |
+| One screen per lane, each phrased as a question | Reads like the rest of the brief; three extra steps | Chosen |
 
 ## 2. The rules
 

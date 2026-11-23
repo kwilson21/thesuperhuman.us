@@ -15,6 +15,7 @@ import {
 	answerCard,
 	keepCard,
 	laneScreen,
+	editOnLeaving,
 	noteOnLeaving,
 	removeNote,
 	setAside,
@@ -119,6 +120,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 	/** Says `text` to screen readers. */
 	const announce = (text: string) => {
+		// Cleared first, so the same sentence said twice in a row is read twice.
+		live.textContent = "";
 		live.textContent = text;
 	};
 
@@ -682,11 +685,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		parts.cancel.addEventListener("click", () => close(false));
 		parts.input.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
-				// Enter that confirms a word in an input method adds nothing.
-				if (event.isComposing) return;
+				// Enter that confirms a word in an input method adds nothing (Safari reports it as keyCode 229).
+				if (event.isComposing || event.keyCode === 229) return;
+
+				// Ctrl or Cmd+Enter is the form's Next: leaving applies the words once.
+				if (event.ctrlKey || event.metaKey) return;
 				event.preventDefault();
 				close(true);
 			} else if (event.key === "Escape") {
+				// By hand the field cannot close, so Escape keeps the words.
+				if (core.byHand()) return;
 				event.preventDefault();
 				close(false);
 			}
@@ -703,8 +711,29 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			if (!lane) return true;
 			const parts = lanes[lane];
 
+			// A card's editor left open: its edit or answer is applied as its own confirm would.
+			for (const input of parts.section.querySelectorAll<HTMLInputElement>(
+				"[data-card-input]",
+			)) {
+				const editor = input.closest<HTMLElement>("[data-card-editor]");
+				const id = input.closest<HTMLElement>("[data-card]")?.dataset.card;
+
+				if (!editor || editor.hidden || !id) continue;
+
+				const next = editOnLeaving({
+					board: core.board(),
+					id,
+					mode: editor.dataset.mode === "answer" ? "answer" : "edit",
+					text: input.value,
+				});
+
+				if (!next) continue;
+				editor.hidden = true;
+				core.change(next);
+			}
+
 			const text = noteOnLeaving({
-				byHand: core.byHand(),
+				editorOpen: !parts.editor.hidden,
 				text: parts.input.value,
 			});
 
@@ -713,6 +742,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			if (!core.tryAddNote(lane, text)) {
 				announce(core.fullNote(lane));
 				parts.input.focus();
+				revealUnlessMouse(parts.full);
 
 				return false;
 			}

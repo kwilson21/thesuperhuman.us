@@ -377,17 +377,36 @@ export function laneScreen(input: {
 }
 
 /**
- * The note a by-hand field holds when the visitor leaves the lane screen (Next, Back or a review Edit link): its words as
- * Add would take them, or null when there is nothing to add. With the AI on the field is behind the lane's "Add" and
- * leaving it adds nothing.
+ * The note an open "Add" editor holds when the visitor leaves the lane screen (Next, Back or a review Edit link): its
+ * words as Add would take them, or null when the editor is closed or blank. By hand the editor is always open; with the
+ * AI on it is open between "Add" and its Add or Cancel.
  */
 export function noteOnLeaving(input: {
-	readonly byHand: boolean;
+	readonly editorOpen: boolean;
 	readonly text: string;
 }): string | null {
-	if (!input.byHand) return null;
+	if (!input.editorOpen) return null;
 
 	return oneLine(input.text) || null;
+}
+
+/**
+ * The board after the visitor leaves with a card's editor still open: the edit (or the answer to a question) as the
+ * editor's own confirm would apply it. Null when it would change nothing (blank, or the same words), so a blank or
+ * unchanged editor does nothing.
+ */
+export function editOnLeaving(input: {
+	readonly board: Board;
+	readonly id: string;
+	readonly mode: "edit" | "answer";
+	readonly text: string;
+}): Board | null {
+	const { board, id, mode, text } = input;
+
+	const next =
+		mode === "edit" ? editCard(board, id, text) : answerCard(board, id, text);
+
+	return next === board ? null : next;
 }
 
 // ---- Text ---------------------------------------------------------------------------------------------------------

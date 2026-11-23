@@ -25,6 +25,7 @@ import {
 	bringBack,
 	commits,
 	editCard,
+	editOnLeaving,
 	emptyBoard,
 	fitContext,
 	keepCard,
@@ -2872,15 +2873,58 @@ describe("by hand", () => {
 });
 
 describe("noteOnLeaving", () => {
-	it("gives the words in a by-hand field as the note to add", () => {
+	it("gives the words in an open editor as the note to add", () => {
 		expect(
-			noteOnLeaving({ byHand: true, text: "  Venues   that book us " }),
+			noteOnLeaving({ editorOpen: true, text: "  Venues   that book us " }),
 		).toBe("Venues that book us");
 	});
 
-	it("adds nothing for a blank field or with the AI on", () => {
-		expect(noteOnLeaving({ byHand: true, text: "   " })).toBeNull();
-		expect(noteOnLeaving({ byHand: true, text: "" })).toBeNull();
-		expect(noteOnLeaving({ byHand: false, text: "Venues" })).toBeNull();
+	it("adds nothing for a blank editor or a closed one", () => {
+		expect(noteOnLeaving({ editorOpen: true, text: "   " })).toBeNull();
+		expect(noteOnLeaving({ editorOpen: true, text: "" })).toBeNull();
+		expect(noteOnLeaving({ editorOpen: false, text: "Venues" })).toBeNull();
+	});
+});
+
+describe("editOnLeaving", () => {
+	const board = started(said("audience", "Fans", "Fans should hear new music"));
+	const id = board.cards[0].id;
+
+	it("applies an edit left in a card's editor as its confirm would", () => {
+		const next = editOnLeaving({
+			board,
+			id,
+			mode: "edit",
+			text: "  Local   fans ",
+		});
+
+		expect(next?.cards.find((c) => c.id === id)?.text).toBe("Local fans");
+		expect(next).toEqual(editCard(board, id, "Local fans"));
+	});
+
+	it("applies an answer left in a question's editor", () => {
+		const q = started(
+			said("questions", "Who adds shows?", "see upcoming shows near them"),
+		);
+
+		const qid = q.cards[0].id;
+
+		const next = editOnLeaving({
+			board: q,
+			id: qid,
+			mode: "answer",
+			text: "Me",
+		});
+
+		expect(next).toEqual(answerCard(q, qid, "Me"));
+		expect(next).not.toBeNull();
+	});
+
+	it("does nothing for blank or unchanged words", () => {
+		expect(editOnLeaving({ board, id, mode: "edit", text: "   " })).toBeNull();
+		expect(editOnLeaving({ board, id, mode: "edit", text: "Fans" })).toBeNull();
+		expect(
+			editOnLeaving({ board, id: "nope", mode: "edit", text: "x" }),
+		).toBeNull();
 	});
 });

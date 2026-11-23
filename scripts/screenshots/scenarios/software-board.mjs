@@ -538,6 +538,34 @@ export default {
 				},
 			);
 
+			// With the AI on, words left in the open "Add" editor are added when the visitor leaves by Next.
+			await shot(
+				"ai-leave-editor",
+				"The audience screen after leaving with a note still typed in Add",
+				async (page) => {
+					const state = await open(page);
+
+					await write(page, state, PURPOSE);
+					await toLane(page, "audience");
+					const screen = page.locator('[data-lane-screen="audience"]');
+
+					await screen.locator("[data-lane-add]").click();
+					await screen
+						.locator("[data-lane-input]")
+						.fill("Bookers at small venues");
+					await next(page);
+					await back(page);
+
+					if (
+						!(await screen.locator("[data-lane-cards]").innerText()).includes(
+							"Bookers at small venues",
+						)
+					)
+						throw new Error("The note typed in Add was not added on Next");
+					await page.mouse.move(0, 0);
+				},
+			);
+
 			// A lane with no cards left: the visitor set aside every card, so the hint says to add their own or go on.
 			await shot(
 				"lane-empty",
