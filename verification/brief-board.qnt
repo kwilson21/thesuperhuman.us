@@ -7,11 +7,16 @@
 //                reply whose request was sent after the card last became unowned: `since`)
 //   actions:     src/lib/brief-board.ts `keepCard`, `editCard`, `setAside`, `bringBack`, `addNote`, `undo`
 //   the outline: src/lib/brief-board.ts `briefOutline` (what is sent with the brief, and its "from your answers" items)
-// What is left out, on purpose: lanes (each lane is reconciled on its own; the one rule that looks across lanes is
-// naming: a reply card that names, by its ref, a card in another lane leaves that card as it is, which the model's
-// replies already cover by naming any idea; cards never move between lanes), similarity (an idea here is its normalised key; tests/lib/brief-board.test.ts covers the matching), lane limits,
-// the scheduler's timing (it only makes overlap rarer: here any number of requests overlap and replies come in any order),
-// and holding replies while focus is in the board (a held reply is the same as one delivered later).
+// The lane on screen (section 10.3 of the design): the page shows one lane at a time, or none (a written question). A
+// reply applies in full to every lane not on screen. On the lane on screen it only adds cards; its changes to and
+// withdrawals of the cards already listed there wait, as the held reply (`deferred`), until the visitor leaves the lane,
+// and are then applied under the same rules as any reply (ownership, `since`, newest wins, pause) against the board as it
+// is at that moment. Requests no longer depend on a visible board: `send` is unchanged.
+// What is left out, on purpose: lane limits and the one rule that looks across lanes (naming: a reply card that names, by
+// its ref, a card in another lane leaves that card as it is, which the model's replies already cover by naming any idea;
+// cards never move between lanes; the model has two lanes, three ideas), similarity (an idea here is its normalised key; tests/lib/brief-board.test.ts covers the matching),
+// and the scheduler's timing (it only makes overlap rarer: here any number of requests overlap and replies come in any
+// order). The visitor may also write or erase while a lane is on screen: more than the page allows, on purpose.
 // The model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or
 // set-aside ideas.
 //
@@ -27,6 +32,8 @@ module briefBoard {
   //   "outline-quote"    the outline marks a card as read from the answers without checking its passage again
   //   "no-number-guard"  a reply older than the last one applied is applied
   //   "apply-paused"     a reply applies while the board is paused
+//   "apply-on-screen"  a reply is applied in full to the lane on screen too: its changes and withdrawals move the cards
+//                      the visitor is looking at
   const MUTANT: str
 
   // A card for one idea. status: absent, proposed (the model's, unowned), kept, edited, dismissed (set aside), wrote (the
@@ -37,11 +44,18 @@ module briefBoard {
   type Req = { text: Set[int], seen: Set[int], live: bool }
   // One visitor action, for Undo: the idea and the card as it was before.
   type Step = { idea: int, prev: Card }
+  // The reply held for the lane on screen: its request number (0 for none), the ideas it mentions and the ideas it says
+  // were read from the answers. Its changes and withdrawals are applied when the visitor leaves the lane.
+  type Held = { n: int, mention: Set[int], said: Set[int] }
 
   val IDEAS = 1.to(3)
   // Idea i is read from passage i. Idea 3 is in no passage: it can only be an inference.
   val PASSAGES = 1.to(2)
   val MAXREQ = 4
+  // Two lanes: ideas 1 and 2 are in lane 1, idea 3 is in lane 2. The lane on screen is 0 (none), 1 or 2.
+  val LANES = 1.to(2)
+  pure def laneOf(i: int): int = if (i <= 2) 1 else 2
+  val noHeld: Held = { n: 0, mention: Set(), said: Set() }
   val absent = { status: "absent", basis: "none", since: 0 }
 
   pure def owned(c: Card): bool = Set("kept", "edited", "dismissed", "wrote").contains(c.status)
@@ -62,6 +76,12 @@ module briefBoard {
   var olderApplied: bool
   var appliedPaused: bool
   var undoReverted: bool
+  // The lane on screen and the reply held for it.
+  var screen: int
+  var deferred: Held
+  // Ghosts: a delivery changed or withdrew a card listed on the lane on screen; leaving a lane applied held changes.
+  var onScreenChanged: bool
+  var flushChanged: bool
 
   action init = all {
     text' = Set(),
@@ -78,12 +98,17 @@ module briefBoard {
     olderApplied' = false,
     appliedPaused' = false,
     undoReverted' = false,
+    screen' = 0,
+    deferred' = noHeld,
+    onScreenChanged' = false,
+    flushChanged' = false,
   }
 
   action keepRequestsAndGhosts = all {
     reqs' = reqs, sent' = sent, applied' = applied,
     ownedTouched' = ownedTouched, ungroundedApplied' = ungroundedApplied, olderApplied' = olderApplied,
     appliedPaused' = appliedPaused, undoReverted' = undoReverted,
+    screen' = screen, deferred' = deferred, onScreenChanged' = onScreenChanged, flushChanged' = flushChanged,
   }
 
   // ---- The visitor ----------------------------------------------------------------------------------------------------
@@ -175,6 +200,7 @@ module briefBoard {
     text' = text, cards' = cards, applied' = applied, paused' = paused, history' = history, rejected' = rejected,
     restoredAt' = restoredAt, ownedTouched' = ownedTouched, ungroundedApplied' = ungroundedApplied,
     olderApplied' = olderApplied, appliedPaused' = appliedPaused, undoReverted' = undoReverted,
+    screen' = screen, deferred' = deferred, onScreenChanged' = onScreenChanged, flushChanged' = flushChanged,
   }
 
   // Whether reply n may change the card for idea i (update it, or withdraw it by leaving it out).
@@ -203,24 +229,42 @@ module briefBoard {
     else c
   }
 
-  action deliver = {
-    nondet n = reqs.keys().filter(k => reqs.get(k).live).oneOf()
-    nondet mention = IDEAS.powerset().oneOf()
-    nondet said = IDEAS.powerset().oneOf()
-    val stale = MUTANT != "no-number-guard" and n <= applied
-    val held = MUTANT != "apply-paused" and paused
-    val updated = IDEAS.mapBy(i => after(n, i, mention, said))
+  // The card for idea i after reply n if the reply may only add: the part of `after` that lists a new card. This is all a
+  // reply does to the lane on screen when it arrives.
+  def afterAdd(n: int, i: int, mention: Set[int], said: Set[int]): Card = {
+    val c = cards.get(i)
+    val r = reqs.get(n)
+    val against = if (MUTANT == "snapshot-quote") r.text else text
+    val ok = mention.contains(i) and (said.contains(i) implies groundedIn(i, against))
+    val basis = if (said.contains(i)) "said" else "suggested"
+    val addable = c.status == "absent" or (MUTANT == "no-avoid" and c.status == "dismissed")
+    if (ok and addable and not(c.status != "absent" and mayChange(n, i))) { status: "proposed", basis: basis, since: sent }
+    else c
+  }
+
+  // The card for idea i after the changes and withdrawals of reply n, which the lane on screen held until it was left.
+  def afterChange(n: int, i: int, mention: Set[int], said: Set[int]): Card = {
+    val c = cards.get(i)
+    val r = reqs.get(n)
+    val against = if (MUTANT == "snapshot-quote") r.text else text
+    val ok = mention.contains(i) and (said.contains(i) implies groundedIn(i, against))
+    val basis = if (said.contains(i)) "said" else "suggested"
+    if (ok and c.status != "absent" and mayChange(n, i)) { ...c, status: "proposed", basis: basis }
+    else if (not(ok) and c.status != "absent" and mayWithdraw(n, i)) absent
+    else c
+  }
+
+  // Puts `updated` on the board, by reply n, and records what the ghosts watch. `watch` is the ideas whose change a
+  // delivery may not make (the lane on screen); `leaving` marks the application of a held reply.
+  action commit(n: int, updated: int -> Card, reqsNext: int -> Req, appliedNext: int, screenNext: int, deferredNext: Held,
+                watch: Set[int], leaving: bool): bool = {
     val changed = IDEAS.filter(i => updated.get(i) != cards.get(i))
-    if (stale or held) all {
-      reqs' = reqs.set(n, { ...reqs.get(n), live: false }),
-      text' = text, cards' = cards, sent' = sent, applied' = applied, paused' = paused, history' = history,
-      rejected' = rejected, restoredAt' = restoredAt, ownedTouched' = ownedTouched,
-      ungroundedApplied' = ungroundedApplied, olderApplied' = olderApplied, appliedPaused' = appliedPaused,
-      undoReverted' = undoReverted,
-    } else all {
-      reqs' = reqs.set(n, { ...reqs.get(n), live: false }),
+    all {
+      reqs' = reqsNext,
       cards' = updated,
-      applied' = if (n > applied) n else applied,
+      applied' = appliedNext,
+      screen' = screenNext,
+      deferred' = deferredNext,
       text' = text, sent' = sent, paused' = paused, history' = history, rejected' = rejected, restoredAt' = restoredAt,
       ownedTouched' = (ownedTouched or changed.exists(i => owned(cards.get(i)))),
       ungroundedApplied' = (ungroundedApplied
@@ -228,10 +272,48 @@ module briefBoard {
       olderApplied' = (olderApplied or (n < applied and changed.size() > 0)),
       appliedPaused' = (appliedPaused or (paused and changed.size() > 0)),
       undoReverted' = (undoReverted or changed.exists(i => n <= restoredAt.get(i))),
+      onScreenChanged' = (onScreenChanged or changed.exists(i => watch.contains(i) and cards.get(i).status != "absent")),
+      flushChanged' = (flushChanged or (leaving and changed.size() > 0)),
     }
   }
 
-  action step = any { write, erase, keep, edit, setAside, bringBack, addNote, undo, pause, resume, send, deliver }
+  action deliver = {
+    nondet n = reqs.keys().filter(k => reqs.get(k).live).oneOf()
+    nondet mention = IDEAS.powerset().oneOf()
+    nondet said = IDEAS.powerset().oneOf()
+    val stale = MUTANT != "no-number-guard" and n <= applied
+    val held = MUTANT != "apply-paused" and paused
+    // The lane on screen is held back, except in the mutant that applies everything to it.
+    val onScreen = if (MUTANT == "apply-on-screen") Set() else IDEAS.filter(i => screen > 0 and laneOf(i) == screen)
+    val updated = IDEAS.mapBy(i => if (onScreen.contains(i)) afterAdd(n, i, mention, said) else after(n, i, mention, said))
+    val spent = reqs.set(n, { ...reqs.get(n), live: false })
+    if (stale or held) all {
+      reqs' = spent,
+      text' = text, cards' = cards, sent' = sent, applied' = applied, paused' = paused, history' = history,
+      rejected' = rejected, restoredAt' = restoredAt, ownedTouched' = ownedTouched,
+      ungroundedApplied' = ungroundedApplied, olderApplied' = olderApplied, appliedPaused' = appliedPaused,
+      undoReverted' = undoReverted, screen' = screen, deferred' = deferred, onScreenChanged' = onScreenChanged,
+      flushChanged' = flushChanged,
+    } else commit(n, updated, spent, if (n > applied) n else applied, screen,
+                  if (screen > 0 and MUTANT != "apply-on-screen") { n: n, mention: mention, said: said } else deferred,
+                  IDEAS.filter(i => screen > 0 and laneOf(i) == screen), false)
+  }
+
+  // The visitor moves to another lane, or to none (a written question or another step). Leaving a lane applies the reply
+  // held for it. The held reply is dropped, not applied, when a newer reply has applied since or the board is paused: the
+  // same two rules that stop a reply on arrival.
+  action moveScreen = {
+    nondet lane = 0.to(2).filter(l => l != screen).oneOf()
+    val has = screen > 0 and deferred.n > 0
+    val dropped = (MUTANT != "no-number-guard" and deferred.n < applied) or (MUTANT != "apply-paused" and paused)
+    val updated =
+      if (has and not(dropped))
+        IDEAS.mapBy(i => if (laneOf(i) == screen) afterChange(deferred.n, i, deferred.mention, deferred.said) else cards.get(i))
+      else cards
+    commit(deferred.n, updated, reqs, applied, lane, noHeld, Set(), true)
+  }
+
+  action step = any { write, erase, keep, edit, setAside, bringBack, addNote, undo, pause, resume, send, deliver, moveScreen }
 
   // For the Apalache check only (`--step stepOrEnd`).
   action finished = all {
@@ -269,14 +351,23 @@ module briefBoard {
   // 7. Nothing a reply says changes the board while it is paused.
   val pausedHolds = not(appliedPaused)
 
+  // 8. No card listed on the lane on screen is changed or withdrawn by a delivery. (A held change is applied when the
+  // visitor leaves the lane, and then it is judged by properties 1 to 7 like any other.)
+  val onScreenStable = not(onScreenChanged)
+
   val allProperties = and {
     ownedUntouched, rejectedStaysRejected, undoRespected, groundedOnApply, outlineGrounded, newestWins, pausedHolds,
+    onScreenStable,
   }
 
   // Reachability witness, for a hand check with the negated invariant: a reply sent before the visitor kept a card arrived
   // after it and left it alone, and a later reply updated another card.
   val keptThenStaleReply = IDEAS.exists(i => cards.get(i).status == "kept") and applied >= 2
   val neverKeptThenStaleReply = not(keptThenStaleReply)
+
+  // Reachability witnesses for the lane on screen: a reply was held for it, and leaving the lane applied a held change.
+  val neverHeld = not(screen > 0 and deferred.n > 0)
+  val neverFlushChanged = not(flushChanged)
 }
 
 module board { import briefBoard(MUTANT = "none").* }
@@ -290,3 +381,4 @@ module boardSnapshotQuote { import briefBoard(MUTANT = "snapshot-quote").* }
 module boardOutlineQuote { import briefBoard(MUTANT = "outline-quote").* }
 module boardNoNumberGuard { import briefBoard(MUTANT = "no-number-guard").* }
 module boardApplyPaused { import briefBoard(MUTANT = "apply-paused").* }
+module boardApplyOnScreen { import briefBoard(MUTANT = "apply-on-screen").* }

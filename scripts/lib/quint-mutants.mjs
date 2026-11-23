@@ -111,6 +111,7 @@ export const boardMutants = {
 	boardOutlineQuote: { property: "outlineGrounded" },
 	boardNoNumberGuard: { property: "newestWins" },
 	boardApplyPaused: { property: "pausedHolds" },
+	boardApplyOnScreen: { property: "onScreenStable" },
 };
 
 // verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module

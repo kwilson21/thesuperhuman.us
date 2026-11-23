@@ -602,7 +602,7 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 File: `verification/brief-board.qnt` (module `board`), written from the design in `docs/plans/2026-11-living-brief.md` before the code. The living brief's board shows the interpreting model's cards beside the brief's answers while the visitor keeps writing and keeps, edits, answers, sets aside, brings back and undoes cards, and pauses the board. Requests are numbered; replies arrive late, out of order and overlapping (the page sends one at a time, but the model does not rely on it); and the model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or set-aside ideas. The code modelled is `applyReply`, the visitor's actions and `briefOutline` in `src/lib/brief-board.ts`.
 
-**State.** One lane of three ideas (two can be read from a passage of the answers, one only inferred), each a card with a status, a basis and `since` (how many requests had been sent when it last became unowned); the passages in the answers; the requests (what they showed); the number of the newest reply applied; Pause; the Undo history; and ghosts for what the visitor set aside and when Undo last made each card unowned.
+**State.** Two lanes holding three ideas (two can be read from a passage of the answers, one only inferred), each a card with a status, a basis and `since` (how many requests had been sent when it last became unowned); the passages in the answers; the requests (what they showed); the number of the newest reply applied; Pause; the Undo history; and ghosts for what the visitor set aside and when Undo last made each card unowned.
 
 **Properties** (`allProperties`):
 1. `ownedUntouched`: a reply never changes a card the visitor owns (kept, edited, set aside, or their own note).
@@ -612,6 +612,7 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 5. `outlineGrounded`: everything the outline sends as read from the answers is in the answers being sent.
 6. `newestWins`: an older reply never changes the board after a newer one has applied.
 7. `pausedHolds`: nothing a reply says changes the board while it is paused.
+8. `onScreenStable`: no card listed on the lane on screen is changed or withdrawn by a delivery (section 10 of the design: a reply only adds there; its changes and withdrawals are held and applied when the visitor leaves the lane).
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -623,6 +624,9 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 | `OutlineQuote` | The outline marks a card as read from the answers without checking its passage again | `outlineGrounded` |
 | `NoNumberGuard` | A reply older than the last applied is applied | `newestWins` |
 | `ApplyPaused` | A reply applies while the board is paused | `pausedHolds` |
+| `ApplyOnScreen` | A reply is applied in full to the lane on screen too | `onScreenStable` |
+
+**The lane on screen** (added November 22, 2026 for the design in section 10 of the living brief, before the code). The model has two lanes (ideas 1 and 2 in the first, idea 3 in the second) and `screen`: 0 for none, or the lane the visitor is looking at, which a `moveScreen` action changes. A reply applies in full to lanes not on screen. On the lane on screen it only adds cards, and is kept as `deferred` (its number and the ideas it mentions and says were read from the answers; a newer delivery replaces it). Leaving the lane applies it with `afterChange`, the changes and withdrawals only, against the board as it is then, under the same ownership, `since` and pause rules, and drops it if a newer reply has applied or the board is paused. `send` no longer depends on a visible board. Reachability witnesses for a hand check: `neverHeld` and `neverFlushChanged`.
 
 **Found by writing it.** The first design let a reply change or withdraw any unowned card its request had shown the model. If the visitor sets such a card aside and then undoes it while the request is in flight, the reply silently reverts the Undo. The design now stamps each card with `since`, and a reply may change it only if its request was sent after that. `SeenOnly` keeps the first design as a mutant.
 
@@ -630,7 +634,7 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 
 **Exhaustive.** Run by hand before the third round of review fixes changed `applyReply` (withdrawals before additions, and `refs`, which the model reads as the reply naming a card): `quint verify verification/brief-board.qnt --main board --init init --step stepOrEnd --invariant allProperties --max-steps N` (2026-11-15, the Apalache that `quint` 0.33.1 downloads, one core, a cloud container): no violation at 5 steps (21 seconds) or 7 steps (2 minutes 15 seconds). Run again at 7 steps after the fifth round removed moves between lanes (2 minutes 25 seconds): no violation.
 
-**What it does not cover.** Lanes and lane limits (each lane is reconciled on its own, and cards never move between lanes; a reply card naming a card in another lane only keeps it, which the model's replies cover by naming any idea; see above), a reply naming a card whose new version is dropped (the card stays while its passage is in the answers; unit tested), the similarity of two wordings (`sameIdea`), and a reply rewording one card into another card's idea (an idea is one key here, so the model cannot express it; review found it, and `tests/lib/brief-board.test.ts` holds the fix), holding a reply while the visitor is in the board (the same as a later delivery), and the scheduler's timing.
+**What it does not cover.** Lane limits and similar rules across lanes (the model has two lanes, each reconciled on its own, and cards never move between lanes; a reply card naming a card in another lane only keeps it, which the model's replies cover by naming any idea; see above), a reply naming a card whose new version is dropped (the card stays while its passage is in the answers; unit tested), the similarity of two wordings (`sameIdea`), and a reply rewording one card into another card's idea (an idea is one key here, so the model cannot express it; review found it, and `tests/lib/brief-board.test.ts` holds the fix), and the scheduler's timing. The visitor may write or erase while a lane is on screen, more than the page allows, on purpose.
 
 ## The software-inquiry model
 
