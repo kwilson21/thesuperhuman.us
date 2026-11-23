@@ -212,6 +212,89 @@ describe("middleware.onRequest", () => {
 		expect(next).not.toHaveBeenCalled();
 	});
 
+	it("accepts a same-origin form post that a no-referrer page sends with Origin null, and nothing else", async () => {
+		// Under `Referrer-Policy: no-referrer` (the agreement, offer and studio pages) a browser sends a native form post
+		// with `Origin: null`; its `Sec-Fetch-Site` still says `same-origin`, and a page cannot set that header.
+		const attempt = async (
+			path: string,
+			headers: Record<string, string>,
+			type = "application/x-www-form-urlencoded",
+		) => {
+			const ctx = makeContext("https://thesuperhuman.us" + path);
+			ctx.request = new Request(ctx.url, {
+				method: "POST",
+				headers: { "content-type": type, ...headers },
+				body: type.includes("json") ? "{}" : "key=fictional",
+			});
+			const next = vi.fn(async () => new Response("reached the route"));
+			const response = await run(ctx, next);
+
+			return { status: response.status, reached: next.mock.calls.length > 0 };
+		};
+
+		const sameOrigin = { origin: "null", "sec-fetch-site": "same-origin" };
+
+		const refused: Record<string, string>[] = [
+			{ origin: "null" },
+			{ origin: "null", "sec-fetch-site": "cross-site" },
+			{ origin: "null", "sec-fetch-site": "same-site" },
+			{ origin: "null", "sec-fetch-site": "none" },
+			{ origin: "https://evil.example", "sec-fetch-site": "same-origin" },
+		];
+
+		// The emailed links' Continue forms and every other native form post.
+		for (const path of ["/agreements/verify", "/offer/tok/verify"]) {
+			expect(await attempt(path, sameOrigin)).toEqual({
+				status: 200,
+				reached: true,
+			});
+
+			for (const headers of refused)
+				expect(await attempt(path, headers)).toEqual({
+					status: 403,
+					reached: false,
+				});
+		}
+
+		// The studio's own check, for a JSON action as well as a form.
+		expect(
+			await attempt("/api/studio/session", sameOrigin, "application/json"),
+		).toEqual({
+			status: 200,
+			reached: true,
+		});
+
+		for (const headers of refused)
+			expect(
+				await attempt("/api/studio/session", headers, "application/json"),
+			).toEqual({
+				status: 403,
+				reached: false,
+			});
+
+		// The owner's check, with a verified owner.
+		verifyOwnerAccess.mockResolvedValue({ email: "owner@example.com" });
+
+		try {
+			expect(
+				await attempt("/api/owner/audience", sameOrigin, "application/json"),
+			).toEqual({
+				status: 200,
+				reached: true,
+			});
+
+			for (const headers of refused)
+				expect(
+					await attempt("/api/owner/audience", headers, "application/json"),
+				).toEqual({
+					status: 403,
+					reached: false,
+				});
+		} finally {
+			verifyOwnerAccess.mockResolvedValue(null);
+		}
+	});
+
 	it("allows only originless, cookieless native OAuth form exchanges through the form guard", async () => {
 		const attempt = async (
 			path: string,

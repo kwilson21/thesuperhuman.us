@@ -27,6 +27,23 @@ function withOwnerHeaders(response: Response) {
 
 type VerifyOwner = typeof verifyOwnerAccess;
 
+/**
+ * Whether a state-changing request comes from this site. A browser names the site in `Origin`, except that a native
+ * form post from a page whose referrer policy is `no-referrer` (the agreement, offer and studio pages set it, so a
+ * link's key never reaches a Referer header) carries `Origin: null`. Such a post is still this site's when the
+ * browser's own `Sec-Fetch-Site` header, which no page can set, says `same-origin`. A post from another site says
+ * `cross-site` (or `same-site` from a sibling host), and a request without `Sec-Fetch-Site` is refused as before.
+ */
+function fromThisSite(request: Request, url: URL) {
+	const origin = request.headers.get("origin");
+
+	return (
+		origin === url.origin ||
+		(origin === "null" &&
+			request.headers.get("sec-fetch-site") === "same-origin")
+	);
+}
+
 async function handle(
 	context: APIContext,
 	next: MiddlewareNext,
@@ -88,7 +105,7 @@ async function handle(
 		!context.isPrerendered &&
 		ownerApi &&
 		!["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-		request.headers.get("origin") !== url.origin
+		!fromThisSite(request, url)
 	) {
 		return new Response(
 			`Cross-site ${request.method} owner actions are forbidden`,
@@ -100,7 +117,7 @@ async function handle(
 		!context.isPrerendered &&
 		studioApi &&
 		!["GET", "HEAD", "OPTIONS"].includes(request.method) &&
-		request.headers.get("origin") !== url.origin
+		!fromThisSite(request, url)
 	) {
 		return new Response("Cross-site studio actions are forbidden", {
 			status: 403,
@@ -136,7 +153,7 @@ async function handle(
 				"text/plain",
 			].some((formType) => type.toLowerCase().includes(formType));
 
-		if (formLike && request.headers.get("origin") !== url.origin) {
+		if (formLike && !fromThisSite(request, url)) {
 			return new Response(
 				`Cross-site ${request.method} form submissions are forbidden`,
 				{ status: 403 },
