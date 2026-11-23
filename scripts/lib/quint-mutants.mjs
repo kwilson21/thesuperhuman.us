@@ -269,6 +269,7 @@ export const audioProjectNoticesMutants = {
 	projectNoticesQueueStatusOnly: { property: "oneEmailInTotal" },
 	projectNoticesCopyClaimNoState: { property: "copyOnlyWhenExecuted" },
 	projectNoticesNoticeClaimNoState: { property: "noticeOnlyBeforeCountersign" },
+	projectNoticesNoObsolete: { property: "noSendingAfterCountersign" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy

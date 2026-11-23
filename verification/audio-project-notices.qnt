@@ -70,6 +70,7 @@ module audioProjectNotices {
   //   "uncertain-failed"  an uncertain outcome is written as failed
   //   "lookup-no-open"    the recipient read does not filter on the project's access, so a closed project has a recipient (the
   //                       update notice's claim has no access condition, so this read is what keeps it from mailing)
+  //   "no-obsolete"       a countersign or an abandon leaves a signing notice that is `sending` as it is (A21 gone)
   const MUTANT: str
   // "invitation", "update", "copy" or "signing": whose conditions the claim, the outcome write, the retry and the close have
   // (see the header).
@@ -245,12 +246,12 @@ module audioProjectNotices {
 
   // While a delivery is between its steps: the owner closes the project's access, or the request is withdrawn (the audio kinds);
   // retention closes the agreement's archive, never while the copy is `sending` (a copy); the owner countersigns or abandons
-  // the agreement, and the same batch fails the notice if it is `sending` (a signing notice, A21).
+  // the agreement, and the same batch fails the notice if it is `sending` (a signing notice, A21; "no-obsolete" drops it).
   action closes = all {
     open,
     inFlight,
     KIND != "copy" or status != "sending",
-    status' = if (KIND == "signing" and status == "sending") "failed" else status,
+    status' = if (KIND == "signing" and status == "sending" and MUTANT != "no-obsolete") "failed" else status,
     open' = false, epoch' = epoch, mailed' = mailed,
     clock' = clock + 1, attempt' = attempt, closedAt' = clock + 1,
     runs' = runs,
@@ -289,9 +290,15 @@ module audioProjectNotices {
   // attempt is later than the moment it left client_signed.
   val noticeOnlyBeforeCountersign = KIND != "signing" or closedAt == 0 or attempt == 0 or attempt < closedAt
 
+  // 7. A signing notice is never `sending` once its agreement left client_signed: the countersign or abandon fails one that
+  // is (A21), the in-flight delivery's outcome is written only while it is still `sending` (by attempt), and neither a claim
+  // nor an A20 reset takes a notice that is not current. Without A21 such a notice could stay `sending` with nothing left to
+  // move it, and retention, which refuses an agreement with a notice `sending`, would never close its archive.
+  val noSendingAfterCountersign = KIND != "signing" or open or status != "sending"
+
   val allProperties = and {
     oneEmailInTotal, claimOnlyWhileOpen, closedUpdateNeverMails, sentMeansMailed, failedMeansNotMailed, copyOnlyWhenExecuted,
-    noticeOnlyBeforeCountersign,
+    noticeOnlyBeforeCountersign, noSendingAfterCountersign,
   }
 
   // Reachability witness, for a hand with the negated invariant: a retry after a failure goes out (two epochs with an email
@@ -323,3 +330,4 @@ module projectNoticesQueueStatusOnly { import audioProjectNotices(MUTANT = "queu
 // Mutants of the agreements' kinds.
 module projectNoticesCopyClaimNoState { import audioProjectNotices(MUTANT = "claim-no-state", KIND = "copy").* }
 module projectNoticesNoticeClaimNoState { import audioProjectNotices(MUTANT = "claim-no-state", KIND = "signing").* }
+module projectNoticesNoObsolete { import audioProjectNotices(MUTANT = "no-obsolete", KIND = "signing").* }

@@ -750,8 +750,10 @@ and which had been run by hand only to 5 steps), was still running after 36 minu
 
 The notices model has no `stepOrEnd` and is not in the exhaustive list; its agreements kinds were run by hand the same
 way with `--step step` (`verification/audio-project-notices.qnt`): `projectNoticesCopy` and `projectNoticesSigning` keep
-every property up to 7 steps (49 s, 52 s); `projectNoticesCopyClaimNoState` and `projectNoticesNoticeClaimNoState` find
-no violation at 2 steps and one at 3 (a read, the close and the claim; about 10 s each).
+every property up to 7 steps (49 s, 52 s; `projectNoticesSigning` again with `noSendingAfterCountersign`, 78 s);
+`projectNoticesCopyClaimNoState` and `projectNoticesNoticeClaimNoState` find no violation at 2 steps and one at 3 (a
+read, the close and the claim; about 10 s each), and so does `projectNoticesNoObsolete` (a read, the claim and the
+close; 35 s and 32 s with other runs alongside).
 
 ## The music-playback model
 
@@ -1030,12 +1032,12 @@ bias the random runs rarely reach the races.
   published final in the model, so dropping only the file check is an equivalent mutant; the completion keeps both conditions
   as today's statement has them. The revoke's
   stage reset is decided from the read and written under a guard with a retry (`RevokeStaleReset` removes both).
-- `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update notice,
-  which have different claim and outcome conditions, and `projectNoticesCopy` and `projectNoticesSigning` for the
-  agreements area, added for the signing conversion, below): the four states and the three statements. 7 properties, 10 mutants
-  (seven of the invitation, one of the update notice, one of each agreements kind; the owner's retry is a read and a
-  guarded write). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
-  confirmation is the owner's judgment and not a property.
+- `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update
+  notice, which have different claim and outcome conditions, and `projectNoticesCopy` and `projectNoticesSigning` for
+  the agreements area, added for the signing conversion, below): the four states and the three statements. 8 properties,
+  11 mutants (seven of the invitation, one of the update notice, one of a copy and two of a signing notice; the owner's
+  retry is a read and a guarded write). Its model of the owner's confirmation is truthful on purpose (the email did not
+  go out); the confirmation is the owner's judgment and not a property.
 
 Every property reads stored rows and stamps (one counter standing for the order D1 serializes statements in), never a
 flag set at the write from the condition the guard checks.
@@ -1082,6 +1084,17 @@ in flight ends `failed` whether or not the email went out, by design (the commen
 for that kind the property says that a failed notice's email went out only once the agreement left client_signed. The
 witness `neverObsoleteAfterMail` (by hand on `projectNoticesSigning`) is violated in about 7 runs, 7 states: a notice is
 claimed, the owner countersigns, and the email goes out. Each new pass run makes 8,000 runs in about 1.5 seconds.
+
+A21 has its own property, added after review: `noSendingAfterCountersign` (a signing notice is never `sending` once its
+agreement left client_signed). It is true of the code: the countersign batch (`software-agreements.ts:703`) and the
+abandon batch (`agreement.ts:163-169`) are the only statements that move an agreement out of client_signed, and both
+run A21 for every document, the SOW that holds the notices included; the in-flight delivery's outcome is written only
+by its attempt while the notice is still `sending` (`agreement-artifacts.ts:510-521`), so it leaves a failed notice as
+it is; and neither the claim nor the A20 reset takes a notice that is not current. Without A21 such a notice would stay
+`sending` once its delivery's answer was uncertain, with nothing left to move it, and retention, whose `eligible`
+refuses an agreement with a notice `sending` (`agreement-retention.ts:37-46`), would never close its archive. Mutant
+`NoObsolete`, the countersign or abandon without A21 (the first run, 5 states): a delivery claims the notice, and the
+owner countersigns while its email is about to go.
 
 Left out for these kinds: the outcome write's attempt condition (`attempt_id=?`). With the owner's confirmation
 truthful, no delivery is still working when a `sending` row is reset, and a `failed` row with a delivery still working

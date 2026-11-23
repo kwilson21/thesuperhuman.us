@@ -653,7 +653,7 @@ describe("the audio project notices model", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties).toHaveLength(7);
+		expect(properties).toHaveLength(8);
 		expect(
 			propertiesWithoutMutant(properties, audioProjectNoticesMutants),
 		).toEqual([]);
@@ -687,6 +687,10 @@ describe("the audio project notices model", () => {
 		expect(audioProjectNoticesMutants.projectNoticesNoticeClaimNoState).toEqual(
 			{ property: "noticeOnlyBeforeCountersign" },
 		);
+		// A21: a countersign or an abandon fails a signing notice that is sending.
+		expect(audioProjectNoticesMutants.projectNoticesNoObsolete).toEqual({
+			property: "noSendingAfterCountersign",
+		});
 	});
 
 	it("every mutant property is one of allProperties", () => {
