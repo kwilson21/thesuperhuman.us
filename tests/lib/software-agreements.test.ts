@@ -22,13 +22,15 @@ import {
 	readClientAgreement,
 } from "~/lib/agreement-client-fields";
 import {
-	reviewAgreements,
 	signAgreements,
 	countersignAgreements,
 	offerAgreements,
 	executedOfferAgreement,
 } from "~/lib/software-agreements";
-import { agreementSession } from "~/lib/agreement-access";
+import {
+	type AgreementSession,
+	agreementSession,
+} from "~/lib/agreement-access";
 import { redeemLinkPage } from "~/server/redeem-page";
 import { POST as signingLinkRoute } from "~/pages/api/offer/[token]/link";
 import { canonicalAgreementRequest } from "~/lib/agreement-host";
@@ -47,6 +49,9 @@ import {
 } from "~/server/agreement-services";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
+import { storeDraft } from "~/server/flows/signing-draft";
+import { DraftRefused } from "~/server/rules/signing-draft";
+import { reviewAndStore } from "~/server/flows/signing-review";
 import { AudioBucket, liveTurnstile, MusicDb } from "~/server/services";
 import {
 	hashOfferToken,
@@ -58,7 +63,6 @@ import { projectToday } from "~/lib/project-dates";
 import { FieldsRefused, type RawValue } from "~/lib/fields";
 import {
 	prefillAgreementDraft,
-	saveAgreementDraft,
 	type PreviousClientDetails,
 } from "~/lib/agreement-draft";
 import type { OwnerRequest } from "~/lib/owner-model";
@@ -371,6 +375,54 @@ const signingLink = (from: Request, turnstileToken = "test") => {
 	);
 };
 
+/**
+ * The review's stages and batch (`reviewAndStore`, src/server/flows/signing-review.ts), for the client's details as the
+ * review route resolves them: answers the documents and the reused MSA, or rejects with an Error naming the refusal and
+ * its sentence (a defect rejects as itself).
+ */
+const reviewDocumentsOf = (
+	database: D1Database,
+	reviewed: SoftwareOffer,
+	session: AgreementSession,
+	client: RawValue,
+) =>
+	Effect.runPromise(
+		reviewAndStore(
+			{ now: () => new Date(), newId: () => crypto.randomUUID() },
+			reviewed,
+			session,
+			client,
+		).pipe(
+			Effect.map((answer) => ({
+				documents: [...answer.documents],
+				reused_msa: answer.reused_msa,
+			})),
+			Effect.mapError(
+				(refusal) =>
+					new Error(`${refusal._tag}: ${"say" in refusal ? refusal.say : ""}`),
+			),
+			Effect.provideService(MusicDb, database),
+		),
+	);
+
+/** The draft saved as the review route saves it first (`storeDraft`, src/server/flows/signing-draft.ts), signing on. */
+const saveDraftOf = (
+	database: D1Database,
+	saved: SoftwareOffer,
+	session: AgreementSession,
+	values: RawValue,
+) =>
+	Effect.runPromise(
+		storeDraft({
+			offer: saved,
+			session: { ...session, revoked_at: null },
+			signingSetting: 1,
+			body: { nonce: session.csrf_nonce, values },
+			route: "review",
+			now: () => new Date(),
+		}).pipe(Effect.provideService(MusicDb, database)),
+	);
+
 /** The visitor's download of a signed copy, with the cookie they hold; answers its bytes or the refusal. */
 const visitorDownload = (id: string, cookie?: string) =>
 	Effect.runPromise(
@@ -424,7 +476,7 @@ async function renderedCertificates(id: string): Promise<SigningCertificate[]> {
 }
 
 async function review() {
-	return reviewAgreements(
+	return reviewDocumentsOf(
 		db,
 		(await offer())!,
 		(await agreementSession(db, request(), "agreement", "o"))!,
@@ -454,7 +506,7 @@ it("removes an unused former client identity when replacing an unsigned review",
 		.prepare("SELECT id FROM software_agreement_clients")
 		.get().id;
 
-	await reviewAgreements(
+	await reviewDocumentsOf(
 		db,
 		(await offer())!,
 		(await agreementSession(db, request(), "agreement", "o"))!,
@@ -1735,7 +1787,7 @@ it("validates font coverage before preserving a review snapshot", async () => {
 	).toBe(coverage.sha256);
 	const session = (await agreementSession(db, request()))!;
 	await expect(
-		reviewAgreements(db, (await offer())!, session, {
+		reviewDocumentsOf(db, (await offer())!, session, {
 			...client,
 			signer_name: "Unsupported 🧪",
 		}),
@@ -1769,7 +1821,7 @@ it("records changed notice details separately from the immutable party snapshot"
 	await review();
 	const session = (await agreementSession(db, request()))!;
 
-	const updated = await reviewAgreements(db, (await offer())!, session, {
+	const updated = await reviewDocumentsOf(db, (await offer())!, session, {
 		...client,
 		business_address: "300 Other Example Street",
 		notice_email: "updated@example.com",
@@ -2435,7 +2487,7 @@ it("reuses an MSA across two offers without importing the first SOW attachments"
 		"UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'",
 	);
 
-	const reviewed = await reviewAgreements(
+	const reviewed = await reviewDocumentsOf(
 		db,
 		(await db
 			.prepare("SELECT * FROM software_offers WHERE id='o2'")
@@ -3448,8 +3500,9 @@ it("restores retry metadata when private storage refuses orphan deletion", async
 });
 
 it("resumes the server draft under a fresh two-hour email session without sharing it with another email", async () => {
-	const { saveAgreementDraft, loadAgreementDraft, prefillAgreementDraft } =
-		await import("~/lib/agreement-draft");
+	const { loadAgreementDraft, prefillAgreementDraft } = await import(
+		"~/lib/agreement-draft"
+	);
 
 	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 
@@ -3475,7 +3528,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		portfolio_choice: "anonymous" as const,
 	};
 
-	await saveAgreementDraft(db, (await offer())!, session, input);
+	await saveDraftOf(db, (await offer())!, session, input);
 	sql
 		.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'")
 		.run();
@@ -3546,7 +3599,7 @@ it.each([
 		expect(result.client.portfolio).toBe(portfolio);
 		expect(result.client.naming).toBe(naming);
 
-		const reviewed = await reviewAgreements(
+		const reviewed = await reviewDocumentsOf(
 			db,
 			(await offer())!,
 			(await agreementSession(db, request()))!,
@@ -3621,8 +3674,6 @@ it("retains both verbatim statements and verification method in signatures and c
 });
 
 it("rejects signing stale reviewed documents after autosaved details change", async () => {
-	const { saveAgreementDraft } = await import("~/lib/agreement-draft");
-
 	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 
 	const { jurisdiction, portfolio, naming, ...rest } = client;
@@ -3634,19 +3685,19 @@ it("rejects signing stale reviewed documents after autosaved details change", as
 	};
 
 	const session = (await agreementSession(db, request()))!;
-	await saveAgreementDraft(db, (await offer())!, session, input);
+	await saveDraftOf(db, (await offer())!, session, input);
 	const resolved = resolveClientDetails(input, session.recipient_email);
 
 	if (!resolved.ok) throw new Error("Invalid fixture");
 
-	const result = await reviewAgreements(
+	const result = await reviewDocumentsOf(
 		db,
 		(await offer())!,
 		session,
 		resolved.client,
 	);
 
-	await saveAgreementDraft(db, (await offer())!, session, {
+	await saveDraftOf(db, (await offer())!, session, {
 		...input,
 		signer_title: "Updated title",
 	});
@@ -3690,8 +3741,6 @@ it("returns field-linked validation messages without raw schema output", async (
 });
 
 it("retires the redundant draft after saving immutable signatures", async () => {
-	const { saveAgreementDraft } = await import("~/lib/agreement-draft");
-
 	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 
 	const { jurisdiction, portfolio, naming, ...rest } = client;
@@ -3703,12 +3752,12 @@ it("retires the redundant draft after saving immutable signatures", async () => 
 		},
 		session = (await agreementSession(db, request()))!;
 
-	await saveAgreementDraft(db, (await offer())!, session, input);
+	await saveDraftOf(db, (await offer())!, session, input);
 	const resolved = resolveClientDetails(input, session.recipient_email);
 
 	if (!resolved.ok) throw new Error("Invalid fixture");
 
-	const result = await reviewAgreements(
+	const result = await reviewDocumentsOf(
 		db,
 		(await offer())!,
 		session,
@@ -4107,7 +4156,7 @@ it.each(["resolve", "withdraw"] as const)(
 		const { changeOwnerRequest } = await import("~/lib/owner-requests");
 		sql.exec("UPDATE software_offer_links SET created_at='2000-01-01'");
 		const current = await offer();
-		await reviewAgreements(
+		await reviewDocumentsOf(
 			db,
 			current!,
 			(await agreementSession(db, request()))!,
@@ -5584,7 +5633,7 @@ it("keeps the reused MSA label on a new SOW when the offer pins a newer MSA temp
 		.prepare("UPDATE software_offers SET msa_template_id=? WHERE id='o2'")
 		.run(newer.id);
 
-	const reviewed = await reviewAgreements(
+	const reviewed = await reviewDocumentsOf(
 		db,
 		(await db
 			.prepare("SELECT * FROM software_offers WHERE id='o2'")
@@ -5821,7 +5870,7 @@ it("keeps a returning client on the executed MSA after a newer MSA is published,
 		"UPDATE software_agreement_sessions SET offer_id='o2'; UPDATE software_agreement_links SET offer_id='o2'",
 	);
 
-	const reviewed = await reviewAgreements(
+	const reviewed = await reviewDocumentsOf(
 		db,
 		(await db
 			.prepare("SELECT * FROM software_offers WHERE id='o2'")
@@ -5931,7 +5980,7 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 		)
 		.run(otherLink);
 
-	const reviewed = await reviewAgreements(
+	const reviewed = await reviewDocumentsOf(
 		db,
 		(await db
 			.prepare("SELECT * FROM software_offers WHERE id='o3'")
@@ -5965,8 +6014,8 @@ it.each(refusedInputs)(
 		const session = (await agreementSession(db, request(), "agreement", "o"))!;
 
 		await expect(
-			reviewAgreements(db, (await offer())!, session, input),
-		).rejects.toBeInstanceOf(FieldsRefused);
+			reviewDocumentsOf(db, (await offer())!, session, input),
+		).rejects.toThrow("StoredDataRefused");
 		expect(
 			sql.prepare("SELECT count(*) n FROM software_agreements").get().n,
 		).toBe(0);
@@ -6006,8 +6055,8 @@ it.each([[null], ["text"], [42], [[]]])(
 		const session = (await agreementSession(db, request(), "agreement", "o"))!;
 
 		await expect(
-			saveAgreementDraft(db, (await offer())!, session, input),
-		).rejects.toBeInstanceOf(FieldsRefused);
+			saveDraftOf(db, (await offer())!, session, input),
+		).rejects.toBeInstanceOf(DraftRefused);
 		expect(
 			sql.prepare("SELECT count(*) n FROM software_agreement_drafts").get().n,
 		).toBe(0);

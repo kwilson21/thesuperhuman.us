@@ -1,143 +1,156 @@
 import type { APIRoute } from "astro";
-import { saveAgreementDraft } from "~/lib/agreement-draft";
-import { resolveClientDetails } from "~/lib/agreement-draft-fields";
-import { z } from "astro/zod";
+import * as Effect from "effect/Effect";
 import {
-	agreementSession,
 	agreementJson,
-	signingEnabled,
+	signingReviewDocumentUnavailable,
+	signingReviewFailed,
+	signingReviewUnavailable,
 } from "~/lib/agreement-access";
 import {
-	nativeAgreementRoute,
 	agreementRequest,
 	nativeAgreementResponse,
+	nativeAgreementRoute,
 } from "~/lib/agreement-request";
-import { FieldsRefused } from "~/lib/fields";
-import { classifyFailure, logUnexpected } from "~/server/failure";
-import { getLinkedOffer } from "~/lib/software-offers";
-import { reviewAgreements, offerAgreements } from "~/lib/software-agreements";
+import { readSigningReviewInput } from "~/server/agreement-input";
+import { loggedAnswer } from "~/server/answers";
+import {
+	readReviewDocument,
+	reviewSigningDocuments,
+} from "~/server/flows/signing-review";
+import { REVIEW_FAILED } from "~/server/rules/signing-review";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 
-/** A fault of the site (a read, a batch, a parser or the code failing for no reason a request explains): 500, logged. */
-function reviewFailed<T>(error: T) {
-	logUnexpected("Agreement review", error);
+/** A fault of the site (a read, a batch, a hash, or the code failing for no reason a request explains): 500, logged. */
+const failed = loggedAnswer(
+	signingReviewFailed.route,
+	signingReviewFailed.answer,
+);
 
-	return agreementJson(
-		{ ok: false, error: "The agreement could not be reviewed." },
-		500,
-	);
-}
+/** A refusal with its own sentence, as a 409. */
+const conflict = (refusal: { readonly say: string }) =>
+	Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 409));
+
+/** Stored data a reader refused, a project started, a signed agreement, or a batch another request changed: one 409. */
+const notReviewed = () =>
+	Effect.succeed(agreementJson({ ok: false, error: REVIEW_FAILED }, 409));
 
 export const GET: APIRoute = async ({ request, locals, params, url }) => {
-	const db = locals.runtime.env.MUSIC_DB;
+	const bindings = bindingsOrUnavailable(locals.runtime.env, ["MUSIC_DB"]);
 
-	try {
-		const offer =
-			db && params.token ? await getLinkedOffer(db, params.token) : null;
+	if (!bindings.ok) return signingReviewDocumentUnavailable();
 
-		const session =
-			db && offer
-				? await agreementSession(db, request, "agreement", offer.id)
-				: null;
-
-		if (!db || !offer || !session || !(await signingEnabled(db)))
-			return agreementJson({ ok: false }, 401);
-
-		const document = (await offerAgreements(db, offer.id)).find(
-			(d) =>
-				d.id === url.searchParams.get("document") &&
-				d.review_session_hash === session.token_hash,
-		);
-
-		if (!document) return agreementJson({ ok: false }, 404);
-
-		return new Response(document.canonical_text, {
-			headers: {
-				"content-type": "text/plain; charset=utf-8",
-				"content-disposition": `attachment; filename="${document.kind}-review.txt"`,
-				"cache-control": "private, no-store",
-				"referrer-policy": "no-referrer",
-				"x-content-type-options": "nosniff",
-			},
-		});
-	} catch (error) {
-		return reviewFailed(error);
-	}
+	return runRoute(
+		bindings.services,
+		readReviewDocument({
+			token: params.token,
+			request,
+			documentId: url.searchParams.get("document"),
+			now: () => new Date(),
+		}).pipe(
+			Effect.map(
+				(document) =>
+					new Response(document.text, {
+						headers: {
+							"content-type": "text/plain; charset=utf-8",
+							"content-disposition": `attachment; filename="${document.kind}-review.txt"`,
+							"cache-control": "private, no-store",
+							"referrer-policy": "no-referrer",
+							"x-content-type-options": "nosniff",
+						},
+					}),
+			),
+			Effect.catchTags({
+				SessionMissing: () => Effect.succeed(agreementJson({ ok: false }, 401)),
+				DocumentNotFound: () =>
+					Effect.succeed(agreementJson({ ok: false }, 404)),
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		signingReviewFailed,
+	);
 };
 
 const post: APIRoute = async ({ request, locals, params }) => {
-	const db = locals.runtime.env.MUSIC_DB;
+	const bindings = bindingsOrUnavailable(locals.runtime.env, ["MUSIC_DB"]);
 
-	if (!db) return agreementJson({ ok: false }, 503);
+	if (!bindings.ok) return signingReviewUnavailable();
+
 	const body = await agreementRequest(request);
 
 	if (body instanceof Response) return body;
 
-	const input = z
-		.object({ csrf_nonce: z.string().min(1), values: z.unknown() })
-		.safeParse(body);
+	const input = readSigningReviewInput(body);
 
-	try {
-		const offer = params.token ? await getLinkedOffer(db, params.token) : null,
-			session = offer
-				? await agreementSession(db, request, "agreement", offer.id)
-				: null;
-
-		if (!(await signingEnabled(db)) || !session)
-			return agreementJson(
-				{
-					ok: false,
-					error:
-						"Open a fresh email link to keep going. Your saved details will be here.",
-				},
-				401,
-			);
-
-		if (!input.success || input.data.csrf_nonce !== session.csrf_nonce)
-			return agreementJson({ ok: false, error: "Reload and try again." }, 403);
-
-		const resolved = resolveClientDetails(
-			input.data.values,
-			session.recipient_email,
-		);
-
-		if (!resolved.ok)
-			return agreementJson(
-				{
-					ok: false,
-					error: "Check the highlighted details.",
-					errors: resolved.errors,
-				},
-				400,
-			);
-		await saveAgreementDraft(db, offer!, session, input.data.values);
-
-		return nativeAgreementResponse(
+	const response = await runRoute(
+		bindings.services,
+		reviewSigningDocuments({
+			token: params.token,
 			request,
-			agreementJson({
-				ok: true,
-				...(await reviewAgreements(db, offer!, session, resolved.client)),
+			// A body the reader refused carries no nonce, which the nonce check refuses (403), after the session's 401.
+			body: input.ok
+				? { nonce: input.value.csrf_nonce, values: input.value.values }
+				: { nonce: undefined, values: undefined },
+			now: () => new Date(),
+			newId: () => crypto.randomUUID(),
+		}).pipe(
+			// The body in today's key order: ok, each document's id, kind, hash and text, then the reused MSA's id, text and hash.
+			Effect.map((answer) =>
+				agreementJson({
+					ok: true,
+					documents: answer.documents.map((document) => ({
+						id: document.id,
+						kind: document.kind,
+						hash: document.hash,
+						text: document.text,
+					})),
+					reused_msa: answer.reused_msa && {
+						id: answer.reused_msa.id,
+						text: answer.reused_msa.text,
+						hash: answer.reused_msa.hash,
+					},
+				}),
+			),
+			Effect.catchTags({
+				SessionMissing: (refusal) =>
+					Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 401)),
+				CsrfMismatch: (refusal) =>
+					Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 403)),
+				// The client's details do not resolve (the draft step cannot refuse values the front resolved).
+				DraftRefused: (refusal) =>
+					Effect.succeed(
+						agreementJson(
+							{ ok: false, error: refusal.say, errors: refusal.errors },
+							400,
+						),
+					),
+				SigningStarted: notReviewed,
+				AlreadySigned: notReviewed,
+				StoredDataRefused: notReviewed,
+				GuardRefused: notReviewed,
+				SaveKeptChanging: notReviewed,
+				DetailsRefused: conflict,
+				SignatureSaved: conflict,
+				MsaMismatch: conflict,
+				TemplatesUnavailable: conflict,
+				RenderRefused: conflict,
+				PendingMsaElsewhere: conflict,
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
 			}),
-			`/offer/${params.token}/sign?review=1`,
-		);
-	} catch (error) {
-		const failure = classifyFailure(error),
-			refused = error instanceof FieldsRefused || error instanceof z.ZodError;
+		),
+		// A defect (stored text that is not JSON, a contractor snapshot that is missing, a bug) is the fixed 500, logged.
+		signingReviewFailed,
+	);
 
-		if (failure.kind === "unexpected" && !refused) return reviewFailed(error);
-
-		return agreementJson(
-			{
-				ok: false,
-				error:
-					failure.kind === "sentence"
-						? failure.say
-						: "The agreement could not be reviewed.",
-			},
-			409,
-		);
-	}
+	return nativeAgreementResponse(
+		request,
+		response,
+		`/offer/${params.token}/sign?review=1`,
+	);
 };
 
 export const POST = nativeAgreementRoute(
