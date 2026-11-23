@@ -24,7 +24,7 @@ import { act, form, MSA, SOW, templateRow } from "./areas/agreement-admin";
 //   404 {error:"That version was not found."}   an unknown version, the other kind's version, a very large version
 //   400 "Check required fields and limits."     kind missing, unknown, in capitals; version missing, zero, negative, a fraction, text that is
 //                       not a number, an empty string, null; accepted by coercion: "2", "2.0", " 2 ", [2], true, "0x10"
-//   409 {error: message}    the first or the comparison read fails
+//   500 "The agreement could not be saved."   the first or the comparison read fails, logged
 //   native form         a version with text becomes an HTML page (the stored text escaped); a version with empty text stays JSON; errors become
 //                       pages; a visitor
 //   403                 a visitor, a studio client cookie

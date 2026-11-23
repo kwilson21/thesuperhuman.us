@@ -31,7 +31,8 @@ import {
 //                                  spaces, a long line, the loop), a long text near the limit, a diff above the table cap
 //   400 "Check required fields and limits."   kind missing, another kind or case, text missing or not text, text of 102401 characters,
 //                                  expectedCurrentVersion missing, negative, a fraction, text, versionLabel over 40, sourceRevision over 120
-//   409 {error: validateTemplate message}   every way a text is refused (the table of problems), a failing read of the current version
+//   409 {error: validateTemplate message}   every way a text is refused (the table of problems)
+//   500 "The agreement could not be saved."   a failing read of the current version, logged
 //   native form                    the preview as an HTML page (200), the same errors as pages, markup characters escaped, a visitor
 //   403                            a visitor
 

@@ -2,7 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: to be filled in when it is opened. Merge facts are recorded after the merge, in the next pull request.
+Pull request: [#391](https://github.com/kwilson21/thesuperhuman.us/pull/391), merged at 12:04:18 UTC as `4826176f`
+(head `01a6a86d`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. Q1 of `docs/plans/2026-11-signing-conversion.md` (#376) was answered in conversation on
 2026-11-23, "The real reason": when the offer stops being signable between the signing link's read and its batch, the
@@ -112,7 +113,7 @@ binding.
   three batches. `tests/security/review-race.test.ts` expects
   200 when another tab creates the same legal party first, and the pending MSA's sentence when another offer's MSA
   appears.
-- PENDING: reviews of the pull request, CI on its head, and the deploy and live check after merge.
+- Reviews, CI, the deploy and the live check: see section 7.
 
 ## 1 to 4. Content, search, accessibility, performance
 
@@ -131,7 +132,18 @@ binding.
 ## 7. Release and final QA
 
 - **PASS · Checks, rollback.** See above.
-- **PENDING · Reviews, CI, production revision and live check.**
+- **PASS · Reviews.** Codex's code and security reviews of `01a6a86d` found nothing. An independent Claude Code pass
+  found nothing blocking (the severity bar of CLAUDE.md applied: a large pull request): `golden:neutral` showed exactly
+  the 23 cases of B7 and Q1 changed in their answers and six `offer-link` cases changed only in their D1 statements (the
+  cooldown's 429 kept); the link's decision order matches `liveSigningGuard` condition for condition, so a guard that
+  still holds always ends in a refusal; the retry is bounded at three batches, keeps the first `at` and draws fresh ids;
+  the review retries only on the pending-MSA index and on a foreign key failure with evidence, and the draft batch runs
+  once. Its three non-blocking notes are in issue #393, for the conversion.
+- **PASS · CI.** On the head `01a6a86d` before merge, all 20 check runs succeeded, the Workers preview build among them.
+- **PASS · Production revision and live check.** After merge, on `4826176f`: the Workers build succeeded (12:06:23 UTC)
+  and `validate` succeeded (12:07:47 UTC). Live check at 12:07:59 UTC: `https://thesuperhuman.us/` answered 200, and a
+  link request answered 404 "Website signing is off.", as before (signing is off on production, and that check comes
+  first).
 - **UNVERIFIED · The races live.** A race between a read and its batch cannot be induced live; the answers are held by
   the tests and the golden corpora.
 - **N/A · Bindings, migrations.** None.
