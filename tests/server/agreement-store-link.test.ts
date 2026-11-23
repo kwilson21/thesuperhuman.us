@@ -1405,14 +1405,17 @@ const CHANGED = [
 ];
 
 /**
- * Statements whose hook pattern PR 4's re-record re-points (plan section 4): the converted statement does the same work
- * on the same table, so the trigger-hit marker stays, but the pattern no longer picks it.
+ * Statements whose hook pattern the conversion re-pointed (plan section 4): the converted statement does the same work
+ * on the same table, so the trigger-hit marker stays, but the old pattern no longer picks it; the corpora pick it with
+ * `to` (offer-link's consume hook; offer-verify-page's live-check hook, whose first match is now the link route's read
+ * of the signing state before each try of its batch and whose second is the page's GET).
  */
 const REPOINTED = [
 	{
 		old: TODAY.consume,
 		call: "consumeLinks",
 		pattern: /UPDATE software_agreement_links SET used_at=\? WHERE purpose/,
+		to: /UPDATE software_agreement_links SET used_at=\? WHERE id IN/,
 		why: "A6 reuses consumeLinks over the ids consumeOlderLinks picks (offer-link: the used_at update after a sent email fails)",
 	},
 	{
@@ -1420,6 +1423,7 @@ const REPOINTED = [
 		call: "readSigningFacts",
 		pattern:
 			/SELECT CASE WHEN EXISTS\(SELECT 1 FROM software_offers o JOIN software_offer_links/,
+		to: /SELECT o\.status,o\.recipient_email_snapshot,r\.status AS request_status/,
 		why: "the redeem's GET reads the signing state for stillOpenForSigning in place of running A1 as a read (offer-verify-page: the GET's live check, nth 2)",
 	},
 ];
@@ -1440,11 +1444,6 @@ const ADDED = [
 		call: "readRecentSigningLinks",
 		index: 0,
 		why: "the recipient's links issued after the window's start, before each try of the link batch (A4's facts)",
-	},
-	{
-		call: "readSigningFacts",
-		index: 0,
-		why: "the offer's signing state before each try of the link batch (A1's facts), and for the redeem's GET",
 	},
 	{
 		call: "readDraftFacts",
@@ -1495,10 +1494,10 @@ describe("the store's SQL against the signing corpora", () => {
 		}
 
 		expect(texts.has(TODAY.linkedOffer)).toBe(true);
-		expect(texts.has(TODAY.redeemRead)).toBe(true);
 		expect(texts.has(TODAY.liveCheck)).toBe(true);
-		// The signing link's own consume (TODAY.consume) left the corpora when the link was converted (its re-recorded
-		// fixtures run `consumeLinks`); the re-pointed hook is checked against its old text below.
+		// The signing link's own consume (TODAY.consume) and the redeem's read (TODAY.redeemRead) left the corpora when the
+		// link and the verify pages were converted (their re-recorded fixtures run `consumeLinks` and `readLinkByKey`); the
+		// re-pointed hook and the changed text are checked against their old texts below.
 	});
 
 	it("keeps every hook's pick for a changed text, names each re-pointed pattern, and adds reads no pattern picks", async () => {
@@ -1530,6 +1529,9 @@ describe("the store's SQL against the signing corpora", () => {
 			expect(sql, repoint.why).toBeDefined();
 			expect(repoint.pattern.test(repoint.old), repoint.why).toBe(true);
 			expect(repoint.pattern.test(sql ?? ""), repoint.why).toBe(false);
+			expect(repoint.to.test(sql ?? ""), repoint.why).toBe(true);
+			expect(repoint.to.test(repoint.old), repoint.why).toBe(false);
+			expect(patterns.map(String), repoint.why).toContain(String(repoint.to));
 			expect(statementOf(sql ?? ""), repoint.why).toEqual(
 				statementOf(repoint.old),
 			);
