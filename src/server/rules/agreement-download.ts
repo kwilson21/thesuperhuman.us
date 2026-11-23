@@ -3,7 +3,8 @@
 // is the visitor's own, or the visitor's signing offer is the agreement's offer or reuses it, or the visitor's studio
 // project is the agreement's project or is linked to it. Anything else is the same refusal as an unknown id, so the
 // rules answer one refusal for every case a visitor can probe. Pure: the flow reads the plain columns and acts on the
-// answer; no statement decides anything.
+// answer; no statement decides anything. The owner's download (`ownerCopy`) needs no visitor check: the owner route is
+// behind sign-in, so it decides only whether the agreement's signed copy is ready and intact.
 import * as Data from "effect/Data";
 import { alwaysWrites, term, unless } from "../terms";
 
@@ -219,4 +220,102 @@ export const intactSignedCopy = alwaysWrites({
 	],
 	writes: () => ({}),
 	writesText: "nothing: the bytes are handed over",
+});
+
+/** The agreement the owner's download names, as read with its client (any status; the rule decides). */
+export type OwnerCopyAgreement = Pick<
+	DownloadAgreement,
+	"status" | "archive_closed_at"
+>;
+
+/**
+ * What the owner's download has read so far. The facts are read one at a time, each only once the facts before it
+ * passed, in today's order: the agreement, then its copy row, then the bytes of the copy's object. A fact not read yet is
+ * absent.
+ */
+export type OwnerCopyFacts = {
+	/** The agreement, or null when none with the id has a client. */
+	readonly agreement: OwnerCopyAgreement | null;
+	/** The agreement's copy row (null when it has none); absent until it is read. */
+	readonly copy?: StoredSignedCopy | null;
+	/** The digest of the bytes read from the copy's object; absent until they are read. */
+	readonly bytesSha256?: string;
+};
+
+/** What the owner's download does next: read the copy row, read the bytes of its object, or hand the bytes over. */
+export type OwnerCopyStep =
+	| { readonly next: "read-copy" }
+	| {
+			readonly next: "read-bytes";
+			readonly pdf_key: string;
+			readonly pdf_sha256: string | null;
+	  }
+	| { readonly next: "hand-over" };
+
+function ownerCopyStep(given: OwnerCopyFacts): OwnerCopyStep {
+	if (given.copy === undefined) return { next: "read-copy" };
+
+	if (given.bytesSha256 !== undefined) return { next: "hand-over" };
+
+	// SAFETY: this runs only once the refusals passed, which ruled out a copy that is missing or names no object.
+	const copy = given.copy as StoredSignedCopy & { readonly pdf_key: string };
+
+	return {
+		next: "read-bytes",
+		pdf_key: copy.pdf_key,
+		pdf_sha256: copy.pdf_sha256,
+	};
+}
+
+/**
+ * The owner's download of a signed copy (today's `agreementDownload`, src/lib/agreement-download.ts): an executed
+ * agreement whose archive is open, then a copy that is ready and names an object, then bytes that have the copy's
+ * digest; the same conditions and sentences as the visitor's `decideDownload` (its first term), `readySignedCopy` and
+ * `intactSignedCopy`, without the visitor's ownership. Each answer names the next fact to read until every one is read.
+ * An object that is missing is the flow's unexpected store state (B8), not a refusal.
+ */
+export const ownerCopy = alwaysWrites({
+	name: "let the owner download an executed agreement's intact ready copy",
+	given: (_request: null, facts: OwnerCopyFacts) => facts,
+	refusals: [
+		unless(
+			term(
+				"the agreement is executed and its archive is not closed",
+				(given: OwnerCopyFacts) =>
+					given.agreement !== null &&
+					given.agreement.status === "executed" &&
+					given.agreement.archive_closed_at === null,
+			),
+			() => new AgreementNotFound(),
+		),
+		unless(
+			term(
+				"the copy is ready and names an object, or it is not read yet",
+				(given: OwnerCopyFacts) =>
+					given.copy === undefined ||
+					(given.copy !== null &&
+						given.copy.status === "ready" &&
+						given.copy.pdf_key !== null &&
+						given.copy.pdf_key !== ""),
+			),
+			() => new CopyNotReady(),
+		),
+		unless(
+			term(
+				"the copy has a digest and the bytes have it, or they are not read yet",
+				(given: OwnerCopyFacts) => {
+					const stored = given.copy?.pdf_sha256 ?? null;
+
+					return (
+						given.bytesSha256 === undefined ||
+						(stored !== null && stored !== "" && stored === given.bytesSha256)
+					);
+				},
+			),
+			() => new CopyIntegrity(),
+		),
+	],
+	writes: ownerCopyStep,
+	writesText:
+		"the next fact to read (the copy row, then its object's bytes), or the bytes handed over",
 });
