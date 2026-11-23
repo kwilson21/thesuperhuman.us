@@ -45,8 +45,9 @@ const OFFER_LOOKUP =
 const SESSION_LOOKUP =
 	/FROM software_agreement_sessions WHERE token_hash=\? AND purpose=\?/;
 
+/** The offer's agreements: `offerAgreements`' read (the sign route's), and the converted routes' `readOfferAgreements`. */
 const AGREEMENTS_READ =
-	/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/;
+	/FROM software_agreements WHERE offer_id=\? (AND status<>'abandoned' )?ORDER BY kind/;
 
 const LINK_INSERT = /INSERT INTO software_agreement_links/;
 

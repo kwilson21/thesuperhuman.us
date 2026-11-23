@@ -1,22 +1,15 @@
 import { readFileSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgreementSession } from "../../src/lib/agreement-access";
-import {
-	type AgreementTemplate,
-	templateFields,
-} from "../../src/lib/agreement-templates";
-import { FieldsRefused, type RawValue } from "../../src/lib/fields";
-import { projectToday } from "../../src/lib/project-dates";
+import { templateFields } from "../../src/lib/agreement-templates";
 import {
 	offerAgreements,
-	reviewAgreements,
 	sessionGuard,
 } from "../../src/lib/software-agreements";
+import { signingStatusIs } from "../../src/server/agreement-store";
+import { AGREEMENT_SIGNED } from "../../src/server/machines/agreement-document";
 import { softwareGuard } from "../../src/lib/software-guard";
-import {
-	hashOfferToken,
-	type SoftwareOffer,
-} from "../../src/lib/software-offers";
+import type { SoftwareOffer } from "../../src/lib/software-offers";
 import {
 	openSession,
 	type StoredAgreementSession,
@@ -27,25 +20,16 @@ import {
 	type OfferAgreementRow,
 	type PendingMsaRow,
 	type ReusedMsaRow,
-	type ReviewOffer,
-	type ReviewSession,
-	type ReviewWrite,
 	reviewDocument,
-	reviewDocuments,
 	reviewExisting,
 	reviewParty,
 	reviewPendingMsa,
-	reviewStored,
-	reviewTemplates,
-	reviewTexts,
 } from "../../src/server/rules/signing-review";
-import type { Refusal } from "../../src/server/terms";
 import {
 	agreementDetails,
 	contractorValues,
 	offerTerms,
 	run,
-	wrote,
 } from "../helpers/offer-rules";
 import {
 	DatabaseSync,
@@ -59,11 +43,14 @@ import {
 // Kept guards: A2 (`sessionGuard`, imported from src/lib/software-agreements.ts) against `openSession`, and A3 (the
 // review's own guard, copied from `reviewOnce`) against `reviewExisting`; A1 is held to `openForSigning` elsewhere. Reads
 // whose SQL decided and whose rule now decides on plain rows: `offerAgreements`' filter (imported), the reused MSA's six
-// conditions, the pending MSA's statuses and `otherRequestChangedClient`'s evidence (copied; each copy is checked to be
-// in today's source, so a change there fails here). Last, today's `reviewAgreements` and the staged rules run on the same
-// database, clock and ids, and must write the same rows and answer the same bytes, or refuse with the same sentence.
+// conditions, the pending MSA's statuses and `otherRequestChangedClient`'s evidence (copied from `reviewOnce` and
+// `otherRequestChangedClient`, src/lib/software-agreements.ts, which the review's conversion deleted; A3 is held to the
+// store's own text). Until that conversion, today's `reviewAgreements` and the staged rules also ran here on the same
+// database, clock and ids; the review flow (src/server/flows/signing-review.ts) now runs the staged rules, and the
+// offer-review golden corpus holds it to what `reviewAgreements` answered and wrote (`pnpm run golden:neutral`).
 
-const SOURCE = readFileSync("src/lib/software-agreements.ts", "utf8");
+/** The store, whose review batch builds A3 (src/server/agreement-store.ts, `reviewStatements`). */
+const STORE = readFileSync("src/server/agreement-store.ts", "utf8");
 
 /** A3, the review's own guard, as `reviewOnce` passes it to `softwareGuard`. */
 const A3 =
@@ -99,23 +86,6 @@ const SESSION: AgreementSession = {
 	verified_at: "2026-11-14T03:00:00.000Z",
 	expires_at: "2099-01-01T00:00:00.000Z",
 	csrf_nonce: "csrf",
-};
-
-/** The client's details as `resolveClientDetails` resolves them. */
-const CLIENT = {
-	legal_name: "Sample LLC",
-	entity_type: "LLC",
-	jurisdiction: "Wyoming",
-	business_address: "100 Example Street",
-	notice_email: "notices@example.com",
-	reviewer_name: "Reviewer",
-	reviewer_email: "reviewer@example.com",
-	approver_name: "Approver",
-	approver_email: "approver@example.com",
-	signer_name: "Example Signer",
-	signer_title: "Representative",
-	portfolio: "allow",
-	naming: true,
 };
 
 /** A template that names every field it must, one per line. */
@@ -324,28 +294,6 @@ const clientsByKey = (database: SqliteDatabase, key: ClientKey) =>
 		)
 		.map((row) => ({ id: text(row, "id") }));
 
-function templateRow(
-	database: SqliteDatabase,
-	id: string | null | undefined,
-): AgreementTemplate | null {
-	const row = database
-		.prepare("SELECT * FROM software_agreement_templates WHERE id=?")
-		.get(id ?? null);
-
-	return row === undefined
-		? null
-		: {
-				id: text(row, "id"),
-				kind: kindOf(row),
-				version: Number(row.version),
-				text: text(row, "text"),
-				sha256: text(row, "sha256"),
-				version_label: maybeText(row, "version_label"),
-				source_revision: maybeText(row, "source_revision"),
-				published_at: text(row, "published_at"),
-			};
-}
-
 /** Whether a statement raises, as a guard does when what it checks no longer holds. */
 const raises = (statement: D1PreparedStatement) =>
 	statement.first().then(
@@ -353,10 +301,14 @@ const raises = (statement: D1PreparedStatement) =>
 		() => true,
 	);
 
-describe("the copies of today's SQL", () => {
-	it("are in today's source, character for character", () => {
-		for (const sql of [A3, REUSED_SQL, PENDING_SQL, EARLIER_SQL, OTHER_SQL])
-			expect(SOURCE).toContain(sql);
+describe("A3 as copied here", () => {
+	it("is the store's review guard, its status list from the agreement document machine", () => {
+		const built = "status IN ('client_signed','executed')";
+
+		expect(signingStatusIs(AGREEMENT_SIGNED)).toBe(built);
+		expect(STORE).toContain(
+			A3.replace(built, "${signingStatusIs(AGREEMENT_SIGNED)}"),
+		);
 	});
 });
 
@@ -745,389 +697,6 @@ describe("otherRequestChangedClient's evidence and clientChangedElsewhere", () =
 					clientsByKey(database, KEY),
 				),
 			).toBe(newToday);
-		}
-	});
-});
-
-/** What the staged rules made of a review: the write, or the first refusal. */
-type Staged = { readonly write: ReviewWrite } | { readonly refusal: Refusal };
-
-/**
- * The review as the flow will run it, on the same database: each read as the store will read it, the clock read and each
- * id drawn where today's code reads and draws them, and each stage asked in turn.
- */
-async function staged(
-	database: SqliteDatabase,
-	offer: ReviewOffer,
-	session: ReviewSession,
-	client: RawValue,
-	draw: () => string,
-): Promise<Staged> {
-	const stored = run(reviewStored.decide({ client, session }, offer));
-
-	if ("refused" in stored) return { refusal: stored.refusal };
-
-	const existing = run(
-		reviewExisting.decide(null, agreementsOf(database, offer.id)),
-	);
-
-	if ("refused" in existing) return { refusal: existing.refusal };
-	const at = new Date().toISOString();
-	const effectiveOn = projectToday(new Date());
-	const found = clientsByKey(database, stored.wrote.key).at(0) ?? null;
-	const newClientId = found ? null : draw();
-
-	const party = run(
-		reviewParty.decide(
-			{ offer, newClientId },
-			{
-				client: found,
-				reusedMsa: offer.reused_msa_id
-					? reusedRow(database, offer.reused_msa_id)
-					: null,
-			},
-		),
-	);
-
-	if ("refused" in party) return { refusal: party.refusal };
-
-	const templates = run(
-		reviewTemplates.decide(null, {
-			msa: templateRow(database, party.wrote.msaTemplateId),
-			sow: templateRow(database, offer.sow_template_id),
-		}),
-	);
-
-	if ("refused" in templates) return { refusal: templates.refusal };
-	const msaId = party.wrote.reused ? null : draw();
-	const sowId = draw();
-
-	const texts = run(
-		reviewTexts.decide(
-			{
-				offer,
-				stored: stored.wrote,
-				party: party.wrote,
-				templates: templates.wrote,
-				msaId,
-				sowId,
-				effectiveOn,
-			},
-			null,
-		),
-	);
-
-	if ("refused" in texts) return { refusal: texts.refusal };
-
-	const hashes = await Promise.all(
-		texts.wrote.documents.map((document) => hashOfferToken(document.text)),
-	);
-
-	const pending = run(
-		reviewPendingMsa.decide(
-			{ offer, party: party.wrote, templates: templates.wrote },
-			pendingRows(database).filter(
-				(row) =>
-					row.client_id === party.wrote.clientId &&
-					row.template_id === templates.wrote.msa.id,
-			),
-		),
-	);
-
-	if ("refused" in pending) return { refusal: pending.refusal };
-
-	return {
-		write: wrote(
-			run(
-				reviewDocuments.decide(
-					{
-						offer,
-						session,
-						stored: stored.wrote,
-						existing: existing.wrote,
-						party: party.wrote,
-						templates: templates.wrote,
-						texts: texts.wrote,
-						hashes,
-						at,
-						sessionNow: new Date().toISOString(),
-						eventId: draw(),
-					},
-					null,
-				),
-			),
-		),
-	};
-}
-
-const uuidFor = (n: number) =>
-	`00000000-0000-4000-8000-${String(n).padStart(12, "0")}` as const;
-
-/** What a promise rejected with, or null when it resolved. */
-const rejection = <T>(promise: Promise<T>) =>
-	promise.then(
-		() => null,
-		(error: Error) => error,
-	);
-
-describe("today's reviewAgreements and the staged rules, on the same database, clock and ids", () => {
-	let drawn = 0;
-
-	beforeEach(() => {
-		vi.useFakeTimers({ toFake: ["Date"] });
-		vi.setSystemTime(new Date(NOW));
-		drawn = 0;
-		vi.spyOn(crypto, "randomUUID").mockImplementation(() => uuidFor(++drawn));
-	});
-
-	afterEach(() => {
-		vi.restoreAllMocks();
-		vi.useRealTimers();
-	});
-
-	/** Runs the staged rules first (they write nothing), then today's code from the same id, on one database. */
-	async function both(
-		setup: (database: SqliteDatabase) => void = () => {},
-		offerOver: Partial<SoftwareOffer> = {},
-		client: RawValue = CLIENT,
-	) {
-		const { database, db, offer } = seeded(offerOver);
-
-		database
-			.prepare(
-				"INSERT INTO software_agreement_sessions VALUES(?,'agreement','o',?,?,'link',?,?,NULL,'csrf')",
-			)
-			.run(
-				TOKEN_HASH,
-				LINK_HASH,
-				EMAIL,
-				SESSION.verified_at,
-				SESSION.expires_at,
-			);
-		setup(database);
-
-		const rules = await staged(database, offer, SESSION, client, () =>
-			uuidFor(++drawn),
-		);
-
-		drawn = 0;
-
-		const today = await reviewAgreements(db, offer, SESSION, client).then(
-			(answer) => ({ answer, error: null }),
-			(error: Error) => ({ answer: null, error }),
-		);
-
-		return { database, rules, today };
-	}
-
-	/** The rows today's batch left and the answer it gave, compared with the write the rules made. */
-	function sameRows(
-		database: SqliteDatabase,
-		write: ReviewWrite,
-		answer: Awaited<ReturnType<typeof reviewAgreements>> | null,
-	) {
-		const documents = database
-			.prepare(
-				"SELECT id,kind,offer_id,request_id,client_id,template_id,msa_id,sow_number,canonical_text,text_sha256,values_json,attachment_manifest_json,created_at,effective_on,review_session_hash FROM software_agreements WHERE offer_id='o' AND status='review' ORDER BY kind",
-			)
-			.all();
-
-		expect(documents).toEqual(write.documents);
-		expect(
-			database
-				.prepare("SELECT * FROM software_agreement_clients WHERE id=?")
-				.get(write.client.id),
-		).toBeDefined();
-		expect(
-			database
-				.prepare(
-					"SELECT * FROM software_agreement_events WHERE action='reviewed'",
-				)
-				.all(),
-		).toEqual([write.event]);
-		expect(JSON.stringify(answer)).toBe(JSON.stringify(write.answer));
-	}
-
-	const writeOf = (rules: Staged) => {
-		if (!("write" in rules)) throw new Error(`refused ${rules.refusal._tag}`);
-
-		return rules.write;
-	};
-
-	it("a first review: the same client row, the MSA and the SOW, the event and the answer, byte for byte", async () => {
-		const { database, rules, today } = await both(
-			undefined,
-			{},
-			{
-				...CLIENT,
-				legal_name: "Fresh LLC",
-			},
-		);
-
-		const write = writeOf(rules);
-
-		expect(today.error).toBeNull();
-		sameRows(database, write, today.answer);
-		expect(
-			database
-				.prepare("SELECT * FROM software_agreement_clients WHERE id=?")
-				.get(write.client.id),
-		).toEqual(write.client);
-		expect(write.client.id).toBe(uuidFor(1));
-		expect(write.documents.map((document) => document.id)).toEqual([
-			uuidFor(2),
-			uuidFor(3),
-		]);
-		expect(write.event.id).toBe(uuidFor(4));
-		expect(write.documents[0]?.effective_on).toBe("2026-11-13");
-	});
-
-	it("a review again for another legal name: the earlier documents and their client are replaced", async () => {
-		const { database, rules, today } = await both((database) => {
-			insertAgreement(database, { id: "a-msa", client_id: "c2" });
-			insertAgreement(database, {
-				id: "a-sow",
-				kind: "sow",
-				client_id: "c2",
-				template_id: "t-sow",
-				msa_id: "a-msa",
-			});
-		});
-
-		const write = writeOf(rules);
-
-		expect(today.error).toBeNull();
-		expect(write.staleClientIds).toEqual(["c2"]);
-		expect(write.client.id).toBe("c1");
-		expect(write.earlierClientId).toBe("c1");
-		sameRows(database, write, today.answer);
-		expect(
-			database
-				.prepare("SELECT id FROM software_agreement_clients WHERE id='c2'")
-				.get(),
-		).toBeUndefined();
-	});
-
-	it("a reused MSA: only the SOW, against that MSA, and the MSA in the answer", async () => {
-		const { database, rules, today } = await both(
-			(database) => {
-				insertAgreement(database, {
-					id: "m1",
-					status: "executed",
-					offer_id: "o-old",
-					client_id: "c1",
-				});
-				database.exec(
-					"INSERT INTO software_agreement_artifacts(agreement_id,status) VALUES('m1','ready')",
-				);
-			},
-			{ reused_msa_id: "m1" },
-		);
-
-		const write = writeOf(rules);
-
-		expect(today.error).toBeNull();
-		expect(
-			write.documents.map((document) => [document.kind, document.msa_id]),
-		).toEqual([["sow", "m1"]]);
-		expect(write.answer.reused_msa?.id).toBe("m1");
-		sameRows(database, write, today.answer);
-	});
-
-	it("refuses with today's sentence, or throws today's error, wherever today's code stops", async () => {
-		const sentence = (error: Error | null) =>
-			error instanceof FieldsRefused
-				? "The agreement could not be reviewed."
-				: error?.message;
-
-		const cases: readonly {
-			readonly setup?: (database: SqliteDatabase) => void;
-			readonly offer?: Partial<SoftwareOffer>;
-			readonly client?: RawValue;
-			readonly tag: string;
-		}[] = [
-			{ client: { ...CLIENT, extra: true }, tag: "StoredDataRefused" },
-			{ offer: { terms_json: "{}" }, tag: "StoredDataRefused" },
-			{ offer: { agreement_details_json: null }, tag: "StoredDataRefused" },
-			{
-				offer: {
-					terms_json: JSON.stringify({
-						...offerTerms,
-						milestones: [offerTerms.milestones[0], offerTerms.milestones[0]],
-					}),
-				},
-				tag: "DetailsRefused",
-			},
-			{
-				setup: (database) =>
-					insertAgreement(database, { id: "a1", status: "client_signed" }),
-				tag: "SignatureSaved",
-			},
-			{
-				setup: (database) =>
-					insertAgreement(database, {
-						id: "m1",
-						status: "executed",
-						offer_id: "o-old",
-					}),
-				offer: { reused_msa_id: "m1" },
-				tag: "MsaMismatch",
-			},
-			{ offer: { sow_template_id: null }, tag: "TemplatesUnavailable" },
-			{ client: { ...CLIENT, legal_name: "株式会社" }, tag: "RenderRefused" },
-			{
-				setup: (database) =>
-					insertAgreement(database, {
-						id: "m-other",
-						offer_id: "o2",
-						client_id: "c1",
-					}),
-				tag: "PendingMsaElsewhere",
-			},
-		];
-
-		for (const { setup, offer, client, tag } of cases) {
-			drawn = 0;
-
-			const { rules, today } = await both(setup, offer, client);
-
-			if (!("refusal" in rules)) throw new Error(`${tag}: the rules wrote`);
-
-			expect(rules.refusal._tag).toBe(tag);
-			expect(rules.refusal.say).toBe(sentence(today.error));
-		}
-	});
-
-	it("throws the same error as today's code for stored text that does not read", async () => {
-		for (const offer of [
-			{ terms_json: "{" },
-			{ agreement_details_json: "{" },
-			{ contractor_snapshot_json: null },
-		]) {
-			drawn = 0;
-
-			const { database } = seeded(offer);
-
-			const thrown = await rejection(
-				staged(database, { ...OFFER, ...offer }, SESSION, CLIENT, () =>
-					uuidFor(++drawn),
-				),
-			);
-
-			const today = await rejection(
-				reviewAgreements(
-					sqliteD1(database),
-					{ ...OFFER, ...offer },
-					SESSION,
-					CLIENT,
-				),
-			);
-
-			expect(thrown).not.toBeNull();
-			expect([thrown?.name, thrown?.message]).toEqual([
-				today?.name,
-				today?.message,
-			]);
 		}
 	});
 });

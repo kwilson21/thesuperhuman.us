@@ -1,8 +1,4 @@
-import type { RawValue } from "./fields";
-import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import { parseDraft, states } from "./agreement-draft-fields";
-import { sessionGuard } from "./software-agreements";
-import type { SoftwareOffer } from "./software-offers";
 import type { OwnerRequest } from "./owner-model";
 import type { JsonValue } from "./json-value";
 
@@ -47,35 +43,4 @@ export async function loadAgreementDraft(
 		.first<{ values_json: string }>();
 
 	return saved ? parseDraft(JSON.parse(saved.values_json)) : null;
-}
-
-/** The values a visitor's draft or review request carries (already read from the body); parseDraft is the first read of them. */
-export async function saveAgreementDraft(
-	db: D1Database,
-	offer: SoftwareOffer,
-	session: AgreementSession,
-	input: RawValue,
-) {
-	const draft = parseDraft(input);
-	await db.batch([
-		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
-		sessionGuard(db, session),
-		db
-			.prepare(
-				`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreements WHERE offer_id=? AND status IN ('client_signed','executed')) THEN 1 ELSE json_extract('Already signed','$') END`,
-			)
-			.bind(offer.id),
-		db
-			.prepare(
-				"INSERT INTO software_agreement_drafts(offer_id,recipient_email,values_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(offer_id,recipient_email) DO UPDATE SET values_json=excluded.values_json,updated_at=excluded.updated_at",
-			)
-			.bind(
-				offer.id,
-				session.recipient_email,
-				JSON.stringify(draft),
-				new Date().toISOString(),
-			),
-	]);
-
-	return draft;
 }

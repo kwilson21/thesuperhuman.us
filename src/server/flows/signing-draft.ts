@@ -40,7 +40,7 @@ export type DraftRequest = {
  * time is read as the batch is built, then the draft's `updated_at`, as today's statements read them.
  */
 export const storeDraft = (input: {
-	readonly offer: LinkedOfferRow;
+	readonly offer: { readonly id: string };
 	readonly session: StoredAgreementSession;
 	readonly signingSetting: number | null;
 	readonly body: DraftBody;

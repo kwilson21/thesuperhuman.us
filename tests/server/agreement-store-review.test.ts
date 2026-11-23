@@ -9,10 +9,7 @@ import { resolveClientDetails } from "../../src/lib/agreement-draft-fields";
 import { templateFields } from "../../src/lib/agreement-templates";
 import type { RawValue } from "../../src/lib/fields";
 import { projectToday } from "../../src/lib/project-dates";
-import {
-	reviewAgreements,
-	signAgreements,
-} from "../../src/lib/software-agreements";
+import { signAgreements } from "../../src/lib/software-agreements";
 import {
 	hashOfferToken,
 	type SoftwareOffer,
@@ -1618,7 +1615,7 @@ describe("the signing batch", () => {
 	});
 });
 
-describe("today's batches beside the store's, on twin databases with the same clock and ids", () => {
+describe("today's signing batch beside the store's, on twin databases with the same clock and ids", () => {
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(new Date(AT));
@@ -1642,51 +1639,9 @@ describe("today's batches beside the store's, on twin databases with the same cl
 		}
 	}
 
-	const reviewCases = [
-		{
-			name: "a first review, for a new client, then again for another legal name",
-			setup: () => OFFER,
-			again: { ...CLIENT, legal_name: "Hopper Industries" },
-		},
-		{
-			name: "a review for a client found by its key, then again for another legal name",
-			setup: (world: World) => {
-				world.seed({
-					software_agreement_clients: [
-						clientRow("c1", { business_address: "9 Old Road" }),
-					],
-				});
-
-				return OFFER;
-			},
-			again: { ...CLIENT, legal_name: "Hopper Industries" },
-		},
-		{
-			name: "a review that reuses the MSA, then again with another address (its client is kept)",
-			setup: (world: World) => reusing(world),
-			again: { ...CLIENT, business_address: "2 Main St" },
-		},
-	];
-
-	for (const testCase of reviewCases)
-		it(`reviews as today's reviewAgreements: ${testCase.name}`, async () => {
-			const today = signingWorld();
-			const store = signingWorld();
-			const offer = testCase.setup(today);
-
-			testCase.setup(store);
-
-			for (const client of [CLIENT, testCase.again]) {
-				await asToday(today, () =>
-					reviewAgreements(today.db, offer, SESSION, client),
-				);
-				await reviewed(store, offer, client);
-
-				expect(store.batches.at(-1)).toEqual(today.batches.at(-1));
-			}
-
-			expect(store.batches.at(-1)?.length).toBeGreaterThan(4);
-		});
+	// The review ran here beside today's `reviewAgreements` until the review's conversion deleted it; the review flow
+	// (src/server/flows/signing-review.ts) runs this store's batch, and the offer-review golden corpus holds it to what
+	// `reviewAgreements` wrote and answered (`pnpm run golden:neutral`).
 
 	const signCases = [
 		{ name: "the MSA and the SOW", setup: () => OFFER, draft: false },
@@ -1763,7 +1718,11 @@ describe("today's batches beside the store's, on twin databases with the same cl
 const CLIENT_BY_KEY =
 	"SELECT id FROM software_agreement_clients WHERE recipient_email=? AND legal_name_key=? AND entity_type=? AND jurisdiction=?";
 
-/** Today's texts the store changes, each with the new text, why, and the hooks PR 4 re-points (none: the hooks pick it as before). */
+/**
+ * Today's texts the store changes, each with the new text, why, the hooks re-pointed (none: the hooks pick it as before),
+ * the patterns the corpora pick the new text with once re-pointed (`to`), and whether the old text's code is deleted (the
+ * review's, with the review's conversion; the read of the offer's agreements stays for the read pages).
+ */
 const CHANGED = [
 	{
 		old: "SELECT * FROM software_agreements WHERE offer_id=? AND status<>'abandoned' ORDER BY kind",
@@ -1777,6 +1736,8 @@ const CHANGED = [
 				/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/,
 			),
 		],
+		to: [String(/FROM software_agreements WHERE offer_id=\? ORDER BY kind/)],
+		deleted: false,
 	},
 	{
 		old: "SELECT * FROM software_agreements WHERE id=? AND kind='msa' AND status='executed' AND terminated_at IS NULL AND archive_closed_at IS NULL AND EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=software_agreements.id AND f.status='ready') AND client_id=?",
@@ -1785,26 +1746,45 @@ const CHANGED = [
 		repoint: [
 			String(/SELECT \* FROM software_agreements WHERE id=\? AND kind='msa'/),
 		],
+		to: [
+			String(
+				/FROM software_agreements a LEFT JOIN software_agreement_artifacts f ON f\.agreement_id=a\.id WHERE a\.id=\?/,
+			),
+		],
+		deleted: true,
 	},
 	{
 		old: "SELECT * FROM software_agreements WHERE client_id=? AND template_id=? AND kind='msa' AND status IN ('review','client_signed') AND offer_id<>?",
 		new: "SELECT * FROM software_agreements WHERE client_id=? AND template_id=?",
 		why: "every agreement of the client and template: `reviewPendingMsa` decides kind, status and offer; the start the hook picks is kept",
 		repoint: [],
+		to: [],
+		deleted: true,
 	},
 	{
 		old: "SELECT id FROM software_agreement_clients WHERE recipient_email=? AND legal_name_key=? AND entity_type=? AND jurisdiction=? AND id<>?",
 		new: CLIENT_BY_KEY,
 		why: "the evidence for a new client is the clients with its key: `clientChangedElsewhere` decides `id<>?`",
 		repoint: [],
+		to: [],
+		deleted: true,
 	},
 	{
 		old: "SELECT 1 FROM software_agreement_clients WHERE id=?",
 		new: "SELECT id FROM software_agreement_clients WHERE id=?",
 		why: "the evidence for a client found before reads its id, which `clientChangedElsewhere` compares",
 		repoint: [],
+		to: [],
+		deleted: true,
 	},
-] as const;
+] satisfies readonly {
+	readonly old: string;
+	readonly new: string;
+	readonly why: string;
+	readonly repoint: readonly string[];
+	readonly to: readonly string[];
+	readonly deleted: boolean;
+}[];
 
 /** The reads the store adds, each with why; no hook of the corpora may pick one, since hooks count their matches. */
 const ADDED = [
@@ -1900,7 +1880,9 @@ describe("the store's SQL against the golden corpora (offer-review, offer-sign)"
 		for (const change of CHANGED) {
 			expect(texts.has(change.new), change.why).toBe(true);
 			expect(texts.has(change.old), change.why).toBe(false);
-			expect(TODAY_SOURCE, change.why).toContain(`"${change.old}"`);
+
+			if (!change.deleted)
+				expect(TODAY_SOURCE, change.why).toContain(`"${change.old}"`);
 		}
 
 		for (const added of ADDED) {
@@ -1924,15 +1906,26 @@ describe("the store's SQL against the golden corpora (offer-review, offer-sign)"
 		expect(HOOK_PATTERNS.length).toBeGreaterThan(15);
 
 		for (const change of CHANGED) {
-			expect(matching(change.old), change.why).toEqual(
-				expect.arrayContaining([...change.repoint]),
-			);
-			expect(matching(change.new), change.why).toEqual(
+			// Each re-pointed pattern picked the old text; the corpora may no longer carry it once re-pointed.
+			for (const repointed of change.repoint)
+				expect(regExpOf(repointed).test(change.old), change.why).toBe(true);
+			expect(
+				matching(change.new).filter((pattern) => !change.to.includes(pattern)),
+				change.why,
+			).toEqual(
 				matching(change.old).filter(
-					(pattern) =>
-						!change.repoint.some((repointed) => repointed === pattern),
+					(pattern) => !change.repoint.includes(pattern),
 				),
 			);
+
+			// Once the corpora pick the new text with a re-pointed pattern, it picks only the new text.
+			for (const pattern of change.to.filter((to) =>
+				HOOK_PATTERNS.map(String).includes(to),
+			)) {
+				expect(matching(change.new), change.why).toContain(pattern);
+				expect(regExpOf(pattern).test(change.old), change.why).toBe(false);
+			}
+
 			// The trigger-hit marker a hook writes names the statement's operation, table and access.
 			expect(statementOf(change.new), change.why).toEqual(
 				statementOf(change.old),

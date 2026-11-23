@@ -1,5 +1,11 @@
 // The client's review of the offer's agreements (docs/plans/2026-11-signing-conversion.md, sections 2 and 3, "review").
 //
+// The fronts, before anything is written: `documentFront` (the GET) and `reviewFront` (the POST) decide from the sent offer
+// the token names, the visitor's signing session for it and the signing setting, as the route has always read them: no
+// session for the offer, or signing off, is SessionMissing (401); then, on the POST, a body the reader refused or a nonce
+// that is not the session's is CsrfMismatch (403), and the client's details that do not resolve are DraftRefused (400,
+// with the errors by field) (`sessionHeld` and `nonceMatches` of src/server/rules/signing-draft.ts, shared).
+//
 // The GET, `reviewDocument`: the document the query names, among the offer's agreements that are not abandoned (as
 // `offerAgreements`' `status<>'abandoned'` chose them), made for this review session (`review_session_hash`), answers its
 // kind and text; anything else is DocumentNotFound (404). It writes nothing, so no guard re-checks it.
@@ -52,8 +58,15 @@ import { FieldsRefused, type RawValue } from "../../lib/fields";
 import { ReaderMessage } from "../../lib/reader-message";
 import { legalNameKey } from "../../lib/software-agreements";
 import { type OfferTerms, parseOfferTerms } from "../../lib/software-offers";
+import { resolveClientDetails } from "../../lib/agreement-draft-fields";
 import { alwaysWrites, term, unless } from "../terms";
 import type { StoredAgreementSession } from "./agreement-session";
+import {
+	DraftRefused,
+	nonceMatches,
+	type SigningSessionFacts,
+	sessionHeld,
+} from "./signing-draft";
 import type { LinkedOfferRow } from "./signing-offer";
 import { proved } from "./software-request";
 
@@ -153,6 +166,92 @@ export type ReviewSession = Pick<
 	StoredAgreementSession,
 	"token_hash" | "link_hash" | "recipient_email"
 >;
+
+type FrontGiven = {
+	readonly offerId: string | null;
+	readonly session: StoredAgreementSession | null;
+	readonly signingOn: boolean;
+};
+
+const frontOf = (facts: SigningSessionFacts): FrontGiven => ({
+	offerId: facts.offer?.id ?? null,
+	session: facts.session,
+	signingOn: Boolean(facts.software_signing_enabled),
+});
+
+/** The GET's front: the visitor holds an open signing session for the sent offer the token names, and signing is on. */
+export const documentFront = alwaysWrites({
+	name: "review GET: the visitor's signing session for the offer",
+	given: (_request: null, facts: SigningSessionFacts) => frontOf(facts),
+	refusals: [sessionHeld],
+	writes: (given): StoredAgreementSession => proved(given.session),
+	writesText: "the session, whose token hash names the documents it may read",
+});
+
+export type ReviewFrontRequest = {
+	/** The body's nonce, or undefined when the reader refused the body (which the nonce check refuses). */
+	readonly nonce: RawValue;
+	/** The client's details as they arrived. */
+	readonly values: RawValue;
+};
+
+type ReviewFrontGiven = FrontGiven & {
+	readonly nonce: RawValue;
+	readonly resolved: ReturnType<typeof resolveClientDetails> | null;
+};
+
+/** What the POST's front checks found: the session, and the client's details resolved from the posted values. */
+export type ReviewFront = {
+	readonly session: StoredAgreementSession;
+	/** What `resolveClientDetails` resolved, which `reviewStored` reads. */
+	readonly client: RawValue;
+};
+
+/**
+ * The POST's front, in the route's order: the session (and signing on), then the nonce, then the client's details resolved
+ * from the posted values with the session's address (`resolveClientDetails`, which today's route called).
+ */
+export const reviewFront = alwaysWrites({
+	name: "review POST: the session, its nonce and the client's details",
+	given: (
+		request: ReviewFrontRequest,
+		facts: SigningSessionFacts,
+	): ReviewFrontGiven => ({
+		...frontOf(facts),
+		nonce: request.nonce,
+		// Resolved only once the nonce is the session's, as the route has always resolved them.
+		resolved:
+			facts.session === null || request.nonce !== facts.session.csrf_nonce
+				? null
+				: resolveClientDetails(request.values, facts.session.recipient_email),
+	}),
+	refusals: [
+		sessionHeld,
+		nonceMatches,
+		unless(
+			term(
+				"the client's details resolve",
+				(given: ReviewFrontGiven) => given.resolved?.ok === true,
+			),
+			(given) =>
+				new DraftRefused({
+					errors:
+						given.resolved !== null && !given.resolved.ok
+							? given.resolved.errors
+							: {},
+				}),
+		),
+	],
+	writes: (given): ReviewFront => {
+		const resolved = proved(given.resolved);
+
+		return {
+			session: proved(given.session),
+			client: resolved.ok ? resolved.client : null,
+		};
+	},
+	writesText: "the session and the client's details, resolved",
+});
 
 export type DocumentRequest = {
 	/** The query's first `document` value, or null when it has none. */
