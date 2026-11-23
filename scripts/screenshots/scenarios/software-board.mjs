@@ -384,7 +384,7 @@ export default {
 						.waitFor();
 					const line = await statusOf(page, "parts");
 
-					if (!/new since you edited your answer/.test(line))
+					if (!/new since you last looked/.test(line))
 						throw new Error(`The pages screen says "${line}"`);
 					await page.waitForFunction(
 						() => !document.querySelector(".board-card.is-new"),

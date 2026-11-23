@@ -49,7 +49,7 @@ no heading says "I".
 The hint with cards is "From your answers. Keep, change or add your own." and with none "Add your own, or go on." An empty
 lane shows its question and Add. The status line (readable by screen readers) says "Reading your answers…" while a
 request waits or is in flight; after an answer changed, it says what is different in the lane since the visitor last left
-it, for example "1 new, 1 removed since you edited your answer", only the parts that are not zero.
+it, for example "1 new, 1 removed since you last looked", only the parts that are not zero.
 
 Every item is a card with a visible origin, in words and in outline, never colour alone:
 

@@ -1701,7 +1701,7 @@ describe("the lane on screen", () => {
 
 		expect(laneChanges(board, "parts")).toEqual({ added: 1, removed: 1 });
 		expect(laneChangesLine(laneChanges(board, "parts"))).toBe(
-			"1 new, 1 removed since you edited your answer",
+			"1 new, 1 removed since you last looked",
 		);
 	});
 
@@ -1994,6 +1994,56 @@ describe("the lane on screen", () => {
 		},
 	);
 
+	it.each([
+		["rewording by ref", suggested("parts", "Lyrics page", "c3")],
+		[
+			"a new quote",
+			{ ...suggested("parts", "Lyrics", "c3"), quote: "words and credits" },
+		],
+	])(
+		"applies on leave a held reply that updates the card a delivery added during the visit (%s)",
+		(_how, item) => {
+			let b = started(
+				suggested("parts", "Music"),
+				suggested("parts", "Contact"),
+			);
+
+			let n: number;
+			[b, n] = sendRequest(b);
+			b = applyReply(
+				b,
+				[
+					suggested("parts", "Music", "c1"),
+					suggested("parts", "Contact", "c2"),
+					suggested("parts", "Lyrics"),
+				],
+				n,
+				ANSWERS,
+				false,
+				"parts",
+			).board;
+			[b, n] = sendRequest(b);
+			b = applyReply(
+				b,
+				[
+					suggested("parts", "Music", "c1"),
+					suggested("parts", "Contact", "c2"),
+					item,
+				],
+				n,
+				ANSWERS,
+				false,
+				"parts",
+			).board;
+
+			const left = leaveLane(b, "parts", ANSWERS);
+			const c3 = left.cards.find((c) => c.id === "c3");
+
+			expect(c3?.text).toBe(item.text);
+			expect(c3?.quote).toBe(item.quote);
+		},
+	);
+
 	it("does not bring back, on leave, a card the delivery added and the visitor then set aside", () => {
 		let b = started(suggested("parts", "Shows"));
 		let n: number;
@@ -2240,13 +2290,13 @@ describe("what changed in a lane since it was left", () => {
 	it("words the line with only the parts that are not zero", () => {
 		expect(laneChangesLine({ added: 0, removed: 0 })).toBe("");
 		expect(laneChangesLine({ added: 2, removed: 0 })).toBe(
-			"2 new since you edited your answer",
+			"2 new since you last looked",
 		);
 		expect(laneChangesLine({ added: 0, removed: 1 })).toBe(
-			"1 removed since you edited your answer",
+			"1 removed since you last looked",
 		);
 		expect(laneChangesLine({ added: 1, removed: 3 })).toBe(
-			"1 new, 3 removed since you edited your answer",
+			"1 new, 3 removed since you last looked",
 		);
 	});
 

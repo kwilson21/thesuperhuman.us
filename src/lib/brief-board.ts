@@ -1137,7 +1137,10 @@ function reconcile<L extends string>(
 				(other) => other.lane === item.lane && sameIdea(other.text, item.text),
 			) ||
 			scope.notAdded.some(
-				(idea) => idea.lane === item.lane && sameIdea(idea.text, item.text),
+				(idea) =>
+					idea.lane === item.lane &&
+					sameIdea(idea.text, item.text) &&
+					!sameIdea(idea.text, card.text),
 			) ||
 			removedIdea(board, item)
 		)
@@ -1395,7 +1398,7 @@ export function laneChangesLine(changes: LaneChanges): string {
 		changes.removed > 0 ? `${changes.removed} removed` : "",
 	].filter(Boolean);
 
-	return parts.length ? `${parts.join(", ")} since you edited your answer` : "";
+	return parts.length ? `${parts.join(", ")} since you last looked` : "";
 }
 
 /**

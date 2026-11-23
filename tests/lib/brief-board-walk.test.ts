@@ -101,6 +101,7 @@ function walk(seed: number, steps: number) {
 		repeated: 0,
 		addedThenGone: 0,
 		rewordIntoEdited: 0,
+		rewordAddedCard: 0,
 	};
 
 	const fail = (step: number, what: string) =>
@@ -115,7 +116,18 @@ function walk(seed: number, steps: number) {
 		// leave applies it (and must not reword that card into the idea).
 		let aimed: { lane: Lane; text: string } | undefined;
 
-		if (screen && !paused && next() < 0.3) {
+		// A second directed case: a reply that rewords, by its id, a card a delivery added during this visit arrives at once.
+		let rewordAim = false;
+
+		if (!aimed && screen && !paused && visitAdded.length && next() < 0.15) {
+			rewordAim = true;
+			let n: number;
+			[board, n] = sendRequest(board);
+			requests.push({ n, live: true });
+			roll = 1;
+		}
+
+		if (screen && !paused && !rewordAim && next() < 0.3) {
 			aimed = pick(
 				visitAdded.filter((i) => onLane(board, i.lane, i.text) === 0),
 			);
@@ -293,6 +305,55 @@ function walk(seed: number, steps: number) {
 						);
 				}
 
+				// 11. leaveUpdatesAddedCard: an untouched card a delivery added during the visit takes the wording of a held
+				// reply that names it by its id, when nothing else forbids it (no other card or item says that idea).
+				if (held && !dropped)
+					for (const item of held.reply) {
+						const card = board.cards.find((c) => c.id === item.ref);
+
+						if (
+							!card ||
+							card.lane !== screen ||
+							item.lane !== screen ||
+							card.status !== "proposed" ||
+							card.since >= held.n ||
+							(restoredAt.get(card.id) ?? -1) >= held.n ||
+							!visitAdded.some(
+								(i) => i.lane === card.lane && sameIdea(i.text, card.text),
+							) ||
+							held.reply.filter((o) => o.ref === card.id).length !== 1 ||
+							held.reply.some(
+								(o) =>
+									o !== item &&
+									o.lane === item.lane &&
+									sameIdea(o.text, item.text),
+							) ||
+							board.cards.some(
+								(c) =>
+									c.id !== card.id &&
+									c.lane === item.lane &&
+									sameIdea(c.text, item.text),
+							) ||
+							// An idea a delivery added that is no longer on any card (edited away) is not reworded into.
+							visitAdded.some(
+								(i) =>
+									i.lane === item.lane &&
+									sameIdea(i.text, item.text) &&
+									!sameIdea(i.text, card.text),
+							) ||
+							(item.basis === "said" && !quotedFrom(item.quote, answers()))
+						)
+							continue;
+
+						seen.rewordAddedCard++;
+
+						if (left.cards.find((c) => c.id === card.id)?.text !== item.text)
+							fail(
+								step,
+								`leaving ${screen} did not apply the held wording to ${card.id}, added during the visit`,
+							);
+					}
+
 				if (addedOnLeave.length) seen.leaveAdded++;
 
 				const moved =
@@ -387,9 +448,10 @@ function walk(seed: number, steps: number) {
 				requests.push({ n, live: true });
 			}
 		} else {
-			const request = aimed
-				? requests[requests.length - 1]
-				: pick(requests.filter((r) => r.live));
+			const request =
+				aimed || rewordAim
+					? requests[requests.length - 1]
+					: pick(requests.filter((r) => r.live));
 
 			if (!request) continue;
 			request.live = false;
@@ -438,6 +500,31 @@ function walk(seed: number, steps: number) {
 				seen.restated++;
 
 				if (reply[reply.length - 1].ref && next() < 0.7) leaveSoon = true;
+			}
+
+			// Some replies reword, by its id, a card a delivery added during this visit, and the leave may apply it.
+			const addedCard = pick(
+				board.cards.filter(
+					(c) =>
+						c.lane === screen &&
+						c.status === "proposed" &&
+						visitAdded.some(
+							(i) => i.lane === c.lane && sameIdea(i.text, c.text),
+						),
+				),
+			);
+
+			if (addedCard && next() < 0.8) {
+				reply.push({
+					ref: addedCard.id,
+					lane: addedCard.lane,
+					text: `${addedCard.text} page`,
+					basis: "suggested",
+					quote: "",
+					reason: "",
+				});
+
+				if (next() < 0.9) leaveSoon = true;
 			}
 
 			if (aimed) {
@@ -640,6 +727,7 @@ describe("the board's properties on the real code", () => {
 			"repeated",
 			"addedThenGone",
 			"rewordIntoEdited",
+			"rewordAddedCard",
 		] as const)
 			expect(total(key), key).toBeGreaterThan(20);
 	});

@@ -2212,7 +2212,7 @@ it("shows what changed in a lane after the visitor went back and edited an answe
 	click("[data-next]");
 	expect(current()).toBe(11);
 	expect(core.statusLine("parts")).toBe(
-		"1 new, 1 removed since you edited your answer",
+		"1 new, 1 removed since you last looked",
 	);
 
 	// The visitor's own actions are not what the edited answer changed: the line still counts only the reply's.
