@@ -4,6 +4,7 @@ import { musicRequest } from "./music-request";
 import { agreementJson } from "./agreement-access";
 import type { JsonValue } from "./json-value";
 import { isText } from "./type-guards";
+import { fromThisSite } from "./same-origin";
 
 /** Native forms use the same bounded JSON parser and Origin check as enhanced requests. */
 export async function agreementRequest(request: Request, max = 16384) {
@@ -12,7 +13,7 @@ export async function agreementRequest(request: Request, max = 16384) {
 			.get("content-type")
 			?.startsWith("application/x-www-form-urlencoded")
 	) {
-		if (request.headers.get("origin") !== new URL(request.url).origin)
+		if (!fromThisSite(request, new URL(request.url).origin))
 			return agreementJson({ ok: false, error: "Forbidden" }, 403);
 		const reader = request.body?.getReader();
 
