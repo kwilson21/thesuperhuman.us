@@ -8,25 +8,30 @@ with the `conversion` label. It holds parts 1 and 2 of the signing area's conver
 their own review. Merge facts: recorded after the merge, in the next pull request.
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson (below). The work was done with Claude Code; Codex reviewed each small pull request.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge. Nothing on the site calls
-the new code yet, and the one change to running code (#418) is answer-for-answer the same, so a rollback changes no
-answer.
+Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge. No route calls the new
+rules or store yet, and the two changes that reach running code (#418, #419) answer exactly as before, so a rollback
+changes no answer.
 
 ## Scope
 
 New code that nothing calls yet, for the signing and agreement routes to use in landings 2 and 3:
 
-- **Part 1, readers, machines and rules** (#396 to #407, and #409's fixes): the Effect Schema readers of the four
-  signing request bodies, with frozen Zod copies and differential tests; the `agreementDocument`, `agreementPacket` and
+- **Part 1, readers, machines and rules** (#396 to #407, and #409's fixes): the Effect Schema readers of the link,
+  review and sign bodies and of the owner's agreements command, with frozen Zod copies and differential tests; the `agreementDocument`, `agreementPacket` and
   `agreementMessage` machines; one rule file per row of plan section 2 under `src/server/rules/`; `abandonBlocked` with
   its LemmaScript contract; and tests that hold each kept SQL guard to its rule.
 - **Part 2, store, services and answers** (#411 to #420): `src/server/agreement-store.ts` (one function per statement or
   batch), `src/server/agreement-services.ts` (mail key and attachments, the allowance's answer, the packet build and
   render, the PDF check), and each route's fixed answers in `src/lib/agreement-access.ts`.
 
-The one change to code that runs today is #418. `countAllowance` (`src/server/studio-signin-store.ts`), shared by the
-studio sign-in routes and the archive link, also answers the window start its upsert already returned. Its SQL is
-unchanged. The archive link's flow reads `.allowed`, and its route maps a refusal it can never reach.
+Two changes reach code that runs today, and both answer exactly as before:
+
+- #418: `countAllowance` (`src/server/studio-signin-store.ts`), shared by the studio sign-in routes and the archive
+  link, also answers the window start its upsert already returned. Its SQL is unchanged. The archive link's flow reads
+  `.allowed`, and its route maps a refusal it can never reach.
+- #419: `AgreementMail.send` (`src/server/agreement-services.ts`), which the archive link calls, takes an optional
+  idempotency key. The archive link passes none, and `sendAudioMessage` sends the header only when a key is given, so
+  its Resend request is byte-identical.
 
 No page, migration, binding or secret changes.
 
@@ -40,7 +45,7 @@ No page, migration, binding or secret changes.
 - Owner, 2026-11-23, in conversation:
   - "#394 might be better if it was split into smaller PRs I'm worried that we have no way to review it properly":
     part 1 was split into twelve small PRs, and part 2 was built the same way.
-  - Claude reviews each small PR and the owner checks the final one.
+  - Claude reviews each small PR and the owner checks the final one (superseded by the next decision).
   - Then, as #408 grew: "One PR per small piece" for the owner's checks, landed with stacks ("Can you not take
     advantage of gh pr stacks to deal with multiple deploys?").
   - The two route switches land "Separately". So the conversion reaches `main` in three landings, one deploy each:
@@ -71,14 +76,15 @@ merged only with CI green. The pull requests, with what review found:
 | #413 | review and signature store | 601 / 1,924 | none |
 | #414 | owner actions store | 670 / 1,679 | the sent offer chosen by the rule, not SQL (Codex); the MSA-use read named the wrong table for the golden tools (Claude) |
 | #415 | signed copy and emails store | 597 / 1,425 | none |
-| #416 | templates, settings, uploads, downloads store | 331 / 1,073 | none |
+| #416 | templates, settings, access clean-up, uploads, downloads store | 331 / 1,073 | none |
 | #417 | retention store | 739 / 2,025 | the retention scan bounded: small columns for all, full rows for the 20 chosen (Codex and Claude) |
 | #418 | the allowance's answer (running code) | 75 / 197 | description corrected (the full golden suite is the evidence) |
 | #419 | mail, packet, PDF check services | 375 / 794 | none |
 | #420 | fixed answers | 171 / 304 | a comment corrected |
 
-The fixed pull requests were reviewed again on their new heads and found clean. Non-blocking notes are in #410 (part 1)
-and #421 (part 2).
+The fixes of #414, #417 and #420 were reviewed again on their new heads by a fresh Claude Code reviewer and found
+clean. Codex's reviews are of each PR as opened, before its fixes. Non-blocking notes are in #410 (part 1) and #421
+(part 2).
 
 ## Checks
 
@@ -90,7 +96,9 @@ On the integration branch's tree (identical to `claude/signing-store-10` at `c96
 - `pnpm run golden:neutral --all origin/main HEAD`: identical, 82 fixtures and 9,471 cases.
 - On #418's branch, every golden corpus (`vitest run tests/golden`): 93 files, 9,842 passed. These record today's live
   answers, so they are what shows the sign-in routes and the archive link answer as before.
-- Part 1's `pnpm run verify:quint:exhaustive` run is recorded in #394; the models did not change since.
+- The models were last checked exhaustively in #383 (`docs/verification.md`, "Exhaustive, after the signing extension";
+  `docs/prelaunch-qa-2026-11-23-signing-models.md`), where `offerBoard` and `allowance` were stopped early. Nothing under
+  `verification/` changed since.
 
 ## Applicable Definition of Done
 
@@ -100,8 +108,9 @@ On the integration branch's tree (identical to `claude/signing-store-10` at `c96
 
 ### 5. Forms and sensitive flows
 
-- **PASS · No answer changes.** No route calls the new code. The studio sign-in and archive link routes use #418's
-  `countAllowance` with unchanged SQL, and the full golden suite holds their answers.
+- **PASS · No answer changes.** No route calls the new rules or store. The studio sign-in and archive link routes run
+  #418's `countAllowance` (SQL unchanged), and the archive link runs #419's mail call (no idempotency key passed, none
+  sent); the full golden suite holds their answers.
 
 ### 6. Privacy, legal and measurement
 
@@ -119,3 +128,16 @@ On the integration branch's tree (identical to `claude/signing-store-10` at `c96
 ### 8. Private owner center
 
 - **N/A.** No change.
+
+### Software agreement signing
+
+- **N/A.** No signing route runs new code in this landing. Landings 2 and 3, which switch the signing routes, carry
+  these checks.
+
+## Remaining work
+
+- After the merge: its facts (merge revision, head, time), CI on the merge revision, the Workers build and the live
+  check above, recorded in the next pull request.
+- Landing 2 (the client signing routes) and landing 3 (the owner agreement routes), each its own stack and release
+  record.
+- The non-blocking notes in #410 and #421.
