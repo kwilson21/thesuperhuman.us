@@ -7,8 +7,9 @@ import {
 	wireKit,
 } from "../golden/areas/agreement-access";
 
-// Two tabs review the same agreement at once. The tab that loses the race answers 409 with the route's own sentence; a
-// failure that no concurrent request explains answers 500.
+// Two tabs review the same agreement at once. The tab whose batch loses a fact it decided from (the client row, the one
+// pending MSA per client and template) reads and decides again, and answers what it then reads (behaviour fix B7 of
+// docs/plans/2026-11-signing-conversion.md); a failure that no concurrent request explains answers 500.
 
 const { scenario } = wireKit(`/api/offer/${TOKEN}/review`, REVIEW_TABLES);
 
@@ -51,16 +52,14 @@ const answers = async (
 	};
 };
 
-it("answers 409 when another tab creates the same legal party first", async () => {
+it("reviews with the other tab's client when another tab creates the same legal party first", async () => {
 	const result = await answers(
 		"party created by another tab",
 		`INSERT INTO software_agreement_clients VALUES('client-race',${KEY},'2026-11-13T11:59:59.000Z')`,
 	);
 
-	expect(result.status).toBe(409);
-	expect(result.body).toBe(
-		'{"ok":false,"error":"The agreement could not be reviewed."}',
-	);
+	expect(result.status).toBe(200);
+	expect(result.body).toContain('"ok":true');
 });
 
 it("answers 409 when another offer's MSA for the party appears before the batch", async () => {
@@ -70,6 +69,9 @@ it("answers 409 when another offer's MSA for the party appears before the batch"
 	);
 
 	expect(result.status).toBe(409);
+	expect(result.body).toBe(
+		'{"ok":false,"error":"Another offer has a pending MSA for this party. Ask Kazon to resolve it."}',
+	);
 });
 
 it("answers 500 when a lookup fails for a reason no request explains", async () => {

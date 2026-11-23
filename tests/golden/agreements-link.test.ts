@@ -71,6 +71,12 @@ import { allowanceRow } from "./areas/studio-access";
 //   303 /agreements?email=sent          form success (with the 200 receipt or after the email)
 //   greeting                            the first word of the signature name, "there" with none, markup and unicode escaped in html
 //                                       and left raw in the text part
+//   the emailed link followed           completeAgreementLink with no token, as src/pages/agreements/verify.astro calls it (the
+//                                       `follow` steps of tests/golden/areas/agreement-access.ts record its own Response): GET preview,
+//                                       POST consume (303 and the agreement_archive cookie), used once, an hour, a newer link, a race
+//                                       that uses the link first (its guard raised: 401); a consume batch that fails for no guard
+//                                       answers 500 {ok:false, error:"This link could not be opened."}, logged once ("Archive verify"),
+//                                       the link left unused (B1; 401 before)
 
 const PATH = "/api/agreements/link";
 

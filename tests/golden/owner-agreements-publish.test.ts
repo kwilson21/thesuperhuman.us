@@ -36,9 +36,11 @@ import {
 //                       sourceRevision over 120, text over 102400 characters, a visitor's body
 //   400 "Confirm publication of a new immutable version."   confirmed missing or false (checked after the text is validated)
 //   409 {error: message}   every way a text is refused (the table of problems), the text matches the current version (with its label, with the
-//                       date fallback), a label already used for this kind, a stale expectedCurrentVersion (too low, too high, on an empty
-//                       table; sqlite's own text), a version that lands before the batch, a label taken between the check and the insert
-//                       (reachable only through a gap in the versions), a failed batch, a failed read of the current version or of the label
+//                       date fallback), a label already used for this kind, a label taken between the check and the insert (reachable
+//                       only through a gap in the versions)
+//   409 "The agreement could not be saved."   a stale expectedCurrentVersion (too low, too high, on an empty table), a version that
+//                       lands before the batch, publish twice with the same expected version
+//   500 "The agreement could not be saved."   a failed batch, a failed read of the current version or of the label, logged
 //   events              a template-published event with the owner's email and time on each success
 //   native form         a 303 for a success; a page for each error, the message escaped (a stored label with markup shows escaped)
 //   403                 a visitor, a studio client cookie

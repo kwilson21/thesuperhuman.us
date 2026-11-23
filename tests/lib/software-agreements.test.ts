@@ -32,6 +32,7 @@ import {
 	agreementSession,
 	completeAgreementLink,
 	issueAgreementLink,
+	type RedeemFailures,
 } from "~/lib/agreement-access";
 import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import {
@@ -48,6 +49,7 @@ import {
 	liveAgreementMail,
 } from "~/server/agreement-services";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
+import { raisedByJsonGuard } from "~/server/guarded-save";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
 import { AudioBucket, liveTurnstile, MusicDb } from "~/server/services";
 import {
@@ -72,6 +74,14 @@ import { fakeR2Bucket } from "../helpers/r2";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 
 type TestEnv = TestRuntime["env"];
+
+/** What the verify pages pass the redeem; a failure on the site's side fails the test with its own error. */
+const redeemFailures: RedeemFailures = {
+	isGuard: raisedByJsonGuard,
+	unexpected: (error) => {
+		throw error;
+	},
+};
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -468,6 +478,8 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 		.spyOn(db, "batch")
 		.mockRejectedValue(new Error("database unavailable"));
 
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
 	try {
 		const { PUT } = await import(
 			"~/pages/api/owner/requests/[id]/agreement-attachments"
@@ -497,12 +509,23 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 			}),
 		);
 
-		expect(response.status).toBe(503);
+		// A failed batch is a fault of the site: the fixed 500, logged once (behaviour fix B1).
+		expect(response.status).toBe(500);
+		expect(await readJson(response)).toEqual({
+			ok: false,
+			error: "The attachment could not be saved.",
+		});
+		expect(log).toHaveBeenCalledExactlyOnceWith(
+			"Owner attachment upload failed unexpectedly:",
+			"Error",
+			"database unavailable",
+		);
 		expect(env.AUDIO!.put).toHaveBeenCalledOnce();
 		expect(env.AUDIO!.delete).toHaveBeenCalledOnce();
 		expect(bucketData.size).toBe(0);
 	} finally {
 		batch.mockRestore();
+		log.mockRestore();
 	}
 });
 
@@ -1005,8 +1028,10 @@ it("countersigns identical hashes atomically and blocks start until artifact and
 		expect(payload.text).not.toContain(`Receipt: ${id}\n`);
 	}
 
-	const ownerCopy = await agreementDownload(env, id);
+	const unexpected = vi.fn();
+	const ownerCopy = await agreementDownload(env, id, { unexpected });
 	expect(ownerCopy.status).toBe(200);
+	expect(unexpected).not.toHaveBeenCalled();
 	expect(await visitorDownload(id)).toEqual({ refused: "SignInFirst" });
 });
 
@@ -1083,8 +1108,15 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	});
 
 	expect(
-		(await issueAgreementLink(env, req, { turnstileToken: "test" }, token))
-			.status,
+		(
+			await issueAgreementLink(
+				env,
+				req,
+				{ turnstileToken: "test" },
+				token,
+				raisedByJsonGuard,
+			)
+		).status,
 	).toBe(200);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 	expect(payload.to).toEqual(["client@example.com"]);
@@ -1101,7 +1133,15 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	expect(Date.parse(stored.expires_at) - Date.parse(stored.issued_at)).toBe(
 		3600000,
 	);
-	const landing = await completeAgreementLink(env, req, key, token);
+
+	const landing = await completeAgreementLink(
+		env,
+		req,
+		key,
+		token,
+		redeemFailures,
+	);
+
 	expect(landing.status).toBe(200);
 	expect(
 		sql
@@ -1114,20 +1154,36 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 		new Request(req.url, { method: "POST" }),
 		key,
 		token,
+		redeemFailures,
 	);
 
 	expect(opened.status).toBe(303);
 	expect(opened.headers.get("location")).toBe(`/offer/${token}/sign`);
 	expect(opened.headers.get("set-cookie")).toContain("Max-Age=7200");
-	expect((await completeAgreementLink(env, req, key, token)).status).toBe(401);
 	expect(
-		(await issueAgreementLink(env, req, { turnstileToken: "test" }, token))
-			.status,
+		(await completeAgreementLink(env, req, key, token, redeemFailures)).status,
+	).toBe(401);
+	expect(
+		(
+			await issueAgreementLink(
+				env,
+				req,
+				{ turnstileToken: "test" },
+				token,
+				raisedByJsonGuard,
+			)
+		).status,
 	).toBe(429);
 });
 
 it("rejects expired links without creating a session", async () => {
-	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
+	await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "test" },
+		token,
+		raisedByJsonGuard,
+	);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -1144,6 +1200,7 @@ it("rejects expired links without creating a session", async () => {
 				new Request(request(), { method: "POST" }),
 				key,
 				token,
+				redeemFailures,
 			)
 		).status,
 	).toBe(401);
@@ -1331,9 +1388,11 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 
 	if (!artifact.pdf_key) throw new Error("The agreement has no stored PDF.");
 	bucketData.set(artifact.pdf_key, new TextEncoder().encode("%PDF-changed"));
-	const response = await agreementDownload(env, id);
+	const unexpected = vi.fn();
+	const response = await agreementDownload(env, id, { unexpected });
 	expect(response.status).toBe(503);
 	expect(await response.text()).toMatch(/integrity check/i);
+	expect(unexpected).not.toHaveBeenCalled();
 });
 
 it("runs private source templates through one, two and three milestones in both payment modes when supplied", async () => {
@@ -2235,7 +2294,13 @@ it.each(["resolved", "withdrawn"])(
 );
 
 it("consumes a link atomically under parallel verification", async () => {
-	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
+	await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "test" },
+		token,
+		raisedByJsonGuard,
+	);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -2248,12 +2313,14 @@ it("consumes a link atomically under parallel verification", async () => {
 			new Request(request(), { method: "POST" }),
 			key,
 			token,
+			redeemFailures,
 		),
 		completeAgreementLink(
 			env,
 			new Request(request(), { method: "POST" }),
 			key,
 			token,
+			redeemFailures,
 		),
 	]);
 
@@ -2560,6 +2627,7 @@ it("invalid Turnstile requests count only the address allowance, not the recipie
 			request(),
 			{ turnstileToken: "invalid" },
 			token,
+			raisedByJsonGuard,
 		);
 
 		expect(response.status).toBe(403);
@@ -2578,6 +2646,7 @@ it("invalid Turnstile requests count only the address allowance, not the recipie
 		request(),
 		{ turnstileToken: "valid" },
 		token,
+		raisedByJsonGuard,
 	);
 
 	expect(response.status).toBe(200);
@@ -3464,7 +3533,13 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 	sql
 		.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'")
 		.run();
-	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
+	await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "test" },
+		token,
+		raisedByJsonGuard,
+	);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -3476,6 +3551,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		new Request(request(), { method: "POST" }),
 		key,
 		token,
+		redeemFailures,
 	);
 
 	const newSession = await agreementSession(
@@ -3970,6 +4046,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 			request(),
 			{ turnstileToken: "test" },
 			token,
+			raisedByJsonGuard,
 		);
 
 		expect(response.status).toBe(502);
@@ -4007,6 +4084,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 		request(),
 		{ turnstileToken: "test" },
 		token,
+		raisedByJsonGuard,
 	);
 
 	expect(response.status).toBe(200);
@@ -4556,6 +4634,7 @@ it.each(["agreement", "archive"])(
 						new Request("https://example.com"),
 						key,
 						offerToken,
+						redeemFailures,
 					)
 				).status,
 			).toBe(200);
@@ -4581,6 +4660,7 @@ it.each(["agreement", "archive"])(
 					new Request("https://example.com", { method: "POST" }),
 					key,
 					offerToken,
+					redeemFailures,
 				)
 			).status,
 		).toBe(401);
@@ -4595,6 +4675,7 @@ it.each(["agreement", "archive"])(
 			new Request("https://example.com", { method: "POST" }),
 			key,
 			offerToken,
+			redeemFailures,
 		);
 
 		expect(response.status).toBe(303);
@@ -4613,6 +4694,7 @@ it.each(["agreement", "archive"])(
 						new Request("https://example.com", { method }),
 						key,
 						offerToken,
+						redeemFailures,
 					)
 				).status,
 			).toBe(401);
@@ -4980,6 +5062,7 @@ it.each(["agreement", "archive"])(
 						foreign,
 						{ turnstileToken: "valid" },
 						token,
+						raisedByJsonGuard,
 					)
 				).status,
 			).toBe(404);
@@ -4990,6 +5073,7 @@ it.each(["agreement", "archive"])(
 					foreign,
 					token,
 					purpose === "agreement" ? token : undefined,
+					redeemFailures,
 				)
 			).status,
 		).toBe(404);
@@ -5133,6 +5217,7 @@ it.each([503, "timeout"])(
 					request(),
 					{ turnstileToken: "test" },
 					token,
+					raisedByJsonGuard,
 				)
 			).status,
 		).toBe(200);

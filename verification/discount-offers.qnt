@@ -2,26 +2,52 @@
 // withdrawn by the owner while the client reviews and signs, and invoices reserved and written before and after a
 // revision. Written before the code, from the design in docs/plans/2026-11-discount-flow.md ("The model"). Extended before
 // the offers conversion (docs/plans/2026-11-offers-conversion.md, section 7) with the offer link, the 20-second sending
-// window, the emails and a clock, so that send and decline are the steps the route takes, not one step each.
-// Code modelled (as it is today; the discount adds data to the terms, not new moves):
+// window, the emails and a clock, so that send and decline are the steps the route takes, not one step each. Extended
+// again before the signing conversion (docs/plans/2026-11-signing-conversion.md, section 7) with the emailed signing link
+// and the session its redeem makes, the signing setting, review and sign each as a read and a batch, the owner's
+// countersign and abandon, and a project that needs an executed agreement. The guards A1 to A12 are named as in section 1
+// of that design.
+// Code modelled (as it is today; the discount adds data to the terms, not new moves; lines at `585619c1`):
 //   draft:                     src/pages/api/owner/requests/[id]/software.ts (UPDATE ... WHERE status='draft')
 //   send:                      the same route, three steps: the batch (G3 the signing guard, G4 depositOfferGuard, G5
 //                              offerSendingGuard, G8 the offer as read, G9 a reissue needs the link revoked; the link
-//                              upsert, retireRequestSigning), the client email then its copy, then the live-link check
+//                              upsert, the retirement), the client email then its copy, then the live-link check
 //   decline:                   the same route, three steps: the first batch (G2, G3, G4, G5; offers withdrawn, links
-//                              revoked, retireRequestSigning), the client email then its copy, then the read of a draft or
+//                              revoked, the retirement), the client email then its copy, then the read of a draft or
 //                              sent offer of the request and the second batch (G1 at the write time, G2, G5, no draft or
 //                              sent offer: F10's fix; the request resolved). G1 holds trivially here and G6 (an audio
 //                              project) is not modelled; see declineSecond
-//   revoke:                    the same route (G5, G10 the link is still live; retireRequestSigning)
+//   revoke:                    the same route (G5, G10 the link is still live; the retirement)
+//   the retirement:            retireSigning in src/server/offers-store.ts:235-261 (the send's, reissue's, revoke's and
+//                              decline's batches, 931, 525, 462): the request's agreements in review abandoned, its
+//                              signing sessions revoked, its signing links used, its drafts deleted
 //   the sending window:        offerSendingGuard and offerIsSending in src/lib/software-offers.ts (created_at > now - 20 s)
 //   the emails:                sendAudioMessage in src/lib/audio-resend.ts (AbortSignal.timeout(10_000) on each)
 //   reopen:                    src/lib/owner-requests.ts (resolved to new, no project)
-//   review, sign:              src/lib/software-agreements.ts (text rendered from the offer's terms at review; the sign
-//                              batch has liveSigningGuard and the session guard); getLinkedOffer opens the review
+//   the signing setting:       src/pages/api/owner/agreements.ts:149-162 (one update; nothing retired)
+//   the signing link:          POST /api/offer/[token]/link, issueAgreementLink in src/lib/agreement-access.ts:112-315:
+//                              the reads (the setting, getLinkedOffer, `at`), then the link batch (A4 the 30-second
+//                              guard, A1 liveSigningGuard, 317-327; the link inserted)
+//   the redeem:                the verify page's POST, completeAgreementLink (329-441): the link read by its key, then
+//                              the batch (A1, A5 the link still unused; the link used, the session inserted)
+//   review:                    POST /api/offer/[token]/review (review.ts:53-107): the reads (getLinkedOffer, the session
+//                              through agreementSession, access.ts:73-109, the setting; the draft batch with A1 A2 A3,
+//                              src/lib/agreement-draft.ts:53-81; reviewAgreements' reads, software-agreements.ts:161-305),
+//                              then the review batch (307-371: A1, A2 sessionGuard, A3; the text rendered from the
+//                              offer's terms as read)
+//   sign:                      POST /api/offer/[token]/sign (sign.ts): the same reads and signAgreements' reads
+//                              (software-agreements.ts:405-458), then the sign batch (460-542: A1, A2, A9 each document
+//                              still in review under this session)
+//   countersign:               POST /api/owner/requests/[id]/agreement, countersign (agreement.ts:60-82;
+//                              countersignAgreements, software-agreements.ts:644-733): the reads, then the batch (A10, A11)
+//   abandon:                   the same route, abandon (agreement.ts:119-194): the reads (the client_signed documents and
+//                              the first deposit, A12 read first), then the batch (A12, A11; the documents abandoned, the
+//                              offer superseded, the offer link revoked, the offer's sessions revoked and links used)
 //   invoice reserve, write:    reserveSoftwareInvoice in src/lib/software-invoices.ts (amount from the terms read first,
 //                              then a guarded batch)
-//   start:                     src/pages/api/owner/requests/[id]/project.ts (copies the sent offer's terms)
+//   start:                     src/pages/api/owner/requests/[id]/project.ts (a website start needs the offer's agreement
+//                              executed, executedOfferAgreement, 139-153; copies the sent offer's terms; it retires
+//                              signing only for an outside signature, 270-279, which is not modelled)
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
 module discountOffers {
@@ -35,8 +61,11 @@ module discountOffers {
   //                            deposit on a withdrawn offer (decline, then reopen) did not stop the next version (found by
   //                            this model, reproduced and fixed in the code; the name is kept for the CI driver)
   //   "no-write-status-guard"  the invoice batch does not re-check that its offer is still sent (a stale read is trusted)
-  //   "no-sign-guards"         the sign batch checks neither that the offer is still sent nor that the review session
-  //                            survived a resend (liveSigningGuard and retireRequestSigning gone)
+  //   "no-sign-guards"         neither the sign's read nor its batch checks that the offer is still sent or that the
+  //                            review and its session survived a resend (A1, A2 and A9's status and session gone, and
+  //                            the read's own checks of the offer and the session), so the client signs the review it
+  //                            holds whatever happened since, as the one-step sign without its guard did
+  //   "sign-guards-at-read"    the sign's guards (A1, A2, A9) are judged at the read only, not in the batch
   //   "send-after-sign"        a new version can be sent after the client signed (the signing guard of send gone)
   //   "start-copies-newest"    the project copies the newest version's terms instead of the signed offer's
   //   "start-drops-discount"   the project copies the signed offer's terms without the discount fields
@@ -51,6 +80,17 @@ module discountOffers {
   //                            email. An equivalent mutant: the model never closes a link during a failed email (see
   //                            sendCheck)
   //   "first-batch-keeps-link" the decline's first batch withdraws the offers but leaves a live link as it is
+  //   "review-no-guards"       the review batch without A1 and A2 (A3 kept)
+  //   "redeem-no-live-guard"   the redeem batch without A1 (A5 kept)
+  //   "countersign-no-guards"  the countersign batch without A10 and A11
+  //   "abandon-no-status-guard"
+  //                            the abandon batch without A11 (A12 kept)
+  //   "abandon-deposit-at-read"
+  //                            the abandon's deposit condition judged at the read only, not in the batch (A12 gone from it)
+  //   "review-no-signed-guard" the review batch without A3, so a review read before the client signed replaces the signed
+  //                            agreement with a new review. In code the one-live-SOW index (0023:13) also refuses that
+  //                            batch's insert of a new SOW while a client_signed or executed one exists, so dropping A3
+  //                            alone is equivalent there; the model's condition stands for both (see reviewBatch)
   const MUTANT: str
   // Offer versions the owner can create. Two are enough for every path the properties need (a revision, a decline then
   // a new offer) and keep the random runs fast; the manual Apalache check uses the same module.
@@ -68,6 +108,12 @@ module discountOffers {
   // tick (docs/verification.md, "The clock").
   val EMAIL_TICKS = 1
   val WINDOW = 2
+  // A4, the signing link's 30 seconds: three ticks, compared strictly (issued_at > at - 30 s).
+  val LINK_WINDOW = 3
+  // Emailed signing links (each with the session its redeem may make) the model can issue. Two are enough for a link
+  // that a resend retires and one for the new version, and for a second link of one version issued before a project
+  // starts (see noSessionForDeadOffer). A link lives an hour and a session two hours, past any run, so neither expires here.
+  val LINK_IDS = 1.to(2)
 
   // d0 and d1: the discount on each milestone. std: the standard payment mode (deposit then balance), else invoice terms.
   type Terms = { d0: int, d1: int, std: bool }
@@ -78,9 +124,20 @@ module discountOffers {
   type Bill = { status: str, amount: int }
   // A pending invoice reservation: the read was made, the batch has not run. reqAt: the request's updated_at it read.
   type Pending = { active: bool, slot: int, amount: int, reqAt: int }
-  // The client's review: the agreement text is rendered from these terms. revoked: retireRequestSigning ran since.
-  type Review = { v: int, terms: Terms, revoked: bool }
-  type Signed = { v: int, terms: Terms }
+  // The offer's agreement documents (software_agreements rows of one offer version; the MSA and the SOW as one). v 0: none.
+  // terms: the terms the text was rendered from at the review. status: "review", "client_signed", "executed" or
+  // "abandoned" (abandoned by the retirement from review, or by the owner from client_signed). session: the review session
+  // (review_session_hash), the key of the link whose redeem made it. executed: executed_at is set.
+  type Agreement = { v: int, terms: Terms, status: str, session: int, executed: bool }
+  // An emailed signing link (software_agreement_links, purpose agreement) and the session its redeem made
+  // (software_agreement_sessions; one link makes at most one, since the redeem uses it). v 0: no link. token: the offer link
+  // it was issued under (link_hash, the software_offer_links token_hash). at: issued_at, in ticks. used: used_at is set.
+  // session: its redeem made a session. revoked: that session's revoked_at is set.
+  type Access = { v: int, token: int, at: int, used: bool, session: bool, revoked: bool }
+  // A visitor's or the owner's request between its read and its batch. active: the read was made and the batch has not
+  // run. k: the link (a redeem) or the session (a review, a sign) it read; v: the offer version it read; token: the offer
+  // link it read (a link request); at: its `at` (a link request); terms: the offer's terms it read (a review).
+  type Op = { active: bool, k: int, v: int, token: int, at: int, terms: Terms }
   // software_offer_links, one row per request. live: revoked_at IS NULL. created: created_at, in ticks. token: which send
   // batch wrote the row (its token_hash), 0 before the first send.
   type Link = { live: bool, created: int, token: int }
@@ -96,6 +153,9 @@ module discountOffers {
     badInvoice: bool,      // an invoice was written for an offer that was neither sent nor the project's
     badSend: bool,         // a send answered 200 while its link was not live at the check
     declined: bool,        // a decline's second batch resolved the request, and it was not reopened since
+    badSession: bool,      // a redeem batch made a session while its offer was not signable
+    badCountersign: bool,  // a countersign batch wrote while its agreement was not client_signed, its offer not sent,
+                           // the request not open or signing off
   }
 
   // ---- State ------------------------------------------------------------------------------------------------------
@@ -107,8 +167,7 @@ module discountOffers {
   // owner_requests.updated_at as a counter: the decline's two batches and reopen write it. Draft, send and revoke never
   // do; the project start does only from status new (project.ts), which this model leaves out (see declineSecond).
   var requestVersion: int
-  var review: Review           // v 0: none
-  var signed: Signed           // v 0: not signed
+  var agreement: Agreement
   var project: int             // the version the project started from, 0 none
   // software_projects.terms_json: the terms copied from the offer at start. The client's project page states the
   // installments from this copy, while reserveSoftwareInvoice computes each invoice from the offer's terms_json, so the
@@ -120,6 +179,20 @@ module discountOffers {
   var link: Link
   var sending: Sending
   var declining: Declining
+  var signingOn: bool          // software_signing_settings.software_signing_enabled
+  var access: int -> Access    // the emailed signing links and their sessions, by key (LINK_IDS)
+  // The versions whose client-signed agreement the owner abandoned (their rows stay, status abandoned).
+  var abandonedVersions: Set[int]
+  // The versions with a client signature (software_agreement_signatures, party client): a raise-only trigger keeps the
+  // rows as they are, and nothing in a run deletes them.
+  var clientSignatures: Set[int]
+  // One of each request in flight at a time: a link request, a redeem, a review, a sign, a countersign, an abandon.
+  var issuing: Op
+  var redeeming: Op
+  var reviewing: Op
+  var signingReq: Op
+  var countersigning: Op
+  var abandoning: Op
   var ghost: Ghost
 
   // ---- The money rule, as pure functions (tests/fixtures/discount-installments.ts) --------------------------------
@@ -154,6 +227,14 @@ module discountOffers {
   pure def live(b: Bill): bool = b.status == "open" or b.status == "paid"
   val liveSlots = slots.filter(k => live(bills.get(k)))
   pure def draftOrSent(o: Offer): bool = o.status == "draft" or o.status == "sent"
+  val sentVersions = versionIds.filter(v => offers.get(v).status == "sent")
+  val noOp = { active: false, k: 0, v: 0, token: 0, at: 0, terms: noTerms }
+  val noAccess = { v: 0, token: 0, at: 0, used: false, session: false, revoked: false }
+
+  // The client's signature, as the properties name it: the agreement while it is client_signed or executed (G3's statuses).
+  pure def isSigned(status: str): bool = status == "client_signed" or status == "executed"
+  val signed =
+    if (isSigned(agreement.status)) { v: agreement.v, terms: agreement.terms } else { v: 0, terms: noTerms }
 
   // The deposit guard of send (depositOfferGuard): no open or paid first deposit on another version. The code counts
   // every other version; the guard before decision 9 ("today-deposit-guard") counted only the sent one.
@@ -161,9 +242,34 @@ module discountOffers {
     mOf(k) == 0 and kindOf(k) == "deposit" and vOf(k) != sendingV and
       (MUTANT != "today-deposit-guard" or offers.get(vOf(k)).status == "sent")
 
+  // A12 (agreement.ts:34-35): a first deposit of the offer counts, open or paid (refunds are not modelled).
+  def depositCounts(v: int): bool = live(bills.get(slotOf(v, 0, "deposit")))
+
   // G5, the sending window (offerSendingGuard in a batch, offerIsSending in a read): a live link made less than 20
   // seconds ago. Send, decline (both batches) and revoke refuse while it holds.
   val stillSending = link.live and clock - link.created < WINDOW
+
+  // A1, liveSigningGuard (agreement-access.ts:317-327), for offer version v and the offer link `token` a signing link or
+  // session names: the offer is sent, the request's link is that one and live, the request is open, the offer has no
+  // project and signing is on. (The recipient is the same in every version here.)
+  def liveSigning(v: int, token: int): bool = and {
+    offers.get(v).status == "sent", link.live, link.token == token, requestOpen, project != v, signingOn,
+  }
+
+  // The retirement (retireSigning): the request's agreement in review abandoned, every signing link used and every
+  // session revoked. Abandon runs the same for its own offer's links and sessions (agreement.ts:181-190).
+  pure def retireAgreement(a: Agreement): Agreement = if (a.status == "review") { ...a, status: "abandoned" } else a
+  pure def retireAccess(x: Access): Access = if (x.v == 0) x else { ...x, used: true, revoked: x.revoked or x.session }
+  val retiredAccess = LINK_IDS.mapBy(k => retireAccess(access.get(k)))
+
+  // A session that can be used: made and not revoked (and unexpired: two hours, past any run).
+  val liveSessions = LINK_IDS.filter(k => access.get(k).session and not(access.get(k).revoked))
+  // A request in flight between its read and its batch, or a link issued and not yet redeemed: the times the signing
+  // switch can change what a batch decides (see switchSigning).
+  val signingInFlight = or {
+    issuing.active, redeeming.active, reviewing.active, signingReq.active, countersigning.active,
+    LINK_IDS.exists(k => access.get(k).v != 0 and not(access.get(k).used)),
+  }
 
   // ---- Actions ----------------------------------------------------------------------------------------------------
   action init = all {
@@ -173,8 +279,7 @@ module discountOffers {
     wasSent' = Set(),
     requestOpen' = true,
     requestVersion' = 0,
-    review' = { v: 0, terms: noTerms, revoked: false },
-    signed' = { v: 0, terms: noTerms },
+    agreement' = { v: 0, terms: noTerms, status: "none", session: 0, executed: false },
     project' = 0,
     projectTerms' = noTerms,
     bills' = slots.mapBy(_ => { status: "none", amount: 0 }),
@@ -183,15 +288,27 @@ module discountOffers {
     link' = { live: false, created: 0, token: 0 },
     sending' = { phase: "none", v: 0, token: 0, start: 0, accepted: false },
     declining' = { phase: "none", start: 0 },
-    ghost' = { badSign: false, badInvoice: false, badSend: false, declined: false },
+    // The owner turned website signing on before the run (the migration stores it off); switchSigning turns it off and on.
+    signingOn' = true,
+    access' = LINK_IDS.mapBy(_ => noAccess),
+    abandonedVersions' = Set(),
+    clientSignatures' = Set(),
+    issuing' = noOp, redeeming' = noOp, reviewing' = noOp, signingReq' = noOp, countersigning' = noOp, abandoning' = noOp,
+    ghost' = { badSign: false, badInvoice: false, badSend: false, declined: false, badSession: false, badCountersign: false },
   }
 
   // Everything else stays as it is.
   action keepOffers = all { offers' = offers, versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent }
-  action keepClient = all { review' = review, signed' = signed }
+  action keepClient = all {
+    agreement' = agreement, access' = access, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
+  }
   action keepMoney = all { bills' = bills, pending' = pending, project' = project, projectTerms' = projectTerms }
   action keepFlows = all { clock' = clock, link' = link, sending' = sending, declining' = declining }
   action keepRequest = all { requestOpen' = requestOpen, requestVersion' = requestVersion }
+  action keepSigning = all {
+    signingOn' = signingOn, issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
+    countersigning' = countersigning, abandoning' = abandoning,
+  }
 
   // The owner saves a new draft (the next version), with any terms: any discount on each milestone, either mode. Allowed
   // while a decline's email is in flight: the request is still new or reviewed until the decline's second batch.
@@ -205,7 +322,7 @@ module discountOffers {
       offers' = offers.set(v, { status: "draft", terms: { d0: d0, d1: d1, std: std } }),
       versions' = v,
       sentTerms' = sentTerms, wasSent' = wasSent, keepRequest,
-      keepClient, keepMoney, keepFlows, ghost' = ghost,
+      keepClient, keepMoney, keepFlows, keepSigning, ghost' = ghost,
     }
   }
 
@@ -220,14 +337,14 @@ module discountOffers {
       offers.get(v).status == "draft" or (MUTANT == "edit-sent" and offers.get(v).status == "sent"),
       offers' = offers.set(v, { ...offers.get(v), terms: { d0: d0, d1: d1, std: std } }),
       versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent, keepRequest,
-      keepClient, keepMoney, keepFlows, ghost' = ghost,
+      keepClient, keepMoney, keepFlows, keepSigning, ghost' = ghost,
     }
   }
 
-  // Send, the batch, for a draft: the sent offer becomes superseded, the review session is revoked, and the link row is
-  // written with a new token and created now. Refused after the client signed (G3), while any other version has an open
-  // or paid first deposit (G4) and within 20 seconds of a live link (G5). The model lets one send be in flight at a time
-  // (see docs/verification.md, "What it does not cover").
+  // Send, the batch, for a draft: the sent offer becomes superseded, signing is retired (the review abandoned, the sessions
+  // revoked, the signing links used), and the link row is written with a new token and created now. Refused after the
+  // client signed (G3), while any other version has an open or paid first deposit (G4) and within 20 seconds of a live link
+  // (G5). The model lets one send be in flight at a time (see docs/verification.md, "What it does not cover").
   action sendDraft = {
     nondet v = versionIds.oneOf()
     all {
@@ -243,11 +360,12 @@ module discountOffers {
       versions' = versions,
       sentTerms' = sentTerms.set(v, offers.get(v).terms),
       wasSent' = wasSent.union(Set(v)),
-      review' = { ...review, revoked: true },
+      agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+      clientSignatures' = clientSignatures,
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       clock' = clock, declining' = declining,
-      keepRequest, signed' = signed, keepMoney, ghost' = ghost,
+      keepRequest, keepMoney, keepSigning, ghost' = ghost,
     }
   }
 
@@ -264,9 +382,10 @@ module discountOffers {
       link.token != 0, not(link.live),
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
-      review' = { ...review, revoked: true },
+      agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+      clientSignatures' = clientSignatures,
       keepOffers, clock' = clock, declining' = declining,
-      keepRequest, signed' = signed, keepMoney, ghost' = ghost,
+      keepRequest, keepMoney, keepSigning, ghost' = ghost,
     }
   }
 
@@ -278,7 +397,7 @@ module discountOffers {
       sending.phase == "email",
       clock <= sending.start + (if (accepted) 2 * EMAIL_TICKS else EMAIL_TICKS),
       sending' = { ...sending, phase: "check", accepted: accepted },
-      keepOffers, keepClient, keepMoney, keepRequest,
+      keepOffers, keepClient, keepMoney, keepRequest, keepSigning,
       clock' = clock, link' = link, declining' = declining, ghost' = ghost,
     }
   }
@@ -294,7 +413,7 @@ module discountOffers {
       sending.phase == "check",
       sending' = { ...sending, phase: "none" },
       ghost' = { ...ghost, badSend: ghost.badSend or (answers200 and not(linkLive)) },
-      keepOffers, keepClient, keepMoney, keepRequest,
+      keepOffers, keepClient, keepMoney, keepRequest, keepSigning,
       clock' = clock, link' = link, declining' = declining,
     }
   }
@@ -304,8 +423,9 @@ module discountOffers {
   action revoke = all {
     link.live, not(stillSending),
     link' = { ...link, live: false },
-    review' = { ...review, revoked: true },
-    keepOffers, signed' = signed, keepMoney, keepRequest,
+    agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+    clientSignatures' = clientSignatures,
+    keepOffers, keepMoney, keepRequest, keepSigning,
     clock' = clock, sending' = sending, declining' = declining, ghost' = ghost,
   }
 
@@ -322,9 +442,10 @@ module discountOffers {
     versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent,
     link' = if (MUTANT == "first-batch-keeps-link") link else { ...link, live: false },
     declining' = { phase: "email", start: clock },
-    review' = { ...review, revoked: true },
-    requestOpen' = requestOpen, requestVersion' = requestVersion + 1, signed' = signed, keepMoney, clock' = clock,
-    sending' = sending, ghost' = ghost,
+    agreement' = retireAgreement(agreement), access' = retiredAccess, abandonedVersions' = abandonedVersions,
+    clientSignatures' = clientSignatures,
+    requestOpen' = requestOpen, requestVersion' = requestVersion + 1, keepMoney, clock' = clock,
+    sending' = sending, keepSigning, ghost' = ghost,
   }
 
   // Decline, the email: the client email, then the copy, timed as for send. A failed client email ends the decline (502):
@@ -335,7 +456,7 @@ module discountOffers {
       declining.phase == "email",
       clock <= declining.start + (if (accepted) 2 * EMAIL_TICKS else EMAIL_TICKS),
       declining' = { ...declining, phase: if (accepted) "second" else "none" },
-      keepOffers, keepClient, keepMoney, keepRequest,
+      keepOffers, keepClient, keepMoney, keepRequest, keepSigning,
       clock' = clock, link' = link, sending' = sending, ghost' = ghost,
     }
   }
@@ -360,7 +481,7 @@ module discountOffers {
       requestOpen' = if (writes) false else requestOpen,
       requestVersion' = if (writes) requestVersion + 1 else requestVersion,
       ghost' = if (writes) { ...ghost, declined: true } else ghost,
-      keepOffers, keepClient, keepMoney, clock' = clock, link' = link, sending' = sending,
+      keepOffers, keepClient, keepMoney, keepSigning, clock' = clock, link' = link, sending' = sending,
     }
   }
 
@@ -369,7 +490,7 @@ module discountOffers {
     not(requestOpen), project == 0,
     requestOpen' = true,
     requestVersion' = requestVersion + 1,
-    keepOffers, keepClient, keepMoney, keepFlows,
+    keepOffers, keepClient, keepMoney, keepFlows, keepSigning,
     ghost' = { ...ghost, declined: false },
   }
 
@@ -381,43 +502,274 @@ module discountOffers {
     declining.phase != "email" or clock + 1 <= declining.start + 2 * EMAIL_TICKS,
     clock' = clock + 1,
     link' = link, sending' = sending, declining' = declining,
-    keepOffers, keepClient, keepMoney, keepRequest, ghost' = ghost,
+    keepOffers, keepClient, keepMoney, keepRequest, keepSigning, ghost' = ghost,
   }
 
-  // The client opens review through the live link (getLinkedOffer: link live, offer sent, request open): the agreement
-  // text is rendered from the sent offer's terms as they are now.
-  action reviewRead = {
-    nondet v = versionIds.oneOf()
+  // The owner switches website signing off or on: one update (owner/agreements.ts:149-162) that retires nothing, so a
+  // link issued, a session made or a review saved while it was on stays as it is. Turning it off is offered only while a
+  // signing request is between its read and its batch or a signing link is unredeemed, where it can change what a batch
+  // decides; at any other moment it only makes the signing reads refuse, which a run gets by not taking them (the same
+  // bias as the audio models' closing steps).
+  action switchSigning = all {
+    not(signingOn) or signingInFlight,
+    signingOn' = not(signingOn),
+    issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
+    countersigning' = countersigning, abandoning' = abandoning,
+    keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+  }
+
+  // The signing link, the reads (agreement-access.ts:135-206): signing on, the offer the link opens (getLinkedOffer: the
+  // link live, the offer sent, the request open), and `at`; the allowances and Turnstile are not modelled. A free key for
+  // the link is part of the bound, not of the code.
+  action linkRead = {
+    nondet v = sentVersions.oneOf()
     all {
-      requestOpen, project == 0, signed.v == 0, offers.get(v).status == "sent", link.live,
-      review' = { v: v, terms: offers.get(v).terms, revoked: false },
-      keepOffers, keepRequest, signed' = signed, keepMoney, keepFlows, ghost' = ghost,
+      not(issuing.active), signingOn, link.live, requestOpen,
+      LINK_IDS.exists(k => access.get(k).v == 0),
+      issuing' = { ...noOp, active: true, v: v, token: link.token, at: clock },
+      redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
     }
   }
 
-  // The client signs what they reviewed. The batch: liveSigningGuard (offer sent, link live, request open, no project)
-  // and the session guard (not revoked; every link change revokes it), and no earlier client signature.
-  action sign = all {
-    review.v != 0, signed.v == 0, project == 0,
-    MUTANT == "no-sign-guards" or (offers.get(review.v).status == "sent" and not(review.revoked) and link.live and requestOpen),
-    signed' = { v: review.v, terms: review.terms },
-    ghost' = { ...ghost, badSign: ghost.badSign or offers.get(review.v).status != "sent" },
-    review' = review, keepOffers, keepRequest, keepMoney, keepFlows,
+  // The link batch (207-242): A4 (no signing link of the recipient and the offer issued in the 30 seconds before `at`) and
+  // A1 (for the offer and the offer link read); the link inserted, issued at `at`. A refused batch answers 429 and writes
+  // nothing. The email and what follows it (a refused email deletes the link, an accepted one consumes the older ones, A6)
+  // are not modelled: here the visitor holds the link as soon as it is stored.
+  action linkBatch = {
+    val x = issuing
+    val a4 = LINK_IDS.forall(j => access.get(j).v != x.v or access.get(j).at <= x.at - LINK_WINDOW)
+    val writes = a4 and liveSigning(x.v, x.token)
+    // The lowest free key: the read found one, and only this request issues links.
+    val k = LINK_IDS.filter(j => access.get(j).v == 0).fold(0, (m, j) => if (m == 0 or j < m) j else m)
+    all {
+      issuing.active,
+      issuing' = noOp,
+      access' = if (writes) access.set(k, { ...noAccess, v: x.v, token: x.token, at: x.at }) else access,
+      agreement' = agreement, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
+      redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
   }
 
-  // The owner starts the project from the signed, sent offer; standard terms need the first deposit paid. The project
-  // copies the offer's terms.
+  // The redeem, the read (349-362): the link by its key, unused (and unexpired).
+  action redeemRead = {
+    nondet k = LINK_IDS.filter(j => access.get(j).v != 0 and not(access.get(j).used)).oneOf()
+    all {
+      not(redeeming.active),
+      redeeming' = { ...noOp, active: true, k: k },
+      issuing' = issuing, reviewing' = reviewing, signingReq' = signingReq, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // The redeem batch (387-425): A1 for the link's offer and offer link ("redeem-no-live-guard" drops it) and A5 (the link
+  // still unused); the link used and the session inserted. A refused batch answers 401 (the expired page) and writes
+  // nothing.
+  action redeemBatch = {
+    val k = redeeming.k
+    val x = access.get(k)
+    val signable = liveSigning(x.v, x.token)
+    val writes = (signable or MUTANT == "redeem-no-live-guard") and not(x.used)
+    all {
+      redeeming.active,
+      redeeming' = noOp,
+      access' = if (writes) access.set(k, { ...x, used: true, session: true }) else access,
+      ghost' = { ...ghost, badSession: ghost.badSession or (writes and not(signable)) },
+      agreement' = agreement, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
+      issuing' = issuing, reviewing' = reviewing, signingReq' = signingReq, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepMoney, keepFlows, keepRequest,
+    }
+  }
+
+  // The checks every signing read of the visitor makes (review.ts:65-78, sign.ts:43-56): getLinkedOffer through the
+  // session's offer link, agreementSession (the session unrevoked, its offer still sent through the live link it names,
+  // the request open), and signing on.
+  def sessionOpens(k: int): bool = {
+    val x = access.get(k)
+    and { x.session, not(x.revoked), offers.get(x.v).status == "sent", link.live, link.token == x.token, requestOpen, signingOn }
+  }
+
+  // Review, the reads: the session's checks, then the draft batch (A1 A2 A3; the draft is not modelled, and a project is
+  // refused there by A1) and reviewAgreements' reads (no agreement of the offer client_signed or executed). The text is
+  // rendered from the offer's terms as read here.
+  action reviewRead = {
+    nondet k = liveSessions.oneOf()
+    val x = access.get(k)
+    all {
+      not(reviewing.active),
+      sessionOpens(k), project != x.v,
+      not(agreement.v == x.v and isSigned(agreement.status)),
+      reviewing' = { ...noOp, active: true, k: k, v: x.v, terms: offers.get(x.v).terms },
+      issuing' = issuing, redeeming' = redeeming, signingReq' = signingReq, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // The review batch: A1 and A2 ("review-no-guards" drops both) and A3 (software-agreements.ts:310-314: no agreement of the
+  // offer client_signed or executed; "review-no-signed-guard" drops it); the offer's review rows replaced by the new ones,
+  // rendered at the read, under this session. A refused batch answers 409 and writes nothing. A3's condition is also what
+  // the one-live-SOW index (migrations/music/0023_software_signing.sql:13) gives this batch: its delete removes only rows
+  // in review, so its insert of a new SOW fails while a client_signed or executed SOW of the offer exists. The model holds
+  // the two as one condition.
+  action reviewBatch = {
+    val r = reviewing
+    val x = access.get(r.k)
+    val a3 = not(agreement.v == r.v and isSigned(agreement.status))
+    val writes = (a3 or MUTANT == "review-no-signed-guard") and
+      (MUTANT == "review-no-guards" or (liveSigning(r.v, x.token) and not(x.revoked)))
+    all {
+      reviewing.active,
+      reviewing' = noOp,
+      agreement' = if (writes) { v: r.v, terms: r.terms, status: "review", session: r.k, executed: false } else agreement,
+      access' = access, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
+      issuing' = issuing, redeeming' = redeeming, signingReq' = signingReq, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // Sign, the reads: the session's checks and signAgreements' reads (software-agreements.ts:405-429): the offer's
+  // agreements that are not executed are the documents named, still in review (documents all client_signed answer the
+  // saved receipt and write nothing). The read compares the documents, not the session that reviewed them: only the
+  // batch's A9 does that, so the model's read does not either. "sign-guards-at-read" judges the batch's guards here instead
+  // (A1, whose project condition the reads lack, A2 and A9). "no-sign-guards" checks none of it: the session signs the
+  // offer's documents it holds, unless they are signed already.
+  action signRead = {
+    nondet k = LINK_IDS.filter(j => access.get(j).session).oneOf()
+    val x = access.get(k)
+    val reads = sessionOpens(k) and agreement.v == x.v and agreement.status == "review"
+    all {
+      not(signingReq.active),
+      if (MUTANT == "no-sign-guards") (agreement.v == x.v and not(isSigned(agreement.status)))
+      else reads and (MUTANT != "sign-guards-at-read" or (liveSigning(x.v, x.token) and agreement.session == k)),
+      signingReq' = { ...noOp, active: true, k: k, v: x.v },
+      issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // The sign batch: A1, A2 and A9 (each document still in review under this review session; A7, the draft, and A8, a
+  // reused MSA, are not modelled); the documents client_signed. A refused batch answers 409 and writes nothing. The two
+  // mutants drop the three guards; the documents are updated by id, so they change only if they are this version's.
+  action signBatch = {
+    val s = signingReq
+    val x = access.get(s.k)
+    val guards = and {
+      liveSigning(s.v, x.token), not(x.revoked),
+      agreement.v == s.v, agreement.status == "review", agreement.session == s.k,
+    }
+    val writes = guards or ((MUTANT == "no-sign-guards" or MUTANT == "sign-guards-at-read") and agreement.v == s.v)
+    all {
+      signingReq.active,
+      signingReq' = noOp,
+      agreement' = if (writes) { ...agreement, status: "client_signed" } else agreement,
+      clientSignatures' = if (writes) clientSignatures.union(Set(agreement.v)) else clientSignatures,
+      ghost' = { ...ghost, badSign: ghost.badSign or (writes and offers.get(s.v).status != "sent") },
+      access' = access, abandonedVersions' = abandonedVersions,
+      issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, countersigning' = countersigning,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepMoney, keepFlows, keepRequest,
+    }
+  }
+
+  // Countersign, the reads (agreement.ts:60-74; software-agreements.ts:652-662): the request's sent offer, signing on, and
+  // the offer's client_signed documents, which are the ones the owner names.
+  action countersignRead = {
+    nondet v = sentVersions.oneOf()
+    all {
+      not(countersigning.active), signingOn, agreement.v == v, agreement.status == "client_signed",
+      countersigning' = { ...noOp, active: true, v: v },
+      issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // The countersign batch (673-730): A10 (the offer sent, the request open, signing on) and A11 (each document still
+  // client_signed with the hash read) ("countersign-no-guards" drops both; A8, a reused MSA, is not modelled); the documents
+  // executed. The signatures, the packet rows and the two copies it inserts are not modelled here (the copies are the
+  // `copy` kind of audio-project-notices.qnt). A refused batch answers 409 and writes nothing.
+  action countersignBatch = {
+    val v = countersigning.v
+    val a10 = offers.get(v).status == "sent" and requestOpen and signingOn
+    val a11 = agreement.v == v and agreement.status == "client_signed"
+    val writes = (a10 and a11) or (MUTANT == "countersign-no-guards" and agreement.v == v)
+    all {
+      countersigning.active,
+      countersigning' = noOp,
+      agreement' = if (writes) { ...agreement, status: "executed", executed: true } else agreement,
+      ghost' = { ...ghost, badCountersign: ghost.badCountersign or (writes and not(a10 and a11)) },
+      access' = access, abandonedVersions' = abandonedVersions, clientSignatures' = clientSignatures,
+      issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
+      abandoning' = abandoning, signingOn' = signingOn,
+      keepOffers, keepMoney, keepFlows, keepRequest,
+    }
+  }
+
+  // Abandon, the reads (agreement.ts:120-138): the request's sent offer, the offer's client_signed documents, which are
+  // the ones the owner names, and its first deposit (A12's condition, read first: none counts).
+  action abandonRead = {
+    nondet v = sentVersions.oneOf()
+    all {
+      not(abandoning.active), agreement.v == v, agreement.status == "client_signed", not(depositCounts(v)),
+      abandoning' = { ...noOp, active: true, v: v },
+      issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
+      countersigning' = countersigning, signingOn' = signingOn,
+      keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // The abandon batch (139-194): A12 ("abandon-deposit-at-read" drops it) and A11, each document still client_signed, of
+  // this request and offer ("abandon-no-status-guard" drops it); the documents abandoned, the offer superseded while it is
+  // sent, the offer link revoked, the offer's sessions revoked and its signing links used (its drafts deleted and the
+  // obsolete notices failed are not modelled here). A refused batch answers 409 and writes nothing.
+  action abandonBatch = {
+    val v = abandoning.v
+    val a12 = not(depositCounts(v))
+    val a11 = agreement.v == v and agreement.status == "client_signed"
+    val writes = (a12 or MUTANT == "abandon-deposit-at-read") and (a11 or MUTANT == "abandon-no-status-guard")
+    all {
+      abandoning.active,
+      abandoning' = noOp,
+      agreement' = if (writes and agreement.v == v) { ...agreement, status: "abandoned" } else agreement,
+      abandonedVersions' = if (writes) abandonedVersions.union(Set(v)) else abandonedVersions,
+      clientSignatures' = clientSignatures,
+      offers' =
+        if (writes and offers.get(v).status == "sent") offers.set(v, { ...offers.get(v), status: "superseded" }) else offers,
+      versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent,
+      link' = if (writes) { ...link, live: false } else link,
+      access' =
+        if (writes) LINK_IDS.mapBy(k => if (access.get(k).v == v) retireAccess(access.get(k)) else access.get(k)) else access,
+      issuing' = issuing, redeeming' = redeeming, reviewing' = reviewing, signingReq' = signingReq,
+      countersigning' = countersigning, signingOn' = signingOn,
+      clock' = clock, sending' = sending, declining' = declining,
+      keepMoney, keepRequest, ghost' = ghost,
+    }
+  }
+
+  // The owner starts the project from a website signing: the offer's agreement executed (executedOfferAgreement; its
+  // packet and the two delivered copies are not modelled), the offer sent, the request open, and on standard terms the
+  // first deposit paid. The project copies the offer's terms. A website start retires no link and no session
+  // (project.ts:270-279 retires only for an outside signature), so a link issued before it stays unused and a session
+  // open, and only A1 refuses them afterwards.
   action start = all {
-    signed.v != 0, project == 0, requestOpen, offers.get(signed.v).status == "sent",
-    not(offers.get(signed.v).terms.std) or bills.get(slotOf(signed.v, 0, "deposit")).status == "paid",
-    project' = signed.v,
+    agreement.status == "executed", project == 0, requestOpen, offers.get(agreement.v).status == "sent",
+    not(offers.get(agreement.v).terms.std) or bills.get(slotOf(agreement.v, 0, "deposit")).status == "paid",
+    project' = agreement.v,
     // INSERT INTO software_projects ... SELECT ... terms_json FROM software_offers WHERE id = the signed offer.
     projectTerms' =
       if (MUTANT == "start-copies-newest") offers.get(versions).terms
-      else if (MUTANT == "start-drops-discount") { ...offers.get(signed.v).terms, d0: 0, d1: 0 }
-      else offers.get(signed.v).terms,
+      else if (MUTANT == "start-drops-discount") { ...offers.get(agreement.v).terms, d0: 0, d1: 0 }
+      else offers.get(agreement.v).terms,
     bills' = bills, pending' = pending,
-    keepOffers, keepClient, keepRequest, keepFlows, ghost' = ghost,
+    keepOffers, keepClient, keepRequest, keepFlows, keepSigning, ghost' = ghost,
   }
 
   // reserveSoftwareInvoice, the reads: the request open (not resolved or withdrawn) with the updated_at it has now, the
@@ -437,7 +789,7 @@ module discountOffers {
       not(live(bills.get(k))),
       pending' = { active: true, slot: k, amount: installment(amountTerms, mOf(k), kindOf(k)), reqAt: requestVersion },
       bills' = bills, project' = project, projectTerms' = projectTerms,
-      keepOffers, keepClient, keepRequest, keepFlows, ghost' = ghost,
+      keepOffers, keepClient, keepRequest, keepFlows, keepSigning, ghost' = ghost,
     }
   }
 
@@ -453,7 +805,7 @@ module discountOffers {
       pending' = { ...pending, active: false },
       bills' = if (writes) bills.set(k, { status: "open", amount: pending.amount }) else bills,
       ghost' = { ...ghost, badInvoice: ghost.badInvoice or (writes and not(offerOk)) },
-      project' = project, projectTerms' = projectTerms, keepOffers, keepClient, keepRequest, keepFlows,
+      project' = project, projectTerms' = projectTerms, keepOffers, keepClient, keepRequest, keepFlows, keepSigning,
     }
   }
 
@@ -465,19 +817,20 @@ module discountOffers {
       bills.get(k).status == "open",
       bills' = bills.set(k, { ...bills.get(k), status: outcome }),
       pending' = pending, project' = project, projectTerms' = projectTerms,
-      keepOffers, keepClient, keepRequest, keepFlows, ghost' = ghost,
+      keepOffers, keepClient, keepRequest, keepFlows, keepSigning, ghost' = ghost,
     }
   }
 
   action step = any {
     newDraft, editDraft, sendDraft, reissue, sendEmail, sendCheck, revoke, declineFirst, declineEmail, declineSecond,
-    reopen, tick, reviewRead, sign, start, invoiceRead, invoiceWrite, settle,
+    reopen, tick, switchSigning, linkRead, linkBatch, redeemRead, redeemBatch, reviewRead, reviewBatch, signRead,
+    signBatch, countersignRead, countersignBatch, abandonRead, abandonBatch, start, invoiceRead, invoiceWrite, settle,
   }
 
   // For the Apalache check only (`--step stepOrEnd`): a state where nothing else can happen stays as it is, so the end
   // of a run is not reported as a deadlock. The random runs use `step`.
   action finished = all {
-    keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
+    keepOffers, keepClient, keepMoney, keepFlows, keepRequest, keepSigning, ghost' = ghost,
   }
 
   action stepOrEnd = any { step, finished }
@@ -506,7 +859,7 @@ module discountOffers {
   val installmentsSum = versionIds.forall(v => offers.get(v).status == "none" or planSum(offers.get(v).terms) == total(offers.get(v).terms))
 
   // 5. A superseded or withdrawn offer can never be signed or invoiced: no sign or invoice batch wrote for an offer that
-  //    was not sent at that moment, and a signed offer stays the sent one.
+  //    was not sent at that moment, and a signed offer stays the sent one (an abandoned signing is no longer signed).
   val supersededInert = and {
     not(ghost.badSign), not(ghost.badInvoice),
     signed.v == 0 or offers.get(signed.v).status == "sent",
@@ -520,9 +873,36 @@ module discountOffers {
   // 7. A send that answers 200 had its link live at the check, whatever became of its client email (F9).
   val sendLinkLive = not(ghost.badSend)
 
+  // 8. A review that is not abandoned was rendered from the version that is sent now: a send, a reissue, a revoke or a
+  //    decline abandons the review it overtakes, and the review batch re-checks its offer and its session (a resend during
+  //    a review leaves no review of the old version).
+  val reviewOfSentOffer =
+    agreement.status != "review" or
+      (offers.get(agreement.v).status == "sent" and agreement.terms == offers.get(agreement.v).terms)
+
+  // 9. No session is made while its offer is not signable: not sent, its offer link revoked or replaced, the request
+  //    closed, a project, or signing off.
+  val noSessionForDeadOffer = not(ghost.badSession)
+
+  // 10. An executed agreement is never abandoned, and its offer stays sent until the project starts.
+  val executedStays =
+    not(agreement.executed) or
+      (agreement.status == "executed" and (project != 0 or offers.get(agreement.v).status == "sent"))
+
+  // 11. Countersign executes only a client_signed agreement of the sent offer, with the request open and signing on.
+  val executedOnlyWhenSigned = not(ghost.badCountersign)
+
+  // 12. An abandoned signing's version has no open or paid first deposit.
+  val abandonedHasNoDeposit = abandonedVersions.forall(v => not(depositCounts(v)))
+
+  // 13. Once a version's documents are client_signed they never return to review: they move only to executed or abandoned.
+  //    A review read before the signature cannot replace the signed documents with a new review (A3 in the review batch).
+  val signedStaysSigned = agreement.status != "review" or not(clientSignatures.contains(agreement.v))
+
   val allProperties = and {
     invoicedMatchesSigned, sentTermsFrozen, oneVersionInvoiced, installmentsSum, supersededInert, declinedHasNoOffer,
-    sendLinkLive,
+    sendLinkLive, reviewOfSentOffer, noSessionForDeadOffer, executedStays, executedOnlyWhenSigned, abandonedHasNoDeposit,
+    signedStaysSigned,
   }
 
   // Reachability witness, for a hand run with the negated invariant (docs/plans/2026-11-discount-flow.md, "The model"):
@@ -545,13 +925,19 @@ module discountOffers {
   // decline with a draft left, and with a sent offer and its live link left.
   val neverDeclinedWithDraft = not(ghost.declined and versionIds.exists(v => offers.get(v).status == "draft"))
   val neverDeclinedWithLiveOffer = not(ghost.declined and versionIds.exists(v => offers.get(v).status == "sent") and link.live)
+
+  // Signing witnesses, for a hand run with the negated invariant on `discount`: an agreement executed; a signing the
+  // owner abandoned, then another version signed; a session made and then left open by a website start.
+  val neverExecuted = not(agreement.executed)
+  val neverSignedAfterAbandon = not(abandonedVersions.size() > 0 and isSigned(agreement.status))
+  val neverSessionAfterStart = not(project != 0 and liveSessions.exists(k => access.get(k).v == project))
 }
 
 module discount { import discountOffers(MUTANT = "none", VERSIONS = 2).* }
 
 // Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs, except the
-// equivalent mutants there (discountSecondBatchNoSendingGuard and discountAcceptedOnlyCheck), which must keep every
-// property.
+// equivalent mutant there (discountSecondBatchNoSendingGuard), which must keep every property. Since the signing
+// extension, discountAcceptedOnlyCheck is a mutant that breaks sendLinkLive (docs/verification.md).
 module discountEditSent { import discountOffers(MUTANT = "edit-sent", VERSIONS = 2).* }
 module discountLatestTerms { import discountOffers(MUTANT = "latest-terms", VERSIONS = 2).* }
 module discountDepositFromUsual { import discountOffers(MUTANT = "deposit-from-usual", VERSIONS = 2).* }
@@ -567,3 +953,10 @@ module discountTodaySecondBatch { import discountOffers(MUTANT = "today-second-b
 module discountNoLiveCheck { import discountOffers(MUTANT = "no-live-check", VERSIONS = 2).* }
 module discountAcceptedOnlyCheck { import discountOffers(MUTANT = "accepted-only-check", VERSIONS = 2).* }
 module discountFirstBatchKeepsLink { import discountOffers(MUTANT = "first-batch-keeps-link", VERSIONS = 2).* }
+module discountReviewNoGuards { import discountOffers(MUTANT = "review-no-guards", VERSIONS = 2).* }
+module discountSignGuardsAtRead { import discountOffers(MUTANT = "sign-guards-at-read", VERSIONS = 2).* }
+module discountRedeemNoLiveGuard { import discountOffers(MUTANT = "redeem-no-live-guard", VERSIONS = 2).* }
+module discountAbandonNoStatusGuard { import discountOffers(MUTANT = "abandon-no-status-guard", VERSIONS = 2).* }
+module discountCountersignNoGuards { import discountOffers(MUTANT = "countersign-no-guards", VERSIONS = 2).* }
+module discountAbandonDepositAtRead { import discountOffers(MUTANT = "abandon-deposit-at-read", VERSIONS = 2).* }
+module discountReviewNoSignedGuard { import discountOffers(MUTANT = "review-no-signed-guard", VERSIONS = 2).* }

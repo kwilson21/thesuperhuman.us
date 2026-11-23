@@ -8,7 +8,7 @@ import {
 	newOfferToken,
 } from "./software-offers";
 import { reserveStudioAllowance } from "./audio-client-access";
-import { normalizeClientEmail } from "./client-portal";
+import { codeKeyUsable, normalizeClientEmail } from "./client-portal";
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
@@ -108,12 +108,179 @@ export async function agreementSession(
 	return session;
 }
 
-/** The signing link of an offer: a link to review and sign the agreement is mailed to the offer's recipient. */
+const signingOff = () =>
+	agreementJson({ ok: false, error: "Website signing is off." }, 404);
+
+const unavailableForSigning = () =>
+	agreementJson(
+		{ ok: false, error: "This offer is unavailable for signing." },
+		404,
+	);
+
+const waitForLink = () =>
+	agreementJson(
+		{
+			ok: false,
+			error: "Wait at least 30 seconds before requesting another link.",
+		},
+		429,
+	);
+
+/** How many times the link batch runs before a guard that keeps raising answers the 429. */
+const LINK_TRIES = 3;
+
+/** What the link batch's guards re-check, as plain rows: the offer, its request and link, the setting, a project. */
+type SigningFacts = {
+	status: string;
+	recipient_email_snapshot: string | null;
+	request_status: string;
+	link_hash: string | null;
+	link_revoked_at: string | null;
+	software_signing_enabled: number | null;
+	project_offer_id: string | null;
+};
+
+/**
+ * What the link batch's two guards refused, decided from what was read after they raised, each with the answer the same
+ * request gets a moment later (Q1 of docs/plans/2026-11-signing-conversion.md, decided 2026-11-23, "The real reason"):
+ * signing switched off is 404 "Website signing is off."; an offer no longer open for signing (no longer sent, its link
+ * revoked or replaced, its recipient changed, its request withdrawn or resolved, a project started: liveSigningGuard's
+ * conditions) is 404 "This offer is unavailable for signing."; a link issued to the recipient for this offer in the last
+ * 30 seconds is the 429. Null when none holds any more, so the batch may run again.
+ */
+function linkRefused(
+	facts: SigningFacts | null,
+	links: readonly { issued_at: string }[],
+	email: string,
+	since: string,
+) {
+	if (facts && !facts.software_signing_enabled) return signingOff();
+
+	if (
+		!facts ||
+		facts.status !== "sent" ||
+		facts.link_hash === null ||
+		facts.link_revoked_at !== null ||
+		facts.recipient_email_snapshot !== email ||
+		facts.request_status === "withdrawn" ||
+		facts.request_status === "resolved" ||
+		facts.project_offer_id !== null
+	)
+		return unavailableForSigning();
+
+	return links.some((link) => link.issued_at > since) ? waitForLink() : null;
+}
+
+/**
+ * Reads what the link batch's guards re-check, after one raised, and decides it. Neither read matches a hook pattern of
+ * a golden corpus that requests a link.
+ */
+async function signingRefusal(
+	db: D1Database,
+	offerId: string,
+	linkHash: string,
+	email: string,
+	since: string,
+) {
+	const facts = await db
+		.prepare(
+			"SELECT o.status,o.recipient_email_snapshot,r.status AS request_status,l.token_hash AS link_hash,l.revoked_at AS link_revoked_at,s.software_signing_enabled,p.offer_id AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id LEFT JOIN software_offer_links l ON l.request_id=o.request_id AND l.token_hash=? LEFT JOIN software_signing_settings s ON s.id=1 LEFT JOIN software_projects p ON p.offer_id=o.id WHERE o.id=?",
+		)
+		.bind(linkHash, offerId)
+		.first<SigningFacts>();
+
+	const links = await db
+		.prepare(
+			"SELECT issued_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ?",
+		)
+		.bind("agreement", email, offerId)
+		.all<{ issued_at: string }>();
+
+	return linkRefused(facts, links.results, email, since);
+}
+
+/**
+ * Stores the signing link. The batch runs as it always has; a guard that raised means the offer stopped being open for
+ * signing or a link was issued in the last 30 seconds, so what the guards re-check is read then and decided
+ * (`linkRefused`), and when none of it holds any more the batch runs again: three batches in all, each with the first
+ * `at` (as the archive link keeps its instant) and its own link id and key. A guard that raises on the third is the 429,
+ * as before. A request whose batch commits reads nothing more. Any other failure of the batch or a read is thrown for the
+ * route to answer.
+ */
+async function storeSigningLink(
+	db: D1Database,
+	offerId: string,
+	linkHash: string,
+	email: string,
+	at: Date,
+	isGuard: (error: Error) => boolean,
+) {
+	const since = new Date(at.getTime() - 30000).toISOString();
+
+	for (let attempt = 1; ; attempt += 1) {
+		const id = crypto.randomUUID(),
+			key = newOfferToken(),
+			hash = await hashOfferToken(key);
+
+		try {
+			await db.batch([
+				db
+					.prepare(
+						`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
+					)
+					.bind("agreement", email, offerId, since),
+				liveSigningGuard(db, offerId, linkHash, email),
+				agreementEvent(
+					db,
+					"link-issued",
+					await hashOfferToken(id),
+					at.toISOString(),
+					null,
+					offerId,
+				),
+				db
+					.prepare(
+						"INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+					)
+					.bind(
+						id,
+						"agreement",
+						offerId,
+						linkHash,
+						email,
+						hash,
+						at.toISOString(),
+						new Date(at.getTime() + 3600000).toISOString(),
+					),
+			]);
+
+			return { id, key };
+		} catch (error) {
+			// Only a guard that raised is another request's change; any other failure of the batch goes to the route, which
+			// answers 500 (the archive link's answer).
+			if (!(error instanceof Error && isGuard(error))) throw error;
+		}
+
+		if (attempt === LINK_TRIES) return waitForLink();
+
+		const refused = await signingRefusal(db, offerId, linkHash, email, since);
+
+		if (refused) return refused;
+	}
+}
+
+/**
+ * The signing link of an offer: a link to review and sign the agreement is mailed to the offer's recipient. `isGuard`
+ * says whether a failed link batch was refused by one of its guards (the route passes the site's recogniser,
+ * `raisedByJsonGuard`); only that is read and decided again (`storeSigningLink`), and any other failure, like every other
+ * failed call here, is thrown for the route to answer.
+ */
 export async function issueAgreementLink(
 	env: Env,
 	request: Request,
 	input: { turnstileToken: string },
 	token: string,
+	isGuard: (error: Error) => boolean,
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
@@ -132,15 +299,11 @@ export async function issueAgreementLink(
 			503,
 		);
 
-	if (!(await signingEnabled(db)))
-		return agreementJson({ ok: false, error: "Website signing is off." }, 404);
+	if (!(await signingEnabled(db))) return signingOff();
 	const offer = await getLinkedOffer(db, token);
 
 	if (!offer?.recipient_email_snapshot || !offer.msa_template_id)
-		return agreementJson(
-			{ ok: false, error: "This offer is unavailable for signing." },
-			404,
-		);
+		return unavailableForSigning();
 
 	const email = normalizeClientEmail(offer.recipient_email_snapshot);
 
@@ -177,6 +340,14 @@ export async function issueAgreementLink(
 				);
 	};
 
+	// A code key under 32 characters fails the first keyed hash, the address allowance's: the 503 of a missing key, at the
+	// point it failed before (after the signing setting, the offer and the recipient are read), with nothing written.
+	if (!codeKeyUsable(env.AUDIO_CLIENT_CODE_KEY))
+		return agreementJson(
+			{ ok: false, error: "Agreement sign-in is temporarily unavailable." },
+			503,
+		);
+
 	const crowded = await charge("agreement-link-ip", ip, 20);
 
 	if (crowded) return crowded;
@@ -199,56 +370,19 @@ export async function issueAgreementLink(
 	};
 
 	const at = new Date(),
-		id = crypto.randomUUID(),
-		key = newOfferToken(),
-		hash = await hashOfferToken(key),
 		linkHash = await hashOfferToken(token);
 
-	try {
-		await db.batch([
-			db
-				.prepare(
-					`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
-				)
-				.bind(
-					"agreement",
-					email,
-					offer.id,
-					new Date(at.getTime() - 30000).toISOString(),
-				),
-			liveSigningGuard(db, offer.id, linkHash, email),
-			agreementEvent(
-				db,
-				"link-issued",
-				await hashOfferToken(id),
-				at.toISOString(),
-				null,
-				offer.id,
-			),
-			db
-				.prepare(
-					"INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
-				)
-				.bind(
-					id,
-					"agreement",
-					offer.id,
-					linkHash,
-					email,
-					hash,
-					at.toISOString(),
-					new Date(at.getTime() + 3600000).toISOString(),
-				),
-		]);
-	} catch {
-		return agreementJson(
-			{
-				ok: false,
-				error: "Wait at least 30 seconds before requesting another link.",
-			},
-			429,
-		);
-	}
+	const stored = await storeSigningLink(
+		db,
+		offer.id,
+		linkHash,
+		email,
+		at,
+		isGuard,
+	);
+
+	if (stored instanceof Response) return stored;
+	const { id, key } = stored;
 
 	const url = new URL(`/offer/${token}/verify`, siteOrigin(env.SITE_ORIGIN));
 
@@ -326,11 +460,29 @@ export const liveSigningGuard = (
 		)
 		.bind(id, linkHash, email);
 
+/**
+ * How the redeem tells a refusal from a failure on the site's side. The verify pages pass the site's recogniser
+ * (`raisedByJsonGuard`) and log through `logUnexpected`, since src/lib imports no value from src/server.
+ */
+export type RedeemFailures = {
+	/** Whether a failed live check or consume batch was refused by one of its guards: the 401, the expired page. */
+	readonly isGuard: (error: Error) => boolean;
+	/** Logs a failure on the site's side once, before its 500. */
+	readonly unexpected: <Failure>(failure: Failure) => void;
+};
+
+/**
+ * The emailed link of a verify page, completed: 404 for another host, 401 (the expired page) for every refusal, 200 for a
+ * GET, and for a POST the 303 with the session cookie. A failed read, or a live check or consume batch that failed for no
+ * guard, is logged once and answers 500, which the pages render as the failure page (behaviour fixes B1 and B2 of
+ * docs/plans/2026-11-signing-conversion.md).
+ */
 export async function completeAgreementLink(
 	env: Env,
 	request: Request,
 	key: string,
-	token?: string,
+	token: string | undefined,
+	failures: RedeemFailures,
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
@@ -341,22 +493,45 @@ export async function completeAgreementLink(
 	const expired = () =>
 		agreementJson({ ok: false, error: "This link has expired." }, 401);
 
+	const failed = <Failure>(failure: Failure) => {
+		failures.unexpected(failure);
+
+		return agreementJson(
+			{ ok: false, error: "This link could not be opened." },
+			500,
+		);
+	};
+
+	/** A guard that raised is a refusal (the expired page); any other failure is the site's (the 500). */
+	const refusedOrFailed = <Failure>(failure: Failure) =>
+		failure instanceof Error && failures.isGuard(failure)
+			? expired()
+			: failed(failure);
+
 	if (!db || !/^[A-Za-z0-9_-]{43}$/.test(key)) return expired();
 
 	const hash = await hashOfferToken(key),
 		at = new Date().toISOString();
 
-	const link = await db
-		.prepare(
-			"SELECT * FROM software_agreement_links WHERE token_hash=? AND purpose=? AND used_at IS NULL AND expires_at>?",
-		)
-		.bind(hash, purpose, at)
-		.first<{
-			id: string;
-			offer_id: string;
-			link_hash: string;
-			recipient_email: string;
-		}>();
+	type Link = {
+		id: string;
+		offer_id: string;
+		link_hash: string;
+		recipient_email: string;
+	};
+
+	let link: Link | null;
+
+	try {
+		link = await db
+			.prepare(
+				"SELECT * FROM software_agreement_links WHERE token_hash=? AND purpose=? AND used_at IS NULL AND expires_at>?",
+			)
+			.bind(hash, purpose, at)
+			.first<Link>();
+	} catch (error) {
+		return failed(error);
+	}
 
 	if (!link || (token && (await hashOfferToken(token)) !== link.link_hash))
 		return expired();
@@ -370,8 +545,9 @@ export async function completeAgreementLink(
 					link.link_hash,
 					link.recipient_email,
 				).first();
-			} catch {
-				return expired();
+			} catch (error) {
+				// The guard raised: the offer is no longer open for signing (A1).
+				return refusedOrFailed(error);
 			}
 		}
 
@@ -423,8 +599,10 @@ export async function completeAgreementLink(
 					csrf,
 				),
 		]);
-	} catch {
-		return expired();
+	} catch (error) {
+		// A guard raised: another request used the link first (A5) or, for a signing link, the offer is no longer open for
+		// signing (A1). Nothing else in the batch can lose a race: the ids and the session token are new.
+		return refusedOrFailed(error);
 	}
 
 	return new Response(null, {

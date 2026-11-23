@@ -10,14 +10,40 @@
 // race to one looks for positive evidence of the race itself and throws `LostRace` only then (see `reviewAgreements`).
 //
 // The ways two legitimate requests can make a converted route's batch throw, and what each answers:
+//   Agreement link (`POST /api/offer/[token]/link`: `issueAgreementLink`)
+//     the 30-second guard, the offer still open for signing (A1) ....... JSON guard: what they re-check is read after it
+//       raised and decided, the batch run again when none holds, three batches in all; the read answers the real reason
+//       (404 signing off or unavailable, 429 a newer link), a third raise the 429
 //   Agreement review (`POST /api/offer/[token]/review`: the draft save, then `reviewAgreements`)
 //     guards (session, live signing link, "already signed", project started) ........ JSON guard, 409
-//     `software_agreements_sow_offer`, `software_agreements_pending_msa`, the client unique key .. UNIQUE, 409
-//     agreements naming a client another tab created under its own id or deleted ..... FOREIGN KEY, 409 through `LostRace`,
-//       only on positive evidence read afterwards: a row with the same natural key (recipient email, legal name key,
-//       entity type, jurisdiction) under another id, or the earlier client row gone. Any other foreign key failure, or
-//       a failed read of that evidence, rethrows the ORIGINAL error: 500, logged
+//     `software_agreements_pending_msa` ...... UNIQUE: read and decided again, three tries (the pending MSA's sentence,
+//       409, once read); a third failure 409
+//     `software_agreements_sow_offer` ............................................... UNIQUE, 409
+//     agreements naming a client another tab created under its own id or deleted ..... FOREIGN KEY, only on positive
+//       evidence read afterwards: a row with the same natural key (recipient email, legal name key, entity type,
+//       jurisdiction) under another id, or the earlier client row gone. Read and decided again, three tries (the other
+//       tab's client); a third failure 409 through `LostRace`. Any other foreign key failure, or a failed read of that
+//       evidence, rethrows the ORIGINAL error: 500, logged
 //     the draft's primary key is an upsert; offers, templates and the reused MSA are never deleted: no other way
+//   Agreement signing (`POST /api/offer/[token]/sign`: `signAgreements`, whose reads and batch throw `StoreRejected`)
+//     guards (live signing link, session, the draft as read, the reused MSA, each document in review) .. JSON guard, 409
+//     a signature of the same document and party, a notice of the same agreement ......... UNIQUE, 409
+//     a document or its client deleted since the read (another tab's review replaces them) .. FOREIGN KEY, 409 through
+//       `LostRace`: every row the batch refers to was read just before it, so the failure is itself the evidence
+//   Agreement verify, Archive verify (the verify pages: `completeAgreementLink`'s consume batch, and the signing page's
+//   live check on a GET)
+//     guards (the link still unused, A5; for a signing link the offer still open for signing, A1) ... JSON guard, 401 (the
+//       expired page); the ids and the session token are new, so nothing else in the batch can lose a race
+//   Owner request agreement (`POST /api/owner/requests/[id]/agreement`: its reads and batches, countersign's included,
+//   marked with `StoreRejected`)
+//     guards (countersign's offer, reused MSA and documents; abandon's deposit and documents; MSA use) .. JSON guard, 409
+//     countersign's signature, packet and copy rows written first by another request ............ UNIQUE, 409
+//     an agreement deleted since the read (hold, record-copy) ...................................... FOREIGN KEY, 409:
+//       every row a batch here refers to was read just before it, so the failure is itself the evidence
+//     the cleanup lock on a closed archive (end, hold) ................................... raise-only trigger, 409
+//     an offer with no client email snapshot (countersign's copy row) ........ NOT NULL, 409 (bad stored data)
+//   Owner attachment upload (`PUT /api/owner/requests/[id]/agreement-attachments`)
+//     the request unknown, not a software request, withdrawn or resolved .... JSON guard: 404 or 409, read after it
 //   Owner agreements (`POST /api/owner/agreements`)
 //     publish: the version guard, UNIQUE (kind, version label) (turned into a sentence) ... 409
 //     config: the version guard, the version primary key ............................... 409
