@@ -2902,6 +2902,24 @@ describe("nextExample", () => {
 		expect(nextExample("website", "parts", "We have a boo", [])).toBe("Home");
 	});
 
+	it("matches the plural shows but never the verb show", () => {
+		expect(nextExample("website", "parts", "see upcoming shows", [])).toBe(
+			"Shows",
+		);
+
+		expect(nextExample("website", "audience", "see upcoming shows", [])).toBe(
+			"Fans who want show dates",
+		);
+
+		expect(nextExample("website", "questions", "see upcoming shows", [])).toBe(
+			"Do we sell tickets on the site?",
+		);
+
+		expect(nextExample("website", "parts", "I want to show my work", [])).toBe(
+			"Home",
+		);
+	});
+
 	it("tolerates -ies for a keyword ending in y and folds accents", () => {
 		expect(nextExample("website", "parts", "Our galleries", [])).toBe("Photos");
 		expect(nextExample("website", "parts", "two bakeries", [])).toBe("Menu");

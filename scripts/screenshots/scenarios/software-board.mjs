@@ -56,7 +56,7 @@ const LANES = Object.keys(HEADINGS);
 const BY_HAND = {
 	parts: {
 		hint: "List the pages you have in mind. A rough list is fine.",
-		placeholder: "Music",
+		placeholder: "Shows",
 	},
 	audience: {
 		hint: "List the people you want the site to reach. It keeps the design aimed at them.",
@@ -64,7 +64,7 @@ const BY_HAND = {
 	},
 	questions: {
 		hint: "List anything you haven’t settled yet. It’s fine to leave this empty.",
-		placeholder: "Who will write the text?",
+		placeholder: "Do we sell tickets on the site?",
 	},
 };
 
@@ -535,8 +535,8 @@ export default {
 					const input = screen.locator("[data-lane-input]");
 
 					for (const [note, nextExample] of [
+						["Shows", "Music"],
 						["Music", "Mailing list"],
-						["Mailing list", "Home"],
 					]) {
 						await input.fill(note);
 						await screen.locator("[data-lane-save]").click();

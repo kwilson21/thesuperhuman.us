@@ -149,7 +149,10 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 	website: {
 		audience: {
 			examples: [
-				ex("Fans who want show dates", "band, music, fan, gig, tour, concert"),
+				ex(
+					"Fans who want show dates",
+					"band, music, fan, shows, gig, tour, concert",
+				),
 				ex("Venues that book us", "band, venue, gig, booking"),
 				ex("New customers"),
 				ex("Returning customers"),
@@ -160,7 +163,7 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 		},
 		parts: {
 			examples: [
-				ex("Shows", "gig, tour, concert"),
+				ex("Shows", "shows, gig, tour, concert"),
 				ex("Music", "music, band, song, album"),
 				ex("Shop", "shop, sell, merch, product"),
 				ex("Mailing list", "mailing, newsletter, subscriber"),
@@ -178,8 +181,8 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 		},
 		questions: {
 			examples: [
-				ex("Do we sell tickets on the site?", "ticket, gig, concert"),
-				ex("Who will add new show dates?", "gig, tour"),
+				ex("Do we sell tickets on the site?", "ticket, shows, gig, concert"),
+				ex("Who will add new show dates?", "shows, gig, tour"),
 				ex("Who will write the text?"),
 				ex("Do we have photos to use?"),
 				ex("Do we need a mailing list sign-up?"),
