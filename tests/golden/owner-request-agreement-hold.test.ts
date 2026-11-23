@@ -24,9 +24,12 @@ import { asOwner, asVisitor, defineCorpus, rows, type Case } from "./harness";
 //   200 {ok:true}   the batch committed (a form gets a 303 to /owner/requests/r1)
 //   400             agreement_id missing or not a uuid; held missing (JSON only) or not a boolean
 //   404 {ok:false}  no agreement with this id for this request
-//   409 "The agreement changed or the operation failed. Reload before retrying."   the batch failed: an agreement
-//                   whose archive was closed (the cleanup lock trigger refuses a change of legal_hold), an outage
-//   rejected        the offer lookup
+//   409 "The agreement changed or the operation failed. Reload before retrying."   the batch was refused: an agreement
+//                   whose archive was closed (the cleanup lock trigger refuses a change of legal_hold), an agreement
+//                   deleted since the read (the event's foreign key)
+//   500 "The agreement changed or the operation failed. Reload before retrying."   a store failure (the offer lookup,
+//                   the agreement lookup, the batch), logged once as "Owner request agreement failed unexpectedly"
+//                   (behaviour fixes B1 and B2)
 
 const body = (held: boolean | string | number | null, id: string = SOW_ID) => ({
 	action: "hold",

@@ -23,15 +23,16 @@ import {
 // Every response branch of the handler (src/pages/api/owner/requests/[id]/agreement-attachments.ts), and its cases:
 //
 //   403 "Forbidden" (no agreement headers)   a visitor, a studio client cookie, a visitor sending an agreement cookie
-//   404 "Not found"                          no attachment query key, an empty value, an unknown id, an attachment of another request, no
-//                                            database bound (the optional call answers undefined), an id that looks like SQL, a very long
-//                                            id, a unicode id, an upper-case id, the request id missing
-//   503 "Unavailable"                        the stored object is missing
+//   503 "Unavailable"                        no database or no bucket bound, before any read (behaviour fix B3)
+//   404 "Not found"                          no attachment query key, an empty value, an unknown id, an attachment of another request,
+//                                            an id that looks like SQL, a very long id, a unicode id, an upper-case id, the request id
+//                                            missing
+//   500 "Unavailable"                        the stored object is missing (B8, judgment call J1), the bucket read fails, the database
+//                                            query fails (B2); logged once as "Owner attachment failed unexpectedly"
 //   200 application/pdf, attachment agreement-attachment.pdf, nosniff, agreement headers
 //                                            the stored bytes, tampered bytes (never re-hashed), an unusual stored filename (not used in the
 //                                            header), a duplicate query key (first wins), Range ignored, a withdrawn request, a service request,
 //                                            signing switched off, an object key that points at another attachment's object
-//   rejected                                 no bucket bound, the bucket read fails, the database query fails
 //   sequences                                twice in a row
 
 const KEY = attachmentKey("att1");

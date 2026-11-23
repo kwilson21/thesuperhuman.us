@@ -29,9 +29,11 @@ import { asOwner, asVisitor, defineCorpus, rows, type Case } from "./harness";
 //   400             agreement_id missing or not a uuid; role not client or contractor; method missing, empty, over 200
 //                   characters or with a control character; confirmed not literally true
 //   404 {ok:false}  no agreement with this id for this request
-//   409 "The agreement changed or the operation failed. Reload before retrying."   the batch failed (the agreement
-//                   vanished and the event's foreign key failed, an outage), or the lookup failed
-//   rejected        the offer lookup
+//   409 "The agreement changed or the operation failed. Reload before retrying."   the batch was refused: the
+//                   agreement vanished and the event's foreign key failed
+//   500 "The agreement changed or the operation failed. Reload before retrying."   a store failure (the offer lookup,
+//                   the agreement lookup, the batch), logged once as "Owner request agreement failed unexpectedly"
+//                   (behaviour fixes B1 and B2)
 
 const body = (over: { [name: string]: string | boolean } = {}) =>
 	forAgreement("record-alternate-copy", {
