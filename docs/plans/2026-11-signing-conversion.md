@@ -490,7 +490,7 @@ with a `say` sentence, exactly today's.
 | `agreement-packet.ts` | `packetClaimable`, `packetRecoverable` | the packet row, `now`, the attempt | `StaleAttemptUnconfirmed` | the claim, the outcome |
 | `agreement-messages.ts` | `messagesToReset`, `copySigned` then `copyClaimable`, `noticeAgreementFound` then `noticeClaimable` | the rows, `now`, the agreement's status and archive, the project | none: a row that cannot move is skipped, as today | the reset, the claims |
 | `agreement-templates.ts` | `previewTemplate`, `publishTemplate`, `saveContractor` | the text, the current version, the label's use, the expected version | `TemplateRefused`, `NothingToPublish`, `LabelInvalid`, `LabelUsed`, `NotConfirmed`, `VersionChanged`, `VersionNotFound` | the version, the config |
-| `agreement-retention.ts` | `accessCleanup`, `retentionEligible`, `manifestFresh`, `objectsToDelete` | the rows each read gives, `now` | `ManifestStale`, `ArchiveChanged`, `ObjectChanged`, `UnattachedChanged`, `OrphanChanged` | the rows to delete or close |
+| `agreement-retention.ts` | `accessCleanup`, `retentionEligible` then `retentionRetiring`, `manifestFresh`, `objectsToDelete` | the rows each read gives, `now` | `ManifestStale`, `ArchiveChanged`, `ObjectChanged`, `UnattachedChanged`, `OrphanChanged` | the rows to delete or close |
 | `agreement-upload.ts` | `acceptAttachment` | the query, the bytes, the page count, the request row | `UploadRefused` (each 400 and 413 above), `PdfUnreadable` (B4), `RequestNotFound`, `RequestClosed` (B4) | the row |
 | `agreement-download.ts` (extended) | `ownerCopy` | the agreement, its copy row, the bytes' digest | `AgreementNotFound`, `CopyNotReady`, `CopyIntegrity` (all reused) | none |
 
@@ -628,7 +628,7 @@ in the re-record commit and the `trigger-hit` marker stays the same.
 | The packet | `claimPacket`, `readPacketDocuments`, `readDocumentSignatures`, `readTemplateLabel`, `markPacketReady`, `markPacketFailed`, `recoverPacket`; R2 through `AudioBucket` | artifacts.ts:108-346, 449-465 |
 | The emails | `readCopyArtifact`, `readReceiptId`, `claimCopy`, `recordCopyOutcome`, `readNoticeAgreement`, `claimNotice`, `recordNoticeOutcome`, `readMessages`, `resetCopies`, `resetNotices` | artifacts.ts:357-447, 470-523; agreement.ts:211-231 |
 | Templates and settings | `readCurrentTemplate`, `readTemplateVersion`, `readLabelUse`, `publishBatch` (A22), `saveContractorBatch` (A23), `saveSetting`, `readAccessRows`, `cleanupBatch` | templates.ts:266-381; owner-agreements.ts:149-186; access.ts:26-41 |
-| Retention | one function per read and batch of `retention.ts`, the `eligible` condition kept in the guard (A25) | retention.ts:54-598 |
+| Retention | one function per read and batch of `retention.ts`, the eligibility query read in two steps (`readRetentionFacts`, the scan, and `readRetainedAgreements`, the chosen rows; section 9), the `eligible` condition kept in the guard (A25) | retention.ts:54-598 |
 | Upload and downloads | `readUploadRequest`, `insertAttachment` (A24), `readAttachmentSaved`, `readOwnerAttachment`, `readOwnerCopy` | attachments.ts:73-138; agreement-download.ts:22-41 |
 
 Where a decision is in SQL today, the store reads plain rows and the rule decides, and the guard keeps the condition as
@@ -1049,9 +1049,36 @@ today's function beside the rule on the same database. What it found, for the st
     (`tests/server/agreement-store-owner.test.ts` checks both).
   - `owner-agreements-retention-preview`, "the orphan reference check fails": `/SELECT 1 WHERE\s+EXISTS/`.
     `readOrphanReferences` reads the references as rows for `orphanUnreferenced`.
+  - `owner-agreements-retention-preview`, "the eligibility query fails", and `owner-agreements-retention-apply`, "the
+    fresh scan during apply fails" (`nth: 2`): `/SELECT a\.\* FROM software_agreements a/`, re-pointed to
+    `/^SELECT id,kind,offer_id,msa_id,/`, the first statement of the scan's batch (a SELECT on `software_agreements`, as
+    today's query). Today's eligibility query is two reads (below); the second, the chosen agreements' full rows
+    (`SELECT * FROM software_agreements WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id`), meets no hook, and
+    the new pattern meets the scan and no statement either retention corpus recorded or the store runs
+    (`tests/server/agreement-store-retention.test.ts` checks both).
 
   `tests/api/signing-owner-outages.test.ts` picks today's deposit check and today's sent-offer read by the same texts
   (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which PR 4 deletes with its tests.
+- **Retention's two reads.** Today's eligibility query (`SELECT a.* ... WHERE eligible ORDER BY a.id LIMIT 20`) returns
+  at most 20 rows. Read as plain rows for the rule, every agreement with every column (`canonical_text` alone may be 256
+  KiB) would outgrow D1's result limit long before today's query does, on every preview and again in the apply's fresh
+  scan. So the store reads in two steps: the scan (`readRetentionFacts`, one batch) reads of every agreement only the
+  columns the `eligible` condition and A25's text check read (`id`, `kind`, `offer_id`, `msa_id`, `status`,
+  `text_sha256`, `ended_at`, `retain_until`, `legal_hold`, `terminated_at`) and the other tables as before;
+  `retentionEligible` chooses at most 20 ids in id order; `readRetainedAgreements` reads those agreements' full rows
+  (every column: the manifest's `row_hash` hashes them all, and the apply's freshness check compares them); and
+  `retentionRetiring` keeps, in the order chosen, each full row still eligible by its own columns as read the second
+  time (with the scan's rows for the others). With no change between the reads the rows are today's query's, so the
+  preview and the apply answer as today, manifest bytes, cursor and marker included
+  (`tests/rules/agreement-retention-sql.test.ts` runs today's preview beside the rules). A race between the reads, which
+  today's single statement could not see, now answers so: a chosen agreement that is gone is skipped; one that is no
+  longer eligible by its full row (put on hold, its retention moved, reopened) is skipped; one that changed and is still
+  eligible (its archive being closed by another apply) is in the manifest as read the second time, its `row_hash` of
+  that row; and the manifest is not refilled past the first 20, so it may hold fewer agreements than today's query would
+  have returned after the same change (the next preview takes the rest). In the apply, the fresh scan makes the same two
+  reads and decisions, so a race in either the preview's scan or the apply's that changes the set or a row answers
+  ArchiveChanged, "Archive changed. Preview again." (409), as a change between the preview and the apply does today, and
+  A25 still re-checks every agreement in the closing batch.
 
 ## Open questions from reading the code
 

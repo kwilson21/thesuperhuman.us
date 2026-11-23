@@ -93,7 +93,15 @@ import type {
 	RecordAgreementRow,
 	ReusingOfferRow,
 } from "./rules/agreement-record";
-import type { AccessRows } from "./rules/agreement-retention";
+import type {
+	AccessRows,
+	ProjectEvidence,
+	References,
+	StoredAttachment as RetainedAttachment,
+	RetentionFacts,
+	StoredObject,
+	UnattachedAttachment,
+} from "./rules/agreement-retention";
 import type {
 	SigningOfferRow,
 	StoredAgreementSession,
@@ -2990,3 +2998,665 @@ export const readOwnerCopy = (id: string) =>
 			)
 			.bind(id),
 	).pipe(Effect.map((rows): OwnerCopyAgreement | null => rows[0] ?? null));
+
+// ---- retention ----
+//
+// The owner's retention preview and apply (src/lib/agreement-retention.ts, which PR 4 deletes). One function per D1 read
+// and batch of today's code, called by the flow in today's order, so each golden hook still meets the call it met (but
+// for those the plan's section 9 lists as re-pointed). Where today's SQL chose rows (the `eligible` condition, its
+// `LIMIT 20` and order, the shared-attachment and open-offer lookups, the unattached query and the orphan reference
+// check), the store reads plain rows, scoped by key where today's lookup was, and the rules in
+// src/server/rules/agreement-retention.ts decide. Today's eligibility query became two reads: the scan, which reads only
+// the columns the condition reads of every agreement (never a text column, so its result stays small however many
+// agreements there are), and the full rows of the at most 20 the rule chose; the batches keep today's statements and
+// guard SQL (A25, with `eligible`) byte for byte, statement for statement. The flow draws the receipt and event ids, in
+// that order, and reads the clock; the store binds what it is given. R2 is the flow's (through `AudioBucket`); the
+// named failures it catches by name are below.
+//
+// A reference read looks through every agreement's manifest, or every offer's details, for the key, where today's lookup
+// stopped at its first match and read only draft and sent offers' details. So a stored manifest or details text SQLite
+// cannot read as JSON fails the read (an `AgreementStoreFailed`, "malformed JSON") in a few states where today's lookup
+// passed it by. The site writes both columns with JSON.stringify; the one golden case that stores one (a retiring
+// agreement's manifest) fails first at the flow's parse of the retiring manifests, as today.
+
+/** The bucket's listing failed. The preview's orphan scan retries once from the first page on this alone. */
+export class BucketListFailed extends Data.TaggedError("BucketListFailed")<{
+	readonly failure: unknown;
+}> {}
+
+/** The bucket refused to delete an object. An unattached PDF's metadata row is put back first. */
+export class BucketDeleteFailed extends Data.TaggedError("BucketDeleteFailed")<{
+	readonly failure: unknown;
+}> {}
+
+/** The orphan scan's cursor marker could not be read or parsed. Ignored: the scan starts at the first page. */
+export class MarkerUnreadable extends Data.TaggedError("MarkerUnreadable") {}
+
+// Today's SQL, byte for byte (src/lib/agreement-retention.ts:37-52): the `eligible` condition and an open offer's pin.
+const retentionEligibleSql = `a.status IN ('executed','abandoned') AND a.ended_at IS NOT NULL AND a.retain_until IS NOT NULL AND a.retain_until<=? AND a.legal_hold=0
+ AND NOT EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=a.id AND f.status='rendering')
+ AND NOT EXISTS(SELECT 1 FROM software_agreement_deliveries d WHERE d.agreement_id=a.id AND d.status='sending')
+ AND NOT EXISTS(SELECT 1 FROM software_agreement_notifications n WHERE n.agreement_id=a.id AND n.status='sending')
+ AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.agreement_id=a.id AND p.content_deleted_at IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=a.offer_id AND p.content_deleted_at IS NULL)
+ AND NOT EXISTS(SELECT 1 FROM software_offers o WHERE o.reused_msa_id=a.id AND (EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NULL) OR EXISTS(SELECT 1 FROM software_agreements sow WHERE sow.offer_id=o.id) OR (o.status IN ('sent','draft') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id AND p.content_deleted_at IS NOT NULL))))
+ AND NOT EXISTS(SELECT 1 FROM software_agreements s WHERE s.msa_id=a.id)
+ AND (a.kind='sow' OR a.terminated_at IS NOT NULL OR NOT EXISTS(SELECT 1 FROM software_agreement_signatures sig WHERE sig.agreement_id=a.id))`;
+
+const retentionOfferPin = (
+	keyExpression = "?",
+) => `SELECT 1 FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment
+ WHERE o.status IN ('draft','sent') AND CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END=${keyExpression}
+ AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)`;
+
+/**
+ * The columns of an agreement the scan reads (`RetentionAgreementRow`): what the `eligible` condition and A25's text check
+ * read, of every agreement. No text column: `canonical_text` alone may be 256 KiB.
+ */
+const RetentionScanRow = Schema.Struct({
+	id: text,
+	kind: text,
+	offer_id: maybeText,
+	msa_id: maybeText,
+	status: text,
+	text_sha256: text,
+	ended_at: maybeText,
+	retain_until: maybeText,
+	legal_hold: Schema.Number,
+	terminated_at: maybeText,
+});
+
+/** The scan's statement: the columns of `RetentionScanRow`, of every agreement. */
+const RETENTION_SCAN =
+	"SELECT id,kind,offer_id,msa_id,status,text_sha256,ended_at,retain_until,legal_hold,terminated_at FROM software_agreements";
+
+/** Every column of software_agreements, as `SELECT *` reads it: the flow hashes the whole row for the manifest. */
+const RetainedAgreementRow = Schema.Struct({
+	id: text,
+	kind: text,
+	offer_id: maybeText,
+	request_id: text,
+	client_id: text,
+	template_id: text,
+	msa_id: maybeText,
+	sow_number: maybeText,
+	status: text,
+	canonical_text: text,
+	text_sha256: text,
+	render_version: Schema.Number,
+	values_json: text,
+	attachment_manifest_json: text,
+	created_at: text,
+	client_signed_at: maybeText,
+	executed_at: maybeText,
+	effective_on: text,
+	ended_at: maybeText,
+	retain_until: maybeText,
+	legal_hold: Schema.Number,
+	terminated_at: maybeText,
+	abandoned_at: maybeText,
+	abandoned_reason: maybeText,
+	review_session_hash: text,
+	archive_closed_at: maybeText,
+});
+
+/** An agreement as stored, every column (the rule reads some of them; the manifest's `row_hash` hashes them all). */
+export type RetainedAgreement = typeof RetainedAgreementRow.Type;
+
+const RetentionStatusRow = Schema.Struct({ agreement_id: text, status: text });
+
+const RetentionProjectRow = Schema.Struct({
+	request_id: text,
+	offer_id: text,
+	agreement_id: maybeText,
+	external_signature_details_json: maybeText,
+	content_deleted_at: maybeText,
+});
+
+const RetentionOfferRow = Schema.Struct({
+	id: text,
+	status: text,
+	reused_msa_id: maybeText,
+});
+
+const RetentionSignatureRow = Schema.Struct({ agreement_id: text });
+
+/** A key as SQLite's JSON functions read it from a stored manifest or an offer's details: text, a number, or nothing. */
+const retentionReferenceKey = Schema.NullOr(
+	Schema.Union([text, Schema.Number]),
+);
+
+const RetentionAgreementReferenceRow = Schema.Struct({
+	agreement_id: text,
+	key: retentionReferenceKey,
+});
+
+const RetentionOfferReferenceRow = Schema.Struct({
+	offer_id: text,
+	status: text,
+	key: retentionReferenceKey,
+	projects: Schema.Number,
+});
+
+const RetentionEvidenceRow = Schema.Struct({
+	request_id: text,
+	external_signature_details_json: maybeText,
+});
+
+const RetentionUnattachedRow = Schema.Struct({
+	id: text,
+	object_key: text,
+	sha256: text,
+	created_at: text,
+});
+
+const RetentionAttachmentKeyRow = Schema.Struct({ object_key: text });
+
+const RetentionAttachmentRow = Schema.Struct({
+	id: text,
+	request_id: text,
+	filename: text,
+	version: text,
+	document_date: text,
+	object_key: text,
+	sha256: text,
+	bytes: Schema.Number,
+	created_at: text,
+	created_by: text,
+});
+
+/** Each agreement's attachment items whose key (today's JSON expression) meets `keyCondition`. */
+const retentionAgreementReferences = (keyCondition: string) =>
+	`SELECT agreement.id AS agreement_id,json_extract(item.value,'$.key') AS key FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item WHERE json_extract(item.value,'$.key')${keyCondition}`;
+
+/**
+ * Each offer's attachment items whose key (today's JSON expression) meets `keyCondition`, with the offer's status and its
+ * number of projects. The projects are joined, not counted in a subquery, so the statement's first table is the offers'.
+ */
+const retentionOfferReferences = (keyCondition: string) =>
+	`SELECT o.id AS offer_id,o.status,CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END AS key,count(p.request_id) AS projects FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment LEFT JOIN software_projects p ON p.offer_id=o.id WHERE CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END${keyCondition} GROUP BY o.id,attachment.id`;
+
+/**
+ * The scan. Plain reads, in ONE batch (one snapshot): every agreement's columns the `eligible` condition reads
+ * (`RetentionScanRow`), and the artifacts, deliveries, notifications, projects, offers and signatures it looks at.
+ * Replaces the first half of the preview's eligibility query (retention.ts:61-68): `retentionEligible` chooses the first
+ * 20 ids in id order, and `readRetainedAgreements` reads their rows. The eligibility hooks, which picked today's query by
+ * its `SELECT a.*`, are re-pointed to this batch's first statement in PR 4 (the plan's section 9).
+ */
+export const readRetentionFacts = () =>
+	asked((db) =>
+		db.batch([
+			db.prepare(RETENTION_SCAN),
+			db.prepare(
+				"SELECT agreement_id,status FROM software_agreement_artifacts",
+			),
+			db.prepare(
+				"SELECT agreement_id,status FROM software_agreement_deliveries",
+			),
+			db.prepare(
+				"SELECT agreement_id,status FROM software_agreement_notifications",
+			),
+			db.prepare(
+				"SELECT request_id,offer_id,agreement_id,external_signature_details_json,content_deleted_at FROM software_projects",
+			),
+			db.prepare("SELECT id,status,reused_msa_id FROM software_offers"),
+			db.prepare("SELECT agreement_id FROM software_agreement_signatures"),
+		]),
+	).pipe(
+		Effect.flatMap(
+			([
+				agreements,
+				artifacts,
+				deliveries,
+				notifications,
+				projects,
+				offers,
+				signatures,
+			]) =>
+				Effect.all({
+					agreements: rowsOf(RetentionScanRow, agreements?.results ?? []),
+					artifacts: rowsOf(RetentionStatusRow, artifacts?.results ?? []),
+					deliveries: rowsOf(RetentionStatusRow, deliveries?.results ?? []),
+					notifications: rowsOf(
+						RetentionStatusRow,
+						notifications?.results ?? [],
+					),
+					projects: rowsOf(RetentionProjectRow, projects?.results ?? []),
+					offers: rowsOf(RetentionOfferRow, offers?.results ?? []),
+					signatures: rowsOf(RetentionSignatureRow, signatures?.results ?? []),
+				}),
+		),
+		Effect.map((facts): RetentionFacts => facts),
+	);
+
+/**
+ * Plain read: the full rows (every column) of the agreements `retentionEligible` chose, in id order, one that is gone left
+ * out. The second half of the preview's eligibility query: `retentionRetiring` keeps the rows still eligible, and the
+ * manifest hashes each whole row. A plain read by key, at most 20 rows.
+ */
+export const readRetainedAgreements = (ids: readonly string[]) =>
+	readAll(RetainedAgreementRow, (db) =>
+		db
+			.prepare(
+				"SELECT * FROM software_agreements WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id",
+			)
+			.bind(JSON.stringify(ids)),
+	).pipe(Effect.map((rows): readonly RetainedAgreement[] => rows));
+
+/**
+ * Plain read: the agreements outside the retiring set whose attachment manifest names the key, one row per naming item.
+ * Today's shared-attachment lookup (retention.ts:110-115), its FROM and WHERE kept, reading the references it found.
+ */
+export const readSharedReferences = (
+	retiring: readonly string[],
+	key: string,
+) =>
+	readAll(RetentionAgreementReferenceRow, (db) =>
+		db
+			.prepare(
+				"SELECT other.id AS agreement_id,json_extract(attachment.value,'$.key') AS key FROM software_agreements other,json_each(other.attachment_manifest_json) attachment WHERE other.id NOT IN (SELECT value FROM json_each(?)) AND json_extract(attachment.value,'$.key')=?",
+			)
+			.bind(JSON.stringify(retiring), key),
+	).pipe(Effect.map((rows): References["agreements"] => rows));
+
+/**
+ * Plain read: the offers whose details name the key, whatever their status, with each one's number of projects. Replaces
+ * today's open-offer lookup (retention.ts:117-120); `pinnedByOpenOffer` decides the status and the projects.
+ */
+export const readOfferReferences = (key: string) =>
+	readAll(RetentionOfferReferenceRow, (db) =>
+		db.prepare(retentionOfferReferences("=?")).bind(key),
+	).pipe(Effect.map((rows): References["offers"] => rows));
+
+/** Plain read, today's (retention.ts:134-143): the projects of the agreement's offer, in request id order. */
+export const readProjectEvidence = (offerId: string | null) =>
+	readAll(RetentionEvidenceRow, (db) =>
+		db
+			.prepare(
+				"SELECT request_id,external_signature_details_json FROM software_projects WHERE offer_id=? ORDER BY request_id",
+			)
+			.bind(offerId),
+	).pipe(Effect.map((rows): readonly ProjectEvidence[] => rows));
+
+/**
+ * Plain reads, in ONE batch: every attachment's metadata (id, key, digest, creation time), and every agreement and offer
+ * that names one of their keys. Replaces today's unattached query (retention.ts:148-159), whose hook meets the first
+ * statement; `unattachedToDelete` applies the 30-day cutoff, the references and the limit of 100 in id order.
+ */
+export const readUnattachedFacts = () =>
+	asked((db) =>
+		db.batch([
+			db.prepare(
+				"SELECT attachment.id,attachment.object_key,attachment.sha256,attachment.created_at FROM software_agreement_attachments attachment",
+			),
+			db.prepare(
+				retentionAgreementReferences(
+					" IN (SELECT object_key FROM software_agreement_attachments)",
+				),
+			),
+			db.prepare(
+				retentionOfferReferences(
+					" IN (SELECT object_key FROM software_agreement_attachments)",
+				),
+			),
+		]),
+	).pipe(
+		Effect.flatMap(([attachments, agreements, offers]) =>
+			Effect.all({
+				attachments: rowsOf(RetentionUnattachedRow, attachments?.results ?? []),
+				agreements: rowsOf(
+					RetentionAgreementReferenceRow,
+					agreements?.results ?? [],
+				),
+				offers: rowsOf(RetentionOfferReferenceRow, offers?.results ?? []),
+			}),
+		),
+		Effect.map(({ attachments, agreements, offers }) => ({
+			attachments,
+			references: { agreements, offers } satisfies References,
+		})),
+	);
+
+/**
+ * Plain reads, in ONE batch: the metadata rows with this key, and every agreement and offer that names it. Replaces
+ * today's orphan reference check (retention.ts:217-224); `orphanUnreferenced` decides.
+ */
+export const readOrphanReferences = (key: string) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(
+					"SELECT object_key FROM software_agreement_attachments WHERE object_key=?",
+				)
+				.bind(key),
+			db.prepare(retentionAgreementReferences("=?")).bind(key),
+			db.prepare(retentionOfferReferences("=?")).bind(key),
+		]),
+	).pipe(
+		Effect.flatMap(([rows, agreements, offers]) =>
+			Effect.all({
+				rows: rowsOf(RetentionAttachmentKeyRow, rows?.results ?? []),
+				agreements: rowsOf(
+					RetentionAgreementReferenceRow,
+					agreements?.results ?? [],
+				),
+				offers: rowsOf(RetentionOfferReferenceRow, offers?.results ?? []),
+			}),
+		),
+		Effect.map(({ rows, agreements, offers }) => ({
+			rows,
+			references: { agreements, offers } satisfies References,
+		})),
+	);
+
+/**
+ * Plain read: an unattached PDF's metadata row by its id, every column, or null. Replaces the apply's metadata read
+ * (retention.ts:446-466); `unattachedRowKept` compares its key, digest and creation time with the reviewed ones.
+ */
+export const readUnattachedRow = (id: string) =>
+	readAll(RetentionAttachmentRow, (db) =>
+		db
+			.prepare(
+				"SELECT id,request_id,filename,version,document_date,object_key,sha256,bytes,created_at,created_by FROM software_agreement_attachments WHERE id=?",
+			)
+			.bind(id),
+	).pipe(Effect.map((rows): RetainedAttachment | null => rows[0] ?? null));
+
+/** A reviewed agreement as the apply's batches guard it. */
+export type ClosingAgreement = {
+	readonly id: string;
+	readonly sha256: string;
+	readonly project_evidence: readonly ProjectEvidence[];
+	readonly objects: readonly StoredObject[];
+};
+
+/** A25's project-evidence guards (retention.ts:306-319): the offer's project count, then each reviewed project. */
+const retentionEvidenceGuards = (db: D1Database, item: ClosingAgreement) => [
+	softwareGuard(
+		db,
+		"SELECT 1 WHERE (SELECT count(*) FROM software_projects WHERE offer_id=(SELECT offer_id FROM software_agreements WHERE id=?))=?",
+		[item.id, item.project_evidence.length],
+	),
+	...item.project_evidence.map((project) =>
+		softwareGuard(
+			db,
+			"SELECT 1 FROM software_projects WHERE request_id=? AND external_signature_details_json IS ?",
+			[project.request_id, project.external_signature_details_json],
+		),
+	),
+];
+
+/** A25's guard that the agreement is still stored with the reviewed text and still eligible at `at`. */
+const retentionStillEligible = (
+	db: D1Database,
+	item: ClosingAgreement,
+	at: string,
+) =>
+	softwareGuard(
+		db,
+		`SELECT 1 FROM software_agreements a WHERE a.id=? AND a.text_sha256=? AND ${retentionEligibleSql}`,
+		[item.id, item.sha256, at],
+	);
+
+/**
+ * Closes the agreement's archive: today's batch (retention.ts:321-341), A25's evidence, eligibility and object guards,
+ * then `archive_closed_at`. A raised guard is `GuardRefused`; any other rejection is `AgreementStoreFailed`.
+ */
+export const closeRetiringArchive = (item: ClosingAgreement, at: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					...retentionEvidenceGuards(db, item),
+					retentionStillEligible(db, item, at),
+					...item.objects.map((object) =>
+						softwareGuard(
+							db,
+							`SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements other,json_each(other.attachment_manifest_json) attachment WHERE other.id<>? AND json_extract(attachment.value,'$.key')=?)
+         AND NOT EXISTS(${retentionOfferPin()})`,
+							[item.id, object.key, object.key],
+						),
+					),
+					db
+						.prepare(
+							"UPDATE software_agreements SET archive_closed_at=? WHERE id=?",
+						)
+						.bind(at, item.id),
+				]),
+			catch: refusedBatch,
+		});
+	});
+
+/** What the receipts batch binds besides the agreement: the time, the reviewed manifest's hash, and the two new ids. */
+export type RetirementRecord = {
+	readonly at: string;
+	readonly manifestHash: string;
+	/** The receipt's id, drawn first (today's `crypto.randomUUID()` in the receipt's bind, retention.ts:367). */
+	readonly receiptId: string;
+	/** The `retention-deleted` event's id, drawn second (today's `agreementEvent`, retention.ts:434). */
+	readonly eventId: string;
+};
+
+/**
+ * Deletes the closed agreement's rows: today's receipts batch (retention.ts:355-435), statement for statement. A25's
+ * evidence and eligibility guards, the receipt, the notices, notifications, deliveries, events, artifact and signatures,
+ * the projects' and offers' links to it, the offer's snapshot and the offer's own events and project details when no
+ * other agreement of the offer is left, the agreement, each of its attachment rows that no agreement still names, and
+ * the `retention-deleted` event (today's `agreementEvent` statement, with the given id). A raised guard is
+ * `GuardRefused`; any other rejection is `AgreementStoreFailed`.
+ */
+export const retireAgreementRows = (
+	item: ClosingAgreement,
+	record: RetirementRecord,
+) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					...retentionEvidenceGuards(db, item),
+					retentionStillEligible(db, item, record.at),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_retention_receipts VALUES(?,?,?,?,?)",
+						)
+						.bind(
+							record.receiptId,
+							item.id,
+							item.sha256,
+							record.at,
+							record.manifestHash,
+						),
+					db
+						.prepare(
+							"DELETE FROM software_agreement_notices WHERE agreement_id=?",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"DELETE FROM software_agreement_notifications WHERE agreement_id=?",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"DELETE FROM software_agreement_deliveries WHERE agreement_id=?",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"DELETE FROM software_agreement_events WHERE agreement_id=?",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"DELETE FROM software_agreement_artifacts WHERE agreement_id=?",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"DELETE FROM software_agreement_signatures WHERE agreement_id=?",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"UPDATE software_projects SET agreement_id=NULL WHERE agreement_id=? AND content_deleted_at IS NOT NULL",
+						)
+						.bind(item.id),
+					db
+						.prepare(
+							"UPDATE software_offers SET reused_msa_id=NULL WHERE reused_msa_id=? AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id AND p.content_deleted_at IS NULL)",
+						)
+						.bind(item.id),
+					db
+						.prepare(`UPDATE software_offers SET recipient_email_snapshot=NULL,agreement_details_json=NULL
+        WHERE id=(SELECT offer_id FROM software_agreements WHERE id=?)
+          AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=software_offers.id AND p.content_deleted_at IS NULL)
+          AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id AND a.id<>?)`)
+						.bind(item.id, item.id),
+					db
+						.prepare(`DELETE FROM software_agreement_events WHERE agreement_id IS NULL
+        AND offer_id=(SELECT offer_id FROM software_agreements WHERE id=?)
+        AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_agreement_events.offer_id AND a.id<>?)`)
+						.bind(item.id, item.id),
+					db
+						.prepare(`UPDATE software_projects SET external_signature_details_json=NULL
+        WHERE content_deleted_at IS NOT NULL AND offer_id=(SELECT offer_id FROM software_agreements WHERE id=?)
+          AND NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_projects.offer_id AND a.id<>?)`)
+						.bind(item.id, item.id),
+					db
+						.prepare("DELETE FROM software_agreements WHERE id=?")
+						.bind(item.id),
+					...item.objects.map((object) =>
+						db
+							.prepare(
+								"DELETE FROM software_agreement_attachments WHERE object_key=? AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE json_extract(m.value,'$.key')=software_agreement_attachments.object_key)",
+							)
+							.bind(object.key),
+					),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_events(id,agreement_id,offer_id,action,actor,occurred_at,reason) VALUES(?,?,?,?,?,?,?)",
+						)
+						.bind(
+							record.eventId,
+							null,
+							null,
+							"retention-deleted",
+							"system",
+							record.at,
+							null,
+						),
+				]),
+			catch: refusedBatch,
+		});
+	});
+
+/**
+ * Deletes every client no agreement names any more: today's statement after each retired agreement (retention.ts:436-440),
+ * on its own, so a failure leaves the agreement retired and the client kept, as today.
+ */
+export const deleteUnusedClients = () =>
+	asked((db) =>
+		db
+			.prepare(
+				"DELETE FROM software_agreement_clients WHERE NOT EXISTS(SELECT 1 FROM software_agreements a WHERE a.client_id=software_agreement_clients.id)",
+			)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/**
+ * Deletes an unattached PDF's metadata row: today's batch (retention.ts:478-508), A25's guard that the row is still the
+ * reviewed one, 30 days old at `cutoff`, named by no agreement and pinned by no open offer, then the delete with the same
+ * condition. A raised guard is `GuardRefused`; any other rejection is `AgreementStoreFailed`.
+ */
+export const deleteUnattachedRow = (
+	entry: UnattachedAttachment,
+	cutoff: string,
+) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		const binds = [
+			entry.id,
+			entry.key,
+			entry.sha256,
+			entry.created_at,
+			cutoff,
+			entry.key,
+		];
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					softwareGuard(
+						db,
+						`SELECT 1 FROM software_agreement_attachments attachment
+      WHERE attachment.id=? AND attachment.object_key=? AND attachment.sha256=? AND attachment.created_at=? AND attachment.created_at<=?
+        AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+          WHERE json_extract(item.value,'$.key')=attachment.object_key)
+        AND NOT EXISTS(${retentionOfferPin()})`,
+						binds,
+					),
+					db
+						.prepare(`DELETE FROM software_agreement_attachments WHERE id=? AND object_key=? AND sha256=? AND created_at=? AND created_at<=?
+        AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+          WHERE json_extract(item.value,'$.key')=software_agreement_attachments.object_key)
+        AND NOT EXISTS(${retentionOfferPin()})`)
+						.bind(...binds),
+				]),
+			catch: refusedBatch,
+		});
+	});
+
+/**
+ * Puts an unattached PDF's metadata row back after the bucket refused to delete its object: today's `INSERT OR IGNORE`
+ * (retention.ts:517-533), on its own, so the next reviewed pass can find the row again.
+ */
+export const restoreUnattachedRow = (row: RetainedAttachment) =>
+	asked((db) =>
+		db
+			.prepare(`INSERT OR IGNORE INTO software_agreement_attachments
+          (id,request_id,filename,version,document_date,object_key,sha256,bytes,created_at,created_by)
+          VALUES (?,?,?,?,?,?,?,?,?,?)`)
+			.bind(
+				row.id,
+				row.request_id,
+				row.filename,
+				row.version,
+				row.document_date,
+				row.object_key,
+				row.sha256,
+				row.bytes,
+				row.created_at,
+				row.created_by,
+			)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/**
+ * Reserves an orphan for deletion: today's batch of one guard (retention.ts:558-568), that no metadata row, agreement or
+ * open offer names the key. A raised guard is `GuardRefused`; any other rejection is `AgreementStoreFailed`.
+ */
+export const reserveOrphan = (key: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					softwareGuard(
+						db,
+						`SELECT 1 WHERE
+      NOT EXISTS(SELECT 1 FROM software_agreement_attachments WHERE object_key=?)
+      AND NOT EXISTS(SELECT 1 FROM software_agreements agreement,json_each(agreement.attachment_manifest_json) item
+        WHERE json_extract(item.value,'$.key')=?)
+      AND NOT EXISTS(${retentionOfferPin()})`,
+						[key, key, key],
+					),
+				]),
+			catch: refusedBatch,
+		});
+	});
