@@ -15,7 +15,7 @@ import type { Recorded } from "../golden/harness/plain";
 import * as access from "../golden/areas/agreement-access";
 
 // How the two verify pages (src/pages/offer/[token]/verify.astro and src/pages/agreements/verify.astro) and the redeem
-// they call (completeAgreementLink, src/lib/agreement-access.ts) answer a failure on the site's side, after the behaviour
+// they call (`redeemLinkPage`, src/server/redeem-page.ts) answer a failure on the site's side, after the behaviour
 // fixes of docs/plans/2026-11-signing-conversion.md, section 5 (B1, B2, B5's verify-page cases), on the owner's decisions
 // of 2026-11-14 (an unexpected store failure answers 500, never the error's text, logged once) and 2026-11-23 (Q2's
 // failure page). A refusal (a key that names no live link, a guard that raised, a lost race) keeps the 401 and the
@@ -40,8 +40,9 @@ const EXPIRED_TITLE = "This link has expired.";
 
 const LINK_READ = /SELECT \* FROM software_agreement_links WHERE token_hash=\?/;
 
+/** The offer's signing state: the link route reads it before its batch, the signing page's GET in place of A1. */
 const LIVE_CHECK =
-	/SELECT CASE WHEN EXISTS\(SELECT 1 FROM software_offers o JOIN software_offer_links/;
+	/SELECT o\.status,o\.recipient_email_snapshot,r\.status AS request_status/;
 
 const OFFER_READ =
 	/SELECT o\.\* FROM software_offers o JOIN software_offer_links/;
@@ -337,7 +338,7 @@ describe("the signing verify page", () => {
 	});
 });
 
-describe("completeAgreementLink, called directly", () => {
+describe("the redeem the pages call (redeemLinkPage), called directly", () => {
 	/** A step that follows the emailed link (the golden corpora's `follow`): the redeem's own Response is recorded. */
 	const redeem = (handler: Handler, page: Page, over: Partial<Case> = {}) =>
 		runCase(handler, {

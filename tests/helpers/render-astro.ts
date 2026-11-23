@@ -54,6 +54,21 @@ export async function bundleAstro(
 							contents: "",
 							loader: "js",
 						}));
+						// A `?raw` import is its file's text, as Vite gives it (the agreement PDF's fonts, which a server module the
+						// verify pages reach imports lazily).
+						builder.onResolve({ filter: /\?raw$/ }, (args) => ({
+							path: args.path.startsWith("~/")
+								? resolve("src", args.path.slice(2, -4))
+								: resolve(args.resolveDir, args.path.slice(0, -4)),
+							namespace: "raw-text",
+						}));
+						builder.onLoad(
+							{ filter: /.*/, namespace: "raw-text" },
+							async (args) => ({
+								contents: await readFile(args.path, "utf8"),
+								loader: "text",
+							}),
+						);
 						builder.onResolve({ filter: /^~\// }, (args) => ({
 							path:
 								resolve("src", args.path.slice(2)) +

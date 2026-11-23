@@ -1,6 +1,6 @@
 // Redeeming an emailed link: a verify page opens the link with a GET (the Continue form) and consumes it with a POST,
 // which makes the visitor's two-hour session (src/pages/offer/[token]/verify.astro for a signing link,
-// src/pages/agreements/verify.astro for an archive link; today `completeAgreementLink` in src/lib/agreement-access.ts).
+// src/pages/agreements/verify.astro for an archive link; the flow src/server/flows/signing-redeem.ts).
 // One function serves both purposes today, the purpose following from whether the page has an offer token, so
 // `redeemLink` decides both. Decided from `at` (read once, after the key's shape), the link read by the key's hash, the
 // page's purpose and offer token, and the method, in today's order:

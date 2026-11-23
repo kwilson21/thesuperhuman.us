@@ -14,10 +14,11 @@ import { DatabaseSync } from "../helpers/sqlite-d1";
 
 // Redeeming an emailed link, for both purposes, as stories in the verify pages' order (docs/plans/2026-11-signing-
 // conversion.md, section 2): the link, the page's offer token and the method; the GET's live check of a signing link; and
-// what a POST writes. Then, on sqlite with the real schema (db/music.sql), the link decision held to today's read
-// (`completeAgreementLink`'s `purpose=? AND used_at IS NULL AND expires_at>?`) and to A5, the consume batch's guard, both
-// copied here from src/lib/agreement-access.ts (neither is exported). The live check reuses `openForSigning`'s terms,
-// which tests/rules/signing-offer.test.ts holds to A1.
+// what a POST writes. Then, on sqlite with the real schema (db/music.sql), the link decision held to the read the pages
+// made before the conversion (`completeAgreementLink`'s `purpose=? AND used_at IS NULL AND expires_at>?`, deleted) and
+// to A5, the consume batch's guard, copied here and held to the store's own text (src/server/agreement-store.ts,
+// `redeemLinkBatch`, which does not export it). The live check reuses `openForSigning`'s terms, which
+// tests/rules/signing-offer.test.ts holds to A1.
 
 type Said = { refused: string; say: string } | { wrote: unknown };
 
@@ -245,13 +246,19 @@ beforeEach(() => {
 	database.exec("DELETE FROM software_agreement_links");
 });
 
-/** The link as today's redeem reads it, copied: none unless it has the purpose, is unused and has not expired. */
+/** The link as the redeem read it before the conversion, copied: none unless of the purpose, unused and unexpired. */
 const TODAY_READ =
 	"SELECT * FROM software_agreement_links WHERE token_hash=? AND purpose=? AND used_at IS NULL AND expires_at>?";
 
-/** A5, the consume batch's guard, copied. */
+/** A5, the consume batch's guard (the store's `redeemLinkBatch`), copied. */
 const A5 =
 	"SELECT CASE WHEN EXISTS(SELECT 1 FROM software_agreement_links WHERE token_hash=? AND used_at IS NULL AND expires_at>?) THEN 1 ELSE json_extract('Link already consumed','$') END";
+
+describe("the statement copied here", () => {
+	it("is the store's own text", () => {
+		expect(readFileSync("src/server/agreement-store.ts", "utf8")).toContain(A5);
+	});
+});
 
 const EXPIRIES = [
 	"2026-11-23T11:59:59.999Z",

@@ -1038,7 +1038,8 @@ export const readLinkByKey = (keyHash: string) =>
 	).pipe(Effect.map((rows): StoredAgreementLink | null => rows[0] ?? null));
 
 /**
- * Redeems a link: one batch, today's (`completeAgreementLink`, src/lib/agreement-access.ts) statement for statement: A1
+ * Redeems a link: one batch, as the verify pages built it before the conversion (`completeAgreementLink`, deleted),
+ * statement for statement: A1
  * for a signing link (`session.live`), A5 (the link still unused and unexpired at `at`), the link used, the `verified`
  * event (its actor the session's hash) and the session. The flow draws the session token, its hash and the nonce before
  * it, as today. A raised guard is `GuardRefused` (the expired page, not retried); any other failure is

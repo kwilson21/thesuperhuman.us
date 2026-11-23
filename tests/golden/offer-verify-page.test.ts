@@ -612,14 +612,15 @@ const cases: Case[] = [
 			],
 		},
 	),
-	// The first match is liveSigningGuard inside the link route's batch; the second is the page's GET.
+	// The first match is the link route's read of the offer's signing state before its batch; the second is the page's
+	// GET, which reads it in place of running A1 (liveSigningGuard) as a read, as it did when this case was recorded.
 	scene(
 		"outage: the GET's live check: the expired page",
 		[issue(), openPage()],
 		{
 			failures: [
 				{
-					on: /SELECT CASE WHEN EXISTS\(SELECT 1 FROM software_offers o JOIN software_offer_links/,
+					on: /SELECT o\.status,o\.recipient_email_snapshot,r\.status AS request_status/,
 					nth: 2,
 					message: "the live check fails",
 				},

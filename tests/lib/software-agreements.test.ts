@@ -28,11 +28,8 @@ import {
 	offerAgreements,
 	executedOfferAgreement,
 } from "~/lib/software-agreements";
-import {
-	agreementSession,
-	completeAgreementLink,
-	type RedeemFailures,
-} from "~/lib/agreement-access";
+import { agreementSession } from "~/lib/agreement-access";
+import { redeemLinkPage } from "~/server/redeem-page";
 import { POST as signingLinkRoute } from "~/pages/api/offer/[token]/link";
 import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import {
@@ -49,7 +46,6 @@ import {
 	liveAgreementMail,
 } from "~/server/agreement-services";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
-import { raisedByJsonGuard } from "~/server/guarded-save";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
 import { AudioBucket, liveTurnstile, MusicDb } from "~/server/services";
 import {
@@ -74,14 +70,6 @@ import { fakeR2Bucket } from "../helpers/r2";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 
 type TestEnv = TestRuntime["env"];
-
-/** What the verify pages pass the redeem; a failure on the site's side fails the test with its own error. */
-const redeemFailures: RedeemFailures = {
-	isGuard: raisedByJsonGuard,
-	unexpected: (error) => {
-		throw error;
-	},
-};
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -1148,13 +1136,7 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 		3600000,
 	);
 
-	const landing = await completeAgreementLink(
-		env,
-		req,
-		key,
-		token,
-		redeemFailures,
-	);
+	const landing = await redeemLinkPage(env, req, key, token);
 
 	expect(landing.status).toBe(200);
 	expect(
@@ -1163,20 +1145,17 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 			.get(stored.id).used_at,
 	).toBeNull();
 
-	const opened = await completeAgreementLink(
+	const opened = await redeemLinkPage(
 		env,
 		new Request(req.url, { method: "POST" }),
 		key,
 		token,
-		redeemFailures,
 	);
 
 	expect(opened.status).toBe(303);
 	expect(opened.headers.get("location")).toBe(`/offer/${token}/sign`);
 	expect(opened.headers.get("set-cookie")).toContain("Max-Age=7200");
-	expect(
-		(await completeAgreementLink(env, req, key, token, redeemFailures)).status,
-	).toBe(401);
+	expect((await redeemLinkPage(env, req, key, token)).status).toBe(401);
 	expect((await signingLink(req)).status).toBe(429);
 });
 
@@ -1193,12 +1172,11 @@ it("rejects expired links without creating a session", async () => {
 		.run();
 	expect(
 		(
-			await completeAgreementLink(
+			await redeemLinkPage(
 				env,
 				new Request(request(), { method: "POST" }),
 				key,
 				token,
-				redeemFailures,
 			)
 		).status,
 	).toBe(401);
@@ -2300,20 +2278,8 @@ it("consumes a link atomically under parallel verification", async () => {
 	)!;
 
 	const results = await Promise.all([
-		completeAgreementLink(
-			env,
-			new Request(request(), { method: "POST" }),
-			key,
-			token,
-			redeemFailures,
-		),
-		completeAgreementLink(
-			env,
-			new Request(request(), { method: "POST" }),
-			key,
-			token,
-			redeemFailures,
-		),
+		redeemLinkPage(env, new Request(request(), { method: "POST" }), key, token),
+		redeemLinkPage(env, new Request(request(), { method: "POST" }), key, token),
 	]);
 
 	expect(results.map((r) => r.status).sort()).toEqual([303, 401]);
@@ -3520,12 +3486,11 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		"key",
 	)!;
 
-	const opened = await completeAgreementLink(
+	const opened = await redeemLinkPage(
 		env,
 		new Request(request(), { method: "POST" }),
 		key,
 		token,
-		redeemFailures,
 	);
 
 	const newSession = await agreementSession(
@@ -4591,12 +4556,11 @@ it.each(["agreement", "archive"])(
 		for (let i = 0; i < 2; i++)
 			expect(
 				(
-					await completeAgreementLink(
+					await redeemLinkPage(
 						env,
 						new Request("https://example.com"),
 						key,
 						offerToken,
-						redeemFailures,
 					)
 				).status,
 			).toBe(200);
@@ -4617,12 +4581,11 @@ it.each(["agreement", "archive"])(
 			.run();
 		expect(
 			(
-				await completeAgreementLink(
+				await redeemLinkPage(
 					env,
 					new Request("https://example.com", { method: "POST" }),
 					key,
 					offerToken,
-					redeemFailures,
 				)
 			).status,
 		).toBe(401);
@@ -4632,12 +4595,11 @@ it.each(["agreement", "archive"])(
 			)
 			.run();
 
-		const response = await completeAgreementLink(
+		const response = await redeemLinkPage(
 			env,
 			new Request("https://example.com", { method: "POST" }),
 			key,
 			offerToken,
-			redeemFailures,
 		);
 
 		expect(response.status).toBe(303);
@@ -4651,12 +4613,11 @@ it.each(["agreement", "archive"])(
 		for (const method of ["GET", "POST"])
 			expect(
 				(
-					await completeAgreementLink(
+					await redeemLinkPage(
 						env,
 						new Request("https://example.com", { method }),
 						key,
 						offerToken,
-						redeemFailures,
 					)
 				).status,
 			).toBe(401);
@@ -5020,12 +4981,11 @@ it.each(["agreement", "archive"])(
 			expect((await signingLink(foreign, "valid")).status).toBe(404);
 		expect(
 			(
-				await completeAgreementLink(
+				await redeemLinkPage(
 					env,
 					foreign,
 					token,
 					purpose === "agreement" ? token : undefined,
-					redeemFailures,
 				)
 			).status,
 		).toBe(404);
