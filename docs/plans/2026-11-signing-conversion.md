@@ -23,6 +23,10 @@ Decided before this design, and not asked again:
   sign-in area's S1 and S2 did.
 - Owner, 2026-11-15: "Effect schema as our only validator no zod use from us"; stacked conversion PRs.
 - Owner, 2026-11-15 ("Go"): the order of `docs/plans/2026-11-effect-conversion.md`, in which this is step 3.
+- Owner, 2026-11-23: the owner checks each small piece, and the conversion lands on `main` in three stacks, one deploy
+  each (section 8): parts 1 and 2, which nothing calls yet; then the client routes (part 3); then the owner routes
+  (part 4). The owner chose to land the two route switches separately, so between them the client's signing pages run
+  the new code while the owner's pages run today's.
 
 Settled in earlier areas and applied here without asking again: a condition that only a guard checks today is read
 first and refused by name, with today's answer (`docs/plans/2026-11-offers-conversion.md`, section 2); a refused
@@ -614,8 +618,8 @@ it for the archive link, the downloads and the session reads (`AgreementStoreFai
 is `GuardRefused`; a UNIQUE failure that section 2 reads and decides again is `ChangedSinceRead`, and the others it
 names (the signature and notice UNIQUEs, countersign's packet and copy keys) are `GuardRefused`; a FOREIGN KEY failure
 with the evidence read after it is `ChangedSinceRead` (the review's client) or `GuardRefused` (an agreement deleted
-under a record). Statements keep today's SQL where a golden hook matches it; where one must change, its pattern changes
-in the re-record commit and the `trigger-hit` marker stays the same.
+under a record). Statements keep today's SQL where a golden hook matches it; where one must change, its pattern is
+re-pointed in a commit before the route PR's re-record (section 7), and the `trigger-hit` marker stays the same.
 
 | Group | Functions | Today |
 |---|---|---|
@@ -916,7 +920,7 @@ payment_failed or uncollectible), refunded or not, or is paid and not refunded. 
 `countsAsFirstDeposit` leaves out every refunded invoice (software-deposit-block.ts:35-42), for an unpaid invoice with a
 refund recorded. The conversion keeps A12's meaning; aligning the two would be a behaviour fix of its own.
 `tests/lib/software-deposit-block.test.ts` runs A12's SQL (agreement.ts:34-35) on sqlite against it for every status,
-kind, milestone and refund. It lands in the conversion's bottom PR, with the rules. The SOW's printed amounts are
+kind, milestone and refund. It landed in part 1 (#401), with the rules. The SOW's printed amounts are
 formatting, held by the review corpus and the discount plan's contracts.
 
 ### The golden corpora
@@ -930,7 +934,8 @@ POST whose body is not a form, a POST after the offer is resent, revoked or with
 after a project starts (the signing page), an outage on the link read, on the GET's live check and on the POST's batch,
 and on the signing page an outage on the offer read and terms that are not JSON.
 
-To hold NEUTRAL under `pnpm run golden:neutral --all <base> <head>` on the conversion's bottom PR: this area's corpora
+To hold NEUTRAL under `pnpm run golden:neutral --all <base> <head>` on each landing's integration PR (section 8), and on
+each route PR for its own corpora: this area's corpora
 (`offer-link`, `offer-draft`, `offer-review`, `offer-sign`, the two verify pages, `agreements-link` for the redeem, the
 eight `owner-agreements-*`, the three `owner-agreement-*` and the eight `owner-request-agreement-*`) "identical" or
 "neutral with D1 changes"; every other corpus identical, `owner-request-software-offer-signing` (the preflight) and the
@@ -958,9 +963,20 @@ access conversion did.
 5. The conversion, in four parts. The owner asked on 2026-11-23 for small pull requests, since one PR per part
    (the first was #394, about 21,000 lines) cannot be reviewed properly. So each part is a series of small PRs, each
    one rule group, store group or flow, stacked on the one before it and reviewed on its own. They merge in order into
-   the integration branch `claude/signing-conversion` (GitHub retargets the next PR when a merged branch is deleted),
-   and one integration PR, carrying the `conversion` label, takes the whole conversion into `main`, so the area is
-   converted completely or not at all (CLAUDE.md). The parts:
+   an integration branch (GitHub retargets the next PR when a merged branch is deleted), and one integration PR,
+   carrying the `conversion` label so CI runs the golden neutrality check, takes the stack into `main`: one deploy and
+   one release record per stack, however many PRs it holds. On 2026-11-23 the owner chose to check each small piece
+   and to land the conversion in three stacks:
+   - **Landing 1, parts 1 and 2** (`claude/signing-conversion`, #408). No route calls the new rules or store yet. Two
+     changes reach running code, and the full golden suite holds both to today's answers: #418's allowance count
+     (studio sign-in and the archive link) and #419's mail call (the archive link passes no idempotency key, and none
+     is sent).
+   - **Landing 2, part 3** (the client routes).
+   - **Landing 3, part 4** (the owner routes).
+
+   Landing 2 before landing 3 means that, between them, the client's signing pages run the new code while the owner's
+   pages run today's. The owner accepted this in place of converting the area in one step (CLAUDE.md, "an area is
+   converted completely, or it is not started"). The parts:
    1. **Readers, machines, rules.** The Effect Schema readers with the frozen Zod copies and differential blocks; the
       `agreementDocument`, `agreementPacket` and `agreementMessage` machines with the tests that hold the store's
       status lists to them; every rule file of section 2 with its tests; `abandonBlocked` with its contract and its SQL
@@ -972,17 +988,22 @@ access conversion did.
    3. **Client flows and routes.** The link, redeem, draft, review and sign flows; the four client routes and both
       verify pages on `bindingsOrUnavailable` and `runRoute`; `issueAgreementLink`, `completeAgreementLink`,
       `saveAgreementDraft`, `reviewAgreements`, `signAgreements`, `sessionGuard`, `liveSigningGuard` and
-      `reserveStudioAllowance` deleted, their tests moved to the flows.
+      `reserveStudioAllowance` deleted, their tests moved to the flows. In each route PR, the client corpora's
+      statement patterns (`offer-link`, `offer-verify-page`, `offer-review`, `offer-sign`, section 9) are re-pointed in
+      a commit before the re-record, and their fixtures re-recorded in a commit of its own, with its `golden:neutral`
+      output; a release record for landing 2.
    4. **Owner flows and routes.** The countersign, abandon, record, packet, messages, templates, retention, upload and
-      download flows; the four owner routes; the rest of the deletions listed in "Files in scope"; the statement
-      patterns re-pointed, the fixtures re-recorded in a commit of their own; the `golden:neutral` output; a release
-      record `docs/prelaunch-qa-<date>-signing-area.md`.
+      download flows; the four owner routes; the rest of the deletions listed in "Files in scope". In each route PR,
+      the owner corpora's statement patterns are re-pointed in a commit before the re-record, and their fixtures
+      re-recorded in a commit of its own, with its `golden:neutral` output; a release record
+      `docs/prelaunch-qa-<date>-signing-area.md`.
 
    Part 1 is twelve PRs: the machines and `openForSigning`; the readers; the link, redeem and draft; the review; the
    sign; countersign and abandon; end, hold and record a copy; the packet and the emails; the upload and the owner's
-   download; the templates; retention; retention held to today's SQL. Part 2 is one PR per store group and one for
-   the services and answers. Parts 3 and 4 are one PR per flow and its route. The `golden:neutral` output and the
-   release record belong to the integration PR.
+   download; the templates; retention; retention held to today's SQL. Part 2 is ten PRs (#411 to #420): a rejected
+   batch's failure kind, one per store group, the allowance's answer, the services, and the fixed answers. Parts 3 and
+   4 are one PR per flow and its route. The
+   `golden:neutral` output and the release record belong to each landing's integration PR.
 
 After it, discount PRs 3 to 5 (step 4 of the plan).
 
@@ -993,7 +1014,7 @@ fixtures hold the 500 that `f78896099` brought: `tests/golden/owner-agreements-a
 
 ## 9. What the rules PR found
 
-The first PR of the stack (readers, machines, rules) holds each rule to today's code on sqlite and, where it could, runs
+Part 1 (readers, machines, rules) holds each rule to today's code on sqlite and, where it could, runs
 today's function beside the rule on the same database. What it found, for the store, flows and routes that follow:
 
 - **Rules are staged.** Where today's code reads, draws an id or calls an outside service between two decisions, the
@@ -1021,11 +1042,12 @@ today's function beside the rule on the same database. What it found, for the st
   a contractor notice email that is not text (today 409, 500 or 200 by its type; the review always writes text) is
   `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.
 - **New reads.** Before claiming a packet, a copy or a notice, and before the contractor's save, the flows read the row
-  they decide on; PR 2 checks each new read against the golden hook patterns, which count statements by `nth`.
-- **Hook patterns PR 4 re-points:** the store keeps today's text wherever a golden hook picks a statement; where a
-  read had to change, the pattern below no longer picks it, and PR 4's re-record commit re-points it to the converted
-  statement (the same operation, table and access, so its `trigger-hit` marker is unchanged). Each store test lists its
-  own and checks them against the corpora.
+  they decide on; part 2 checks each new read against the golden hook patterns, which count statements by `nth`.
+- **Hook patterns parts 3 and 4 re-point** (part 3 the client corpora: `offer-link`, `offer-verify-page`,
+  `offer-review`, `offer-sign`; part 4 the owner corpora): the store keeps today's text wherever a golden hook picks a
+  statement; where a read had to change, the pattern below no longer picks it, and the route PR re-points it, in a
+  commit before its re-record, to the converted statement (the same operation, table and access, so its `trigger-hit`
+  marker is unchanged). Each store test lists its own and checks them against the corpora.
   - `offer-link`, "the used_at update after a sent email fails": `/UPDATE software_agreement_links SET used_at=\? WHERE
     purpose/`. A6 consumes the older links through `consumeLinks` (`WHERE id IN (...)`), as `agreements-link` does.
   - `offer-verify-page`, "outage: the GET's live check: the expired page": `/SELECT CASE WHEN EXISTS\(SELECT 1 FROM
@@ -1065,7 +1087,7 @@ today's function beside the rule on the same database. What it found, for the st
     (`tests/server/agreement-store-retention.test.ts` checks both).
 
   `tests/api/signing-owner-outages.test.ts` picks today's deposit check and today's sent-offer read by the same texts
-  (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which PR 4 deletes with its tests.
+  (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which part 4 deletes with its tests.
 - **Retention's two reads.** Today's eligibility query (`SELECT a.* ... WHERE eligible ORDER BY a.id LIMIT 20`) returns
   at most 20 rows. Read as plain rows for the rule, every agreement with every column (`canonical_text` alone may be 256
   KiB) would outgrow D1's result limit long before today's query does, on every preview and again in the apply's fresh
