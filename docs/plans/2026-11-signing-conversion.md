@@ -914,12 +914,11 @@ formatting, held by the review corpus and the discount plan's contracts.
 To record first, on today's code, before any fix: `offer-verify-page` and `agreements-verify-page`. The harness renders
 a page with `experimental_AstroContainer`, built as `tests/helpers/render-astro.ts` builds one, streamed and compact as
 production renders it, with the case's request, params and locals, so a step's answer is the page's own status, headers,
-cookies and HTML. Cases for each page: GET and
-POST with a good key, a key of the wrong shape, an unknown, used, expired or other purpose's key, another offer's token
-(the signing page), another host, no D1, another method, a POST twice, a POST whose body is not a form, a POST after the
-offer is resent, revoked or withdrawn, after signing is switched off and after a project starts (the signing page), an
-outage on the link read, on the GET's live check and on the POST's batch, and on the signing page an outage on the offer
-read and terms that are not JSON.
+cookies and HTML. Cases for each page: GET and POST with a good key, a key of the wrong shape, an unknown, used, expired
+or other purpose's key, another offer's token (the signing page), another host, no D1, another method, a POST twice, a
+POST whose body is not a form, a POST after the offer is resent, revoked or withdrawn, after signing is switched off and
+after a project starts (the signing page), an outage on the link read, on the GET's live check and on the POST's batch,
+and on the signing page an outage on the offer read and terms that are not JSON.
 
 To hold NEUTRAL under `pnpm run golden:neutral --all <base> <head>` on the conversion's bottom PR: this area's corpora
 (`offer-link`, `offer-draft`, `offer-review`, `offer-sign`, the two verify pages, `agreements-link` for the redeem, the
