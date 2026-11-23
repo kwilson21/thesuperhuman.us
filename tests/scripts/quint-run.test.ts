@@ -771,11 +771,14 @@ describe("the models the driver runs", () => {
 	});
 
 	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {
-		models.forEach((model: { steps?: string }) =>
-			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/),
-		);
+		models.forEach((model: { steps?: string; passSteps?: string }) => {
+			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/);
+			expect(model.passSteps ?? model.steps ?? "20").toMatch(/^[1-9]\d*$/);
+		});
 
-		// The discount model's send and decline are three steps each, so its deepest witness needs about 50.
+		// The discount model's send and decline are three steps each, so its deepest mutant needs about 17 and is found at
+		// 50; its deepest witness, a website start after a revision, needs at least 33 and is reached at 80.
 		expect(models[1].steps).toBe("50");
+		expect(models[1].passSteps).toBe("80");
 	});
 });

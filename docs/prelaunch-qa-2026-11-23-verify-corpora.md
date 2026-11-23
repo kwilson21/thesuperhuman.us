@@ -2,13 +2,13 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: [#380](https://github.com/kwilson21/thesuperhuman.us/pull/380). Merge facts are recorded after the merge,
-in the next pull request.
+Pull request: [#380](https://github.com/kwilson21/thesuperhuman.us/pull/380), merged at 03:22:43 UTC as `585619c1`
+(head `4d72c050`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The order of `docs/plans/2026-11-effect-conversion.md` ("Go", 2026-11-15) and the step 3
 design (`docs/plans/2026-11-signing-conversion.md`, #376), whose section 8 makes this PR 2: the verify pages recorded on
 today's code before any fix. The corpora and the page handler were built with Claude Code.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. Tests and docs
+Rollback revision: `9deca488`, the revision of `main` before the merge; or `git revert -m 1 585619c1`. Tests and docs
 only.
 
 ## Scope
@@ -48,7 +48,17 @@ only.
   content type ("a PUT with a good key in the query") 403 first (`src/middleware.ts:124-144`). The HEAD case records a
   body that production never sends (an answer to a HEAD has none). The page's own stylesheet links (`/_astro/*.css`)
   are missing from the recorded HTML: the styles are stubbed when the page is compiled for the container.
-- Reviews and CI: UNVERIFIED until they report; recorded with the merge facts.
+- Reviews: Codex's security and code reviews of `2e36efa8` found nothing. The first independent Claude Code pass found
+  two blocking points (a throw while the template renders was recorded as a bare rejection, because the container did
+  not stream as production does; cookies set with `Astro.cookies` were not recorded), fixed in `c485ee45`; the second
+  found that the docs said a body failing at once gives a 200, fixed in `79efdf90`; the third found that what workerd
+  sends depends on timing, not on bytes sent, fixed in `4d72c050`. Under the severity bar in CLAUDE.md (a large pull
+  request whose last three passes each found something), that last point was not blocking: it corrected a harness
+  comment and this record, and changed no recording.
+- CI on the head `4d72c050` before merge: all 20 check runs succeeded, the Workers preview build among them.
+- After merge, on `585619c1`: the Workers build succeeded (03:24:29 UTC) and `validate` succeeded (03:25:37 UTC). Live
+  check at 03:25:58 UTC: `https://thesuperhuman.us/` answered 200, and `/agreements/verify?key=x` answered 401 with the
+  expired page, as before.
 
 ## 1 to 6. Content, search, accessibility, performance, forms, privacy
 
@@ -56,7 +66,8 @@ only.
 
 ## 7. Release and final QA
 
-- **UNVERIFIED · Checks, reviews, production revision and live check.** Recorded after the merge.
+- **PASS · Checks, reviews, rollback.** See above.
+- **PASS · Production revision and live check.** Deployed `585619c1`; the site answered 200.
 - **N/A · Bindings, migrations.** None.
 
 ## 8. Private owner center

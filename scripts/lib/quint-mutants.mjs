@@ -289,7 +289,7 @@ export const briefCopyMutants = {
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, how many random runs each check makes, and how many steps each run
-// takes (20 unless the model says). The discount model's steps are slower to evaluate, so it makes fewer runs; every
+// takes (20 unless the model says; `passSteps` and `passSamples` set them apart for the runs that must pass). The discount model's steps are slower to evaluate, so it makes fewer runs; every
 // mutant of it is found well inside that number.
 export const models = [
 	{
@@ -315,9 +315,11 @@ export const models = [
 		// extension (about 1,300 before), the signing mutants in at most about 950 (discountAbandonDepositAtRead) and the
 		// rarest, discountAcceptedOnlyCheck, in about 9,700, so each mutant check allows 20,000 and each run that must pass
 		// makes 10,000. The pass run's deepest witness (neverStandardPaidAfterSentRevision) needed about 25 steps and was
-		// reached at this setting in about 320 runs; a website start now needs a signing and a countersign (at least 33
-		// steps), and it is reached by hand only at 80 steps (about 710 runs; not in 20,000 at 60 or 70).
+		// reached at 50 in about 320 runs; a website start now needs a signing and a countersign (at least 33 steps), and
+		// it is reached only at 80 steps (about 710 runs; not in 20,000 at 60 or 70), so the runs that must pass take 80
+		// steps and the mutant checks, every one found within their budget at 50, keep 50.
 		steps: "50",
+		passSteps: "80",
 		samples: "20000",
 		passSamples: "10000",
 	},
