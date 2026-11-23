@@ -61,8 +61,12 @@ import { allowanceRow } from "./areas/studio-access";
 //   400 "Enter a valid email address."  no token in the params (the route answers it without issuing a link, as there is no recipient)
 //   403 security check again            Turnstile fails (after the address allowance, before the email's)
 //   429 "wait a few minutes"            agreement-link-ip at 20, agreement-link-email at 3
-//   429 "wait at least 30 seconds"      a guard of the link batch raised: a link issued under 30 seconds ago; liveSigningGuard fails
-//                                       (a started project, a revoked offer link, a withdrawn request, signing switched off)
+//   a guard of the link batch raised    what the two guards re-check is read then and decided (B7, Q1): signing off 404 "Website
+//                                       signing is off."; the offer no longer open for signing (a started project, a revoked offer
+//                                       link, a withdrawn or resolved request, a superseded offer) 404 "unavailable for signing"; a
+//                                       link issued under 30 seconds ago 429 "wait at least 30 seconds" (another request's link
+//                                       included). When none holds any more the batch runs again, three batches in all, and a third
+//                                       raise is the 429. A batch that commits reads nothing more
 //   200 receipt                         the message names the full email when the request carries a live session for this offer, and a
 //                                       masked one (g•••@example.test) otherwise
 //   mail outcomes                       200 and the 5xx/network "uncertain" cases keep the link and consume older ones; a 4xx deletes the
