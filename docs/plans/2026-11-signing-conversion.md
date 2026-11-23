@@ -23,6 +23,10 @@ Decided before this design, and not asked again:
   sign-in area's S1 and S2 did.
 - Owner, 2026-11-15: "Effect schema as our only validator no zod use from us"; stacked conversion PRs.
 - Owner, 2026-11-15 ("Go"): the order of `docs/plans/2026-11-effect-conversion.md`, in which this is step 3.
+- Owner, 2026-11-23: the owner checks each small piece, and the conversion lands on `main` in three stacks, one deploy
+  each (section 8): parts 1 and 2, which nothing calls yet; then the client routes (part 3); then the owner routes
+  (part 4). The owner chose to land the two route switches separately, so between them the client's signing pages run
+  the new code while the owner's pages run today's.
 
 Settled in earlier areas and applied here without asking again: a condition that only a guard checks today is read
 first and refused by name, with today's answer (`docs/plans/2026-11-offers-conversion.md`, section 2); a refused
@@ -958,9 +962,18 @@ access conversion did.
 5. The conversion, in four parts. The owner asked on 2026-11-23 for small pull requests, since one PR per part
    (the first was #394, about 21,000 lines) cannot be reviewed properly. So each part is a series of small PRs, each
    one rule group, store group or flow, stacked on the one before it and reviewed on its own. They merge in order into
-   the integration branch `claude/signing-conversion` (GitHub retargets the next PR when a merged branch is deleted),
-   and one integration PR, carrying the `conversion` label, takes the whole conversion into `main`, so the area is
-   converted completely or not at all (CLAUDE.md). The parts:
+   an integration branch (GitHub retargets the next PR when a merged branch is deleted), and one integration PR,
+   carrying the `conversion` label so CI runs the golden neutrality check, takes the stack into `main`: one deploy and
+   one release record per stack, however many PRs it holds. On 2026-11-23 the owner chose to check each small piece
+   and to land the conversion in three stacks:
+   - **Landing 1, parts 1 and 2** (`claude/signing-conversion`, #408). Nothing calls this code yet, so no answer
+     changes; the one change to running code is #418's, which the full golden suite holds to today's answers.
+   - **Landing 2, part 3** (the client routes).
+   - **Landing 3, part 4** (the owner routes).
+
+   Landing 2 before landing 3 means that, between them, the client's signing pages run the new code while the owner's
+   pages run today's. The owner accepted this in place of converting the area in one step (CLAUDE.md, "an area is
+   converted completely, or it is not started"). The parts:
    1. **Readers, machines, rules.** The Effect Schema readers with the frozen Zod copies and differential blocks; the
       `agreementDocument`, `agreementPacket` and `agreementMessage` machines with the tests that hold the store's
       status lists to them; every rule file of section 2 with its tests; `abandonBlocked` with its contract and its SQL
@@ -981,8 +994,8 @@ access conversion did.
    Part 1 is twelve PRs: the machines and `openForSigning`; the readers; the link, redeem and draft; the review; the
    sign; countersign and abandon; end, hold and record a copy; the packet and the emails; the upload and the owner's
    download; the templates; retention; retention held to today's SQL. Part 2 is one PR per store group and one for
-   the services and answers. Parts 3 and 4 are one PR per flow and its route. The `golden:neutral` output and the
-   release record belong to the integration PR.
+   the services and answers (ten PRs, #411 to #420). Parts 3 and 4 are one PR per flow and its route. The
+   `golden:neutral` output and the release record belong to each landing's integration PR.
 
 After it, discount PRs 3 to 5 (step 4 of the plan).
 
