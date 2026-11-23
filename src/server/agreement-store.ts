@@ -60,7 +60,7 @@ import type {
 import type {
 	OfferAgreementRow as CountersignAgreementRow,
 	CountersignWrite,
-	SentOfferRow,
+	RequestOfferRow,
 } from "./rules/agreement-countersign";
 import type {
 	DownloadAgreement,
@@ -1616,7 +1616,11 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 // abandon, end, hold and record-alternate-copy), for the rules in src/server/rules/agreement-countersign.ts,
 // agreement-abandon.ts and agreement-record.ts. Each statement is the route's own (src/pages/api/owner/requests/[id]/
 // agreement.ts), or `countersignAgreements` and `closeObsoleteAgreementNotifications`' (src/lib/software-agreements.ts),
-// in the same order statement for statement, with four reads changed so the rules decide what their SQL filtered:
+// in the same order statement for statement, with five reads changed so the rules decide what their SQL filtered:
+//   - the request's sent offer becomes `readRequestOffers`, every version of the request with its status, in the offers
+//     store's text (src/server/offers-store.ts, `readOffers`); the rules choose the sent one (`sentOfferOf`). Every
+//     action reads it first, as the route does, and the golden hooks that picked today's `status='sent'` read are
+//     re-pointed in PR 4 (the plan's section 9 lists them);
 //   - the offer's agreements are `readOfferAgreements` above, with the abandoned ones (`offerAgreements` left them out;
 //     the rules keep only the client-signed);
 //   - the agreement an end, a hold or a copy record names also reads `archive_closed_at`, which the rules decide
@@ -1625,6 +1629,8 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 //     every invoice of the offer and every offer that reuses the agreement, which the rules decide on. Their texts no
 //     longer start as today's checks do, so the golden hooks that picked those checks are re-pointed in PR 4 (the plan's
 //     section 9 lists them). Both conditions stay in their batches' guards as today's text.
+// Each changed read names its table first, as today's did, so the operation and table a golden `trigger-hit` marker
+// records for it (scripts/sql-effects.mjs, `statementOf`) stay today's.
 // The signing setting is `readSigningEnabled` above, today's statement. tests/server/agreement-store-owner.test.ts holds
 // every other text, and each batch's statements and values, to what the golden corpora recorded, and each changed text
 // to the hook patterns that picked the old one, less the ones PR 4 re-points.
@@ -1645,9 +1651,10 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 // holds included (the ids are drawn at random). The client email snapshot a copy row needs is the rule's
 // (RecipientMissing), so no batch here meets its NOT NULL.
 
-const SentOfferColumns = Schema.Struct({
+const RequestOfferColumns = Schema.Struct({
 	id: text,
 	request_id: text,
+	status: Schema.Literals(OFFER_STATUSES),
 	contractor_snapshot_json: maybeText,
 	recipient_email_snapshot: maybeText,
 	reused_msa_id: maybeText,
@@ -1802,15 +1809,19 @@ const obsoleteNotices = (
 		.bind(agreementId),
 ];
 
-/** Plain read: the request's sent offer, or null. Every action reads it first, as the route does. */
-export const readSentOffer = (requestId: string) =>
-	readAll(SentOfferColumns, (db) =>
+/**
+ * Plain read: every offer version of the request with its status, newest first, in the offers store's text
+ * (src/server/offers-store.ts, `readOffers`). Every action reads it first, as the route reads the sent offer; which
+ * version is sent is the rule's (`sentOfferOf`), and countersign's A10 keeps `status='sent'` as the re-check.
+ */
+export const readRequestOffers = (requestId: string) =>
+	readAll(RequestOfferColumns, (db) =>
 		db
 			.prepare(
-				"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
+				"SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC",
 			)
 			.bind(requestId),
-	).pipe(Effect.map((rows): SentOfferRow | null => rows[0] ?? null));
+	).pipe(Effect.map((rows): readonly RequestOfferRow[] => rows));
 
 /**
  * Plain read: every invoice of the offer, in id order, unfiltered, so the abandon's deposit decision is `abandonBlocked`'s.
@@ -1838,13 +1849,15 @@ export const readAgreement = (agreementId: string, requestId: string) =>
 /**
  * Plain read: every offer that reuses the agreement as its MSA, in id order, with its request's status and its project's
  * offer id (null without one), unfiltered, so whether one is open is the rule's. Today's `msaUse` filtered them in SQL;
- * A13 keeps that condition as the re-check.
+ * A13 keeps that condition as the re-check. `software_offers` is the first table the text names, as in `msaUse`, so a
+ * golden hook's marker reads the same table; the projects are joined as their distinct offer ids, since several project
+ * rows may name one offer and a plain join would repeat it.
  */
 export const readMsaUse = (agreementId: string) =>
 	readAll(ReusingOfferColumns, (db) =>
 		db
 			.prepare(
-				"SELECT o.status,r.status AS request_status,(SELECT p.offer_id FROM software_projects p WHERE p.offer_id=o.id LIMIT 1) AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? ORDER BY o.id",
+				"SELECT o.status,r.status AS request_status,p.offer_id AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id LEFT JOIN (SELECT DISTINCT offer_id FROM software_projects) p ON p.offer_id=o.id WHERE o.reused_msa_id=? ORDER BY o.id",
 			)
 			.bind(agreementId),
 	).pipe(Effect.map((rows): readonly ReusingOfferRow[] => rows));
@@ -2989,10 +3002,13 @@ export const readOwnerCopy = (id: string) =>
 // ---- retention ----
 //
 // The owner's retention preview and apply (src/lib/agreement-retention.ts, which PR 4 deletes). One function per D1 read
-// and batch of today's code, called by the flow in today's order, so each golden hook still meets the call it met.
-// Where today's SQL chose rows (the `eligible` condition, its `LIMIT 20` and order, the shared-attachment and open-offer
-// lookups, the unattached query and the orphan reference check), the store reads plain rows, scoped by key where today's
-// lookup was, and the rules in src/server/rules/agreement-retention.ts decide; the batches keep today's statements and
+// and batch of today's code, called by the flow in today's order, so each golden hook still meets the call it met (but
+// for those the plan's section 9 lists as re-pointed). Where today's SQL chose rows (the `eligible` condition, its
+// `LIMIT 20` and order, the shared-attachment and open-offer lookups, the unattached query and the orphan reference
+// check), the store reads plain rows, scoped by key where today's lookup was, and the rules in
+// src/server/rules/agreement-retention.ts decide. Today's eligibility query became two reads: the scan, which reads only
+// the columns the condition reads of every agreement (never a text column, so its result stays small however many
+// agreements there are), and the full rows of the at most 20 the rule chose; the batches keep today's statements and
 // guard SQL (A25, with `eligible`) byte for byte, statement for statement. The flow draws the receipt and event ids, in
 // that order, and reads the clock; the store binds what it is given. R2 is the flow's (through `AudioBucket`); the
 // named failures it catches by name are below.
@@ -3033,7 +3049,28 @@ const retentionOfferPin = (
  WHERE o.status IN ('draft','sent') AND CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END=${keyExpression}
  AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)`;
 
-/** Every column of software_agreements, as `SELECT a.*` reads it: the flow hashes the whole row for the manifest. */
+/**
+ * The columns of an agreement the scan reads (`RetentionAgreementRow`): what the `eligible` condition and A25's text check
+ * read, of every agreement. No text column: `canonical_text` alone may be 256 KiB.
+ */
+const RetentionScanRow = Schema.Struct({
+	id: text,
+	kind: text,
+	offer_id: maybeText,
+	msa_id: maybeText,
+	status: text,
+	text_sha256: text,
+	ended_at: maybeText,
+	retain_until: maybeText,
+	legal_hold: Schema.Number,
+	terminated_at: maybeText,
+});
+
+/** The scan's statement: the columns of `RetentionScanRow`, of every agreement. */
+const RETENTION_SCAN =
+	"SELECT id,kind,offer_id,msa_id,status,text_sha256,ended_at,retain_until,legal_hold,terminated_at FROM software_agreements";
+
+/** Every column of software_agreements, as `SELECT *` reads it: the flow hashes the whole row for the manifest. */
 const RetainedAgreementRow = Schema.Struct({
 	id: text,
 	kind: text,
@@ -3065,11 +3102,6 @@ const RetainedAgreementRow = Schema.Struct({
 
 /** An agreement as stored, every column (the rule reads some of them; the manifest's `row_hash` hashes them all). */
 export type RetainedAgreement = typeof RetainedAgreementRow.Type;
-
-/** The facts the `eligible` condition reads, with each agreement's every column. */
-export type RetainedFacts = Omit<RetentionFacts, "agreements"> & {
-	readonly agreements: readonly RetainedAgreement[];
-};
 
 const RetentionStatusRow = Schema.Struct({ agreement_id: text, status: text });
 
@@ -3145,14 +3177,16 @@ const retentionOfferReferences = (keyCondition: string) =>
 	`SELECT o.id AS offer_id,o.status,CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END AS key,count(p.request_id) AS projects FROM software_offers o,json_each(json_extract(o.agreement_details_json,'$.attachments')) attachment LEFT JOIN software_projects p ON p.offer_id=o.id WHERE CASE WHEN json_valid(attachment.value) THEN json_extract(attachment.value,'$.key') END${keyCondition} GROUP BY o.id,attachment.id`;
 
 /**
- * Plain reads, in ONE batch (one snapshot): every agreement with every column, and the artifacts, deliveries,
- * notifications, projects, offers and signatures the `eligible` condition looks at. Replaces the preview's eligibility
- * query (retention.ts:61-68) and keeps its hook: `retentionEligibleSql` chooses the first 20 in id order.
+ * The scan. Plain reads, in ONE batch (one snapshot): every agreement's columns the `eligible` condition reads
+ * (`RetentionScanRow`), and the artifacts, deliveries, notifications, projects, offers and signatures it looks at.
+ * Replaces the first half of the preview's eligibility query (retention.ts:61-68): `retentionEligible` chooses the first
+ * 20 ids in id order, and `readRetainedAgreements` reads their rows. The eligibility hooks, which picked today's query by
+ * its `SELECT a.*`, are re-pointed to this batch's first statement in PR 4 (the plan's section 9).
  */
 export const readRetentionFacts = () =>
 	asked((db) =>
 		db.batch([
-			db.prepare("SELECT a.* FROM software_agreements a"),
+			db.prepare(RETENTION_SCAN),
 			db.prepare(
 				"SELECT agreement_id,status FROM software_agreement_artifacts",
 			),
@@ -3180,7 +3214,7 @@ export const readRetentionFacts = () =>
 				signatures,
 			]) =>
 				Effect.all({
-					agreements: rowsOf(RetainedAgreementRow, agreements?.results ?? []),
+					agreements: rowsOf(RetentionScanRow, agreements?.results ?? []),
 					artifacts: rowsOf(RetentionStatusRow, artifacts?.results ?? []),
 					deliveries: rowsOf(RetentionStatusRow, deliveries?.results ?? []),
 					notifications: rowsOf(
@@ -3192,8 +3226,22 @@ export const readRetentionFacts = () =>
 					signatures: rowsOf(RetentionSignatureRow, signatures?.results ?? []),
 				}),
 		),
-		Effect.map((facts): RetainedFacts => facts),
+		Effect.map((facts): RetentionFacts => facts),
 	);
+
+/**
+ * Plain read: the full rows (every column) of the agreements `retentionEligible` chose, in id order, one that is gone left
+ * out. The second half of the preview's eligibility query: `retentionRetiring` keeps the rows still eligible, and the
+ * manifest hashes each whole row. A plain read by key, at most 20 rows.
+ */
+export const readRetainedAgreements = (ids: readonly string[]) =>
+	readAll(RetainedAgreementRow, (db) =>
+		db
+			.prepare(
+				"SELECT * FROM software_agreements WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id",
+			)
+			.bind(JSON.stringify(ids)),
+	).pipe(Effect.map((rows): readonly RetainedAgreement[] => rows));
 
 /**
  * Plain read: the agreements outside the retiring set whose attachment manifest names the key, one row per naming item.
