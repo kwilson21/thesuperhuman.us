@@ -45,8 +45,11 @@ import { asOwner, asVisitor, defineCorpus, type Case } from "./harness";
 //   409 "Signing is off or the offer changed."   no sent offer for the request, signing off
 //   409 "The agreement changed or the operation failed. Reload before retrying."
 //       no pending documents, documents that differ in id, hash or number, a name or a stored value that cannot be signed,
-//       a batch guard lost to a race, a batch outage
-//   rejected (an outage on the offer lookup or the signing setting, outside the try)
+//       a batch guard lost to a race, a row another request wrote first (a unique index), an offer with no client email
+//       snapshot (NOT NULL)
+//   500 "The agreement changed or the operation failed. Reload before retrying."
+//       a store failure: the offer lookup, the signing setting, the read of the agreements, the signing batch; logged once
+//       as "Owner request agreement failed unexpectedly" (behaviour fixes B1 and B2)
 //   400 / 403 / 503 and the form and JSON wire errors are in owner-request-agreement-wire
 
 const reuseOriginal: Partial<Case> = {
