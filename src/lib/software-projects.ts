@@ -126,6 +126,8 @@ export type SoftwareUpdate = Omit<
 	status: "draft" | "shared" | "superseded";
 	visual_key: string | null;
 	visual_media_type: string | null;
+	visual_width: number | null;
+	visual_height: number | null;
 	shared_at: string | null;
 	updated_at: string;
 	notification_status: string;
@@ -221,6 +223,8 @@ export type ClientSoftwareUpdate = Pick<
 	| "shared_at"
 > & {
 	has_visual: number;
+	visual_width?: number | null;
+	visual_height?: number | null;
 	kind?: SoftwareUpdate["kind"];
 	milestone_index?: number;
 	status?: SoftwareUpdate["status"];
@@ -450,11 +454,26 @@ export function clearUnmetRevisionEvidence(
 	return evidence.map((value, index) => (unmet.has(index) ? "" : value));
 }
 
+/** The width and height attributes for an update's image: both, when both are positive whole numbers, otherwise neither. */
+export function visualSize(update: {
+	visual_width?: number | null;
+	visual_height?: number | null;
+}) {
+	const { visual_width: width, visual_height: height } = update;
+
+	return Number.isInteger(width) &&
+		Number.isInteger(height) &&
+		width! > 0 &&
+		height! > 0
+		? { width: width!, height: height! }
+		: {};
+}
+
 export async function sharedSoftwareUpdates(db: D1Database, id: string) {
 	return (
 		await db
 			.prepare(`SELECT u.id,u.title,u.artifact_version,u.evidence_type,u.visual_alt,u.preview_url,u.what_changed,u.checks_limitations,
-    u.next_step,u.client_request,u.next_update_on,u.shared_at,u.visual_key IS NOT NULL AS has_visual,
+    u.next_step,u.client_request,u.next_update_on,u.shared_at,u.visual_key IS NOT NULL AS has_visual,u.visual_width,u.visual_height,
     u.kind,u.milestone_index,u.status,u.criteria_json,u.delivered_deliverables_json,u.links_json,COALESCE(u.review_window_days_extended,u.review_window_days) AS review_window_days,
     m.decision,m.created_at AS decided_at,m.body AS decision_body
     FROM software_project_updates u LEFT JOIN software_project_messages m ON m.update_id=u.id AND m.decision IS NOT NULL

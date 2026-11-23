@@ -1950,6 +1950,103 @@ it("limits visual uploads, guards replacement, deletes old objects and restricts
 	);
 });
 
+/** A complete PNG of the given size, optionally with an eXIf chunk that turns the picture by 90 degrees. */
+function sizedPng(width: number, height: number, rotated = false) {
+	const table = Array.from({ length: 256 }, (_, n) => {
+		let c = n;
+
+		for (let bit = 0; bit < 8; bit++)
+			c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+
+		return c >>> 0;
+	});
+
+	const crc = (data: number[]) => {
+		let value = 0xffffffff;
+
+		for (const byte of data)
+			value = table[(value ^ byte) & 0xff] ^ (value >>> 8);
+
+		return (value ^ 0xffffffff) >>> 0;
+	};
+
+	const u32 = (n: number) => [
+		(n >>> 24) & 0xff,
+		(n >>> 16) & 0xff,
+		(n >>> 8) & 0xff,
+		n & 0xff,
+	];
+
+	const chunk = (type: string, body: number[]) => {
+		const typed = [...type].map((c) => c.charCodeAt(0)).concat(body);
+
+		return [...u32(body.length), ...typed, ...u32(crc(typed))];
+	};
+
+	// A TIFF block, big endian, with one Orientation entry set to 6.
+	const exif = [
+		0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 1, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0,
+		0, 0, 0, 0,
+	];
+
+	return Uint8Array.from([
+		137,
+		80,
+		78,
+		71,
+		13,
+		10,
+		26,
+		10,
+		...chunk("IHDR", [...u32(width), ...u32(height), 8, 2, 0, 0, 0]),
+		...(rotated ? chunk("eXIf", exif) : []),
+		...chunk("IDAT", [1, 2, 3]),
+		...chunk("IEND", []),
+	]);
+}
+
+it("stores the pixel size of each upload, or NULL when it is not certain", async () => {
+	await start();
+
+	const saved = await draft();
+
+	const size = () =>
+		sql
+			.prepare(
+				"SELECT visual_width,visual_height FROM software_project_updates WHERE id=?",
+			)
+			.get(saved.id);
+
+	expect(size()).toMatchObject({ visual_width: null, visual_height: null });
+
+	const first = await readJson<{ updatedAt: string }>(
+		await visualCall(uploadVisual, saved.id, {
+			version: saved.updatedAt,
+			bytes: sizedPng(640, 480),
+		}),
+	);
+
+	expect(size()).toMatchObject({ visual_width: 640, visual_height: 480 });
+
+	const second = await readJson<{ ok: boolean; updatedAt: string }>(
+		await visualCall(uploadVisual, saved.id, {
+			version: first.updatedAt,
+			bytes: sizedPng(1200, 300),
+		}),
+	);
+
+	expect(size()).toMatchObject({ visual_width: 1200, visual_height: 300 });
+
+	const third = await visualCall(uploadVisual, saved.id, {
+		version: second.updatedAt,
+		bytes: sizedPng(640, 480, true),
+	});
+
+	expect(third.status).toBe(200);
+	expect((await readJson<{ ok: boolean }>(third)).ok).toBe(true);
+	expect(size()).toMatchObject({ visual_width: null, visual_height: null });
+});
+
 it("client projection excludes private notes, drafts, audit and all owner fields", async () => {
 	await start();
 	await draft();
