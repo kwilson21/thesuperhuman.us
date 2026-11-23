@@ -7,6 +7,7 @@ import {
 	ArchiveChanged,
 	accessCleanup,
 	type AgreementScan,
+	type ChosenAgreementRow,
 	eligibleForRetention,
 	ListedObjectGone,
 	listedObject,
@@ -35,6 +36,7 @@ import {
 	retentionEligible,
 	type SentLists,
 	retentionManifest,
+	retentionRetiring,
 	type StoredAccessLink,
 	type StoredAccessSession,
 	type StoredAttachment,
@@ -209,7 +211,6 @@ const agreementRow = (
 	msa_id: null,
 	status: "executed",
 	text_sha256: SHA,
-	attachment_manifest_json: "[]",
 	ended_at: at(-DAY),
 	retain_until: at(-DAY),
 	legal_hold: 0,
@@ -247,17 +248,17 @@ describe("choosing the agreements a preview retires", () => {
 	const ids = (facts: Partial<RetentionFacts>) =>
 		Effect.runSync(
 			retentionEligible.decide({ now: NOW }, { ...emptyFacts, ...facts }),
-		).map((row) => row.id);
+		);
 
 	const one = (
 		over: Partial<RetentionAgreementRow> = {},
 		facts: Partial<RetentionFacts> = {},
 	) => ids({ agreements: [agreementRow("a1", over)], ...facts });
 
-	it("chooses an executed or abandoned SOW that ended and whose retention is over, and writes the row as read", () => {
-		const row = agreementRow("a1");
-
-		expect(chosen({ agreements: [row] })).toEqual({ wrote: [row] });
+	it("chooses an executed or abandoned SOW that ended and whose retention is over, and writes its id", () => {
+		expect(chosen({ agreements: [agreementRow("a1")] })).toEqual({
+			wrote: ["a1"],
+		});
 		expect(one({ status: "abandoned" })).toEqual(["a1"]);
 	});
 
@@ -426,6 +427,93 @@ describe("choosing the agreements a preview retires", () => {
 				now: NOW.toISOString(),
 			}),
 		).toBe(true);
+	});
+});
+
+describe("keeping the chosen agreements, read in full", () => {
+	/** A chosen agreement's full row: the scanned columns, its attachment manifest, and a column no rule reads. */
+	type FullRow = ChosenAgreementRow & { readonly canonical_text: string };
+
+	const fullRow = (id: string, over: Partial<FullRow> = {}): FullRow => ({
+		...agreementRow(id),
+		attachment_manifest_json: "[]",
+		canonical_text: `text of ${id}`,
+		...over,
+	});
+
+	const scanned = (...ids: string[]): RetentionFacts => ({
+		...emptyFacts,
+		agreements: ids.map((id) => agreementRow(id)),
+	});
+
+	const retiring = (
+		chosen: readonly string[],
+		rows: readonly ChosenAgreementRow[],
+		facts: RetentionFacts = scanned(...chosen),
+	) =>
+		Effect.runSync(
+			retentionRetiring.decide({ now: NOW, chosen }, { ...facts, rows }),
+		);
+
+	it("writes the full rows as read, every column, in the order chosen", () => {
+		const a1 = fullRow("a1");
+		const a2 = fullRow("a2");
+
+		expect(retiring(["a1", "a2"], [a2, a1])).toEqual([a1, a2]);
+		expect(retiring(["a1", "a2"], [a2, a1])[0]).toBe(a1);
+		expect(retiring([], [])).toEqual([]);
+	});
+
+	it("skips a chosen agreement whose row is gone", () => {
+		const a2 = fullRow("a2");
+
+		expect(retiring(["a1", "a2"], [a2])).toEqual([a2]);
+		expect(retiring(["a1"], [])).toEqual([]);
+	});
+
+	it("skips one whose full row is no longer eligible: put on hold, its retention moved, reopened or no longer ended", () => {
+		const a2 = fullRow("a2");
+
+		for (const changed of [
+			{ legal_hold: 1 },
+			{ retain_until: at(DAY) },
+			{ status: "client_signed" },
+			{ ended_at: null },
+		])
+			expect(
+				retiring(["a1", "a2"], [fullRow("a1", changed), a2]),
+				JSON.stringify(changed),
+			).toEqual([a2]);
+	});
+
+	it("keeps one that changed and is still eligible, as read the second time", () => {
+		const changed = fullRow("a1", {
+			attachment_manifest_json: '[{"key":"k","sha256":"s"}]',
+			canonical_text: "another text",
+			retain_until: at(-2 * DAY),
+		});
+
+		expect(retiring(["a1"], [changed])).toEqual([changed]);
+	});
+
+	it("decides on the scan's rows for the others: an MSA a SOW named in the scan is kept", () => {
+		const msa = fullRow("m1", { kind: "msa", offer_id: null });
+
+		expect(
+			retiring(["m1"], [msa], {
+				...emptyFacts,
+				agreements: [
+					agreementRow("m1", { kind: "msa", offer_id: null }),
+					agreementRow("a2", { status: "review", msa_id: "m1" }),
+				],
+			}),
+		).toEqual([]);
+	});
+
+	it("never writes a row that was not chosen", () => {
+		expect(retiring(["a1"], [fullRow("a1"), fullRow("a2")])).toEqual([
+			fullRow("a1"),
+		]);
 	});
 });
 
