@@ -2,7 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: to be filled in when it is opened. Merge facts are recorded after the merge, in the next pull request.
+Pull request: [#384](https://github.com/kwilson21/thesuperhuman.us/pull/384), merged at 07:21:45 UTC as `a11a4fab`
+(head `f021a4e2`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The 2026-11-14 decision (an unexpected database or store failure answers 500 with the route's
 fixed sentence and never the error's own text; a lost race or a stale version 409; 503 only for a missing binding or a
@@ -11,8 +12,8 @@ answered in conversation on 2026-11-23: Q2 "Approve all three" (this pull reques
 sentences; the verify pages' is for their own pull request), Q3 "Success with receipt" (B6). Section 8 of the plan, PR
 order item 4, first bullet, makes this the client routes' fix, made on today's code before the conversion so that the
 conversion changes no behaviour; no `conversion` label. The work was done with Claude Code.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. No migration, no
-binding.
+Rollback revision: `31e32124`, the revision of `main` before the merge; or `git revert -m 1 a11a4fab`. No migration,
+no binding.
 
 ## Scope
 
@@ -101,7 +102,7 @@ binding.
   that pass pin answers that must not change (the link batch's guard 429, the short code key's 503, the draft batch's
   guard 409, the signing batch's guard, foreign key and unique 409s, refused stored values). The log line never carries
   the address in a database message (`logUnexpected` redacts it).
-- PENDING: reviews of the pull request, CI on its head, and the deploy and live check after merge.
+- Reviews, CI, the deploy and the live check: see section 7.
 
 ## 1 to 4. Content, search, accessibility, performance
 
@@ -120,7 +121,19 @@ binding.
 ## 7. Release and final QA
 
 - **PASS · Checks, rollback.** See above.
-- **PENDING · Reviews, CI, production revision and live check.**
+- **PASS · Reviews.** Codex's code and security reviews of `f021a4e2` found nothing. An independent Claude Code pass
+  found nothing blocking (the severity bar of CLAUDE.md applied: a large pull request): it confirmed the 60 cases and
+  nothing else changed, that no answer or log line carries an error's text, and that the foreign key judgment call is
+  sound, since every key in the signing batch points at rows read just before it. Its notes, not changed: B6's failed
+  read is not logged (as Q3 decided); the foreign key test reads the message only, as the review's does; this record's
+  pull request line (filled in here); "the used_at update after a sent email fails" answers 500 although the email
+  went out (as B1 lists).
+- **PASS · CI.** On the head `f021a4e2` before merge, all 20 check runs succeeded, the Workers preview build among
+  them.
+- **PASS · Production revision and live check.** After merge, on `a11a4fab`: the Workers build succeeded (07:23:26 UTC)
+  and `validate` succeeded (07:25:34 UTC). Live check at 07:26:03 UTC: `https://thesuperhuman.us/` answered 200, and a
+  link request with an empty JSON body answered 400 "Complete the security check.", the schema's answer before any
+  read, as before.
 - **UNVERIFIED · The 500 answers live.** No database fault can be induced live; the answers are held by the tests and
   the golden corpora.
 - **N/A · Bindings, migrations.** None.
