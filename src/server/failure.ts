@@ -10,13 +10,20 @@
 // race to one looks for positive evidence of the race itself and throws `LostRace` only then (see `reviewAgreements`).
 //
 // The ways two legitimate requests can make a converted route's batch throw, and what each answers:
+//   Agreement link (`POST /api/offer/[token]/link`: `issueAgreementLink`)
+//     the 30-second guard, the offer still open for signing (A1) ....... JSON guard: what they re-check is read after it
+//       raised and decided, the batch run again when none holds, three batches in all; the read answers the real reason
+//       (404 signing off or unavailable, 429 a newer link), a third raise the 429
 //   Agreement review (`POST /api/offer/[token]/review`: the draft save, then `reviewAgreements`)
 //     guards (session, live signing link, "already signed", project started) ........ JSON guard, 409
-//     `software_agreements_sow_offer`, `software_agreements_pending_msa`, the client unique key .. UNIQUE, 409
-//     agreements naming a client another tab created under its own id or deleted ..... FOREIGN KEY, 409 through `LostRace`,
-//       only on positive evidence read afterwards: a row with the same natural key (recipient email, legal name key,
-//       entity type, jurisdiction) under another id, or the earlier client row gone. Any other foreign key failure, or
-//       a failed read of that evidence, rethrows the ORIGINAL error: 500, logged
+//     `software_agreements_pending_msa` ...... UNIQUE: read and decided again, three tries (the pending MSA's sentence,
+//       409, once read); a third failure 409
+//     `software_agreements_sow_offer` ............................................... UNIQUE, 409
+//     agreements naming a client another tab created under its own id or deleted ..... FOREIGN KEY, only on positive
+//       evidence read afterwards: a row with the same natural key (recipient email, legal name key, entity type,
+//       jurisdiction) under another id, or the earlier client row gone. Read and decided again, three tries (the other
+//       tab's client); a third failure 409 through `LostRace`. Any other foreign key failure, or a failed read of that
+//       evidence, rethrows the ORIGINAL error: 500, logged
 //     the draft's primary key is an upsert; offers, templates and the reused MSA are never deleted: no other way
 //   Agreement signing (`POST /api/offer/[token]/sign`: `signAgreements`, whose reads and batch throw `StoreRejected`)
 //     guards (live signing link, session, the draft as read, the reused MSA, each document in review) .. JSON guard, 409

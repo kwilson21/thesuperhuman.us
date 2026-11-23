@@ -163,11 +163,54 @@ async function otherRequestChangedClient(
 	}
 }
 
+/** How many times a review reads, decides and writes before another request's change is answered as before (409). */
+const REVIEW_TRIES = 3;
+
+/** The review batch lost a fact it decided from to another request, with tries left: read and decide again. */
+class ReviewChanged extends Error {}
+
+/**
+ * The unique index that allows one pending MSA per client and template (`software_agreements_pending_msa`), which
+ * re-checks the pending MSA read before the batch. SQLite names the index by its columns.
+ */
+const PENDING_MSA_TAKEN =
+	/UNIQUE constraint failed: software_agreements\.client_id, software_agreements\.template_id/;
+
+/**
+ * The documents for review, written in one batch. Two failures of that batch mean another request changed a fact the
+ * review decided from, so the review is read and decided again from its first read, three tries in all (behaviour fix B7
+ * of docs/plans/2026-11-signing-conversion.md, as offers F7 did for its unique index): the one pending MSA per client and
+ * template, taken since the pending MSA read, and the client row the review chose, created by another request under its
+ * own id or gone, recognised as before by the evidence read after the foreign key failure. A third such failure answers
+ * as before: the unique index as a stale batch, the client as a `LostRace` (both 409). Each try reads the clock and draws
+ * its ids where the code always has.
+ */
 export async function reviewAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
 	session: AgreementSession,
 	input: RawValue,
+) {
+	for (let attempt = 1; ; attempt += 1)
+		try {
+			return await reviewOnce(
+				db,
+				offer,
+				session,
+				input,
+				attempt < REVIEW_TRIES,
+			);
+		} catch (error) {
+			if (!(error instanceof ReviewChanged)) throw error;
+		}
+}
+
+async function reviewOnce(
+	db: D1Database,
+	offer: SoftwareOffer,
+	session: AgreementSession,
+	input: RawValue,
+	triesLeft: boolean,
 ) {
 	const client = parseClientAgreement(input),
 		terms = parseOfferTerms(JSON.parse(offer.terms_json)),
@@ -376,11 +419,20 @@ export async function reviewAgreements(
 		await db.batch(batch);
 	} catch (error) {
 		if (
+			triesLeft &&
+			error instanceof Error &&
+			PENDING_MSA_TAKEN.test(error.message)
+		)
+			throw new ReviewChanged();
+
+		if (
 			error instanceof Error &&
 			/FOREIGN KEY/.test(error.message) &&
 			(await otherRequestChangedClient(db, previous?.id, clientId, identity))
 		)
-			throw new LostRace("Another request changed the client row.");
+			throw triesLeft
+				? new ReviewChanged()
+				: new LostRace("Another request changed the client row.");
 
 		throw error;
 	}
