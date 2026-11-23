@@ -12,6 +12,7 @@ import {
 	type StoredAgreementSession,
 } from "../../src/server/rules/agreement-session";
 import {
+	AlreadySigned,
 	type DraftSaveFacts,
 	type DraftSaveRequest,
 	draftFront,
@@ -236,8 +237,15 @@ describe("saving the draft", () => {
 		);
 	});
 
+	// The draft route's second read runs where the rule is asked, as today's runs before the batch, so a value that reads
+	// once but not twice throws there: asked inside a flow, that is a defect, the route's logged 500.
+	const asked = (request: DraftSaveRequest, facts: DraftSaveFacts) =>
+		Effect.runSyncExit(
+			Effect.suspend(() => saveSigningDraft.decide(request, facts)),
+		);
+
 	it("dies with today's FieldsRefused when the values read once but not twice (a field whose NFC form outgrows its limit)", () => {
-		const values = { legal_name: "क़".repeat(200) };
+		const values = { legal_name: "\u0958".repeat(200) };
 		const first = readDraft(values);
 
 		// Today: the route's read passes, and saveAgreementDraft's second read throws (the route's logged 500).
@@ -246,13 +254,11 @@ describe("saving the draft", () => {
 			FieldsRefused,
 		);
 
-		const exit = Effect.runSyncExit(
-			saveSigningDraft.decide(saveRequest({ values }), {
-				...held,
-				agreements: [],
-				project: null,
-			}),
-		);
+		const exit = asked(saveRequest({ values }), {
+			...held,
+			agreements: [],
+			project: null,
+		});
 
 		expect(Exit.isFailure(exit)).toBe(true);
 
@@ -260,6 +266,39 @@ describe("saving the draft", () => {
 			expect(Cause.hasDies(exit.cause)).toBe(true);
 			expect(Cause.squash(exit.cause)).toBeInstanceOf(FieldsRefused);
 		}
+	});
+
+	it("reads the draft route's values a second time before the project and signed checks, as today", () => {
+		// Today `saveAgreementDraft` parses the route's value again before its batch, so a value that reads once but not
+		// twice is the logged 500 even when the offer is signed or a project started (A3 and A1 only check in the batch).
+		const values = { legal_name: "\u0958".repeat(200) };
+
+		for (const facts of [
+			{ ...held, agreements: [agreement("client_signed")], project: null },
+			{ ...held, agreements: [], project: { offer_id: "o1" } },
+			{
+				...held,
+				agreements: [agreement("executed")],
+				project: { offer_id: "o1" },
+			},
+		]) {
+			const exit = asked(saveRequest({ values }), facts);
+
+			expect(Exit.isFailure(exit)).toBe(true);
+
+			if (Exit.isFailure(exit)) {
+				expect(Cause.hasDies(exit.cause)).toBe(true);
+				expect(Cause.squash(exit.cause)).toBeInstanceOf(FieldsRefused);
+			}
+		}
+
+		// The review reads them once: the signed agreement is its refusal.
+		expect(
+			asked(
+				{ ...saveRequest({ values }), route: "review" },
+				{ ...held, agreements: [agreement("client_signed")], project: null },
+			),
+		).toEqual(Exit.fail(new AlreadySigned()));
 	});
 
 	it("stores the review's values as read once, as the review route's single read does today", () => {
@@ -279,11 +318,9 @@ describe("saving the draft", () => {
 
 		const today = parseDraft(values);
 
-		const exit = Effect.runSyncExit(
-			saveSigningDraft.decide(
-				{ ...saveRequest({ values }), route: "review" },
-				{ ...held, agreements: [], project: null },
-			),
+		const exit = asked(
+			{ ...saveRequest({ values }), route: "review" },
+			{ ...held, agreements: [], project: null },
 		);
 
 		expect(Exit.isSuccess(exit)).toBe(true);
@@ -292,13 +329,11 @@ describe("saving the draft", () => {
 			expect(exit.value.values_json).toBe(JSON.stringify(today));
 
 		// The draft route reads the same values a second time: today's FieldsRefused, a defect.
-		const draftRoute = Effect.runSyncExit(
-			saveSigningDraft.decide(saveRequest({ values }), {
-				...held,
-				agreements: [],
-				project: null,
-			}),
-		);
+		const draftRoute = asked(saveRequest({ values }), {
+			...held,
+			agreements: [],
+			project: null,
+		});
 
 		expect(Exit.isFailure(draftRoute)).toBe(true);
 
