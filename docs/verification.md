@@ -907,6 +907,20 @@ stateDiagram-v2
 
 **What it does not cover.** The mail keys of a deployment (a delivery that never asks the provider records "failed" at once, the same path as a refusal here), the answers the route gives, and the 10-second limit of the provider's call (the model lets a delivery wait indefinitely between the claim and its record, which is the harder case). There is no Apalache run for it.
 
+## The market-refresh model
+
+File: `verification/market-refresh.qnt` (module `refresh`). The site searches for new market figures on a schedule or when the owner asks, and saves a proposal; the owner uses or discards it on `/owner/pricing` (docs/plans/2026-11-market-refresh.md). The code modelled is the run in `src/server/flows/market-refresh.ts`, the proposal store in `src/server/market-refresh-store.ts`, and the `ask-refresh`, `accept-proposal` and `discard-proposal` actions of `src/pages/api/owner/pricing.ts`.
+
+A run reads the owner's ask when it starts, saves its proposal (which replaces older ones) and then clears the ask only if it was made before the run started; an ask made during the run waits for the next one. A page shows the newest proposal with its id. Use these figures takes that id, is refused when the id is no longer stored (a newer search replaced it), and goes through the versioned save that `verification/pricing-save.qnt` covers; it then removes that id only. Discard removes that id only. Left out: whether a run searches (a pure rule over facts read first), search failures (a failed run saves nothing), and KV's delay (an ask read a few seconds late is served by the next day's run).
+
+**Properties** (`allProperties`): `askNeverLost` (an ask made while a run is going is not cleared by that run), `newerKept` (using or discarding a proposal never removes one newer than the page showed) and `acceptedWasShown` (the research only takes figures the owner was shown).
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `ClearAnyAsk` | A run clears the ask even when it was made after the run started | `askNeverLost` |
+| `DiscardAll` | Discard removes every stored proposal | `newerKept` |
+| `AcceptLatest` | Use these figures takes the newest stored proposal, not the one the page showed | `acceptedWasShown` |
+
 ## The golden corpus: what "request" and "background" mean
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart

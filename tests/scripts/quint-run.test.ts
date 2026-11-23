@@ -18,6 +18,7 @@ import {
 	offerBoardMutants,
 	pricingMutants,
 	inquiryMutants,
+	refreshMutants,
 	musicMutants,
 	publicationMutants,
 	equivalents,
@@ -363,6 +364,7 @@ describe.each([
 	["offer-board", "offerBoardModel", "offerBoard", offerBoardMutants, 10],
 	["daily-allowance", "dailyAllowanceModel", "allowance", allowanceMutants, 4],
 	["pricing-save", "pricingSaveModel", "pricing", pricingMutants, 3],
+	["market-refresh", "marketRefreshModel", "refresh", refreshMutants, 3],
 ])(
 	"the %s model's mutant registry",
 	(file, base, current, registry, propertyCount) => {
@@ -691,7 +693,7 @@ describe("the brief copy model", () => {
 });
 
 describe("the models the driver runs", () => {
-	it("lists the sixteen models, each with its own registry", () => {
+	it("lists the seventeen models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
@@ -709,6 +711,7 @@ describe("the models the driver runs", () => {
 			"verification/audio-project-files.qnt",
 			"verification/audio-project-notices.qnt",
 			"verification/brief-copy.qnt",
+			"verification/market-refresh.qnt",
 		]);
 		expect(models[0].mutants).toBe(mutants);
 		expect(models[1].mutants).toBe(discountMutants);
@@ -726,6 +729,7 @@ describe("the models the driver runs", () => {
 		expect(models[13].mutants).toBe(audioProjectFilesMutants);
 		expect(models[14].mutants).toBe(audioProjectNoticesMutants);
 		expect(models[15].mutants).toBe(briefCopyMutants);
+		expect(models[16].mutants).toBe(refreshMutants);
 	});
 
 	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {

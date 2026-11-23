@@ -274,6 +274,14 @@ export const briefCopyMutants = {
 	briefCopyFinalUnguarded: { property: "finalOnlyOwn" },
 };
 
+// verification/market-refresh.qnt: refreshing the market research on a schedule, with the owner's ask, use and discard
+// (docs/plans/2026-11-market-refresh.md). Module name -> the property its change must break.
+export const refreshMutants = {
+	refreshClearAnyAsk: { property: "askNeverLost" },
+	refreshDiscardAll: { property: "newerKept" },
+	refreshAcceptLatest: { property: "acceptedWasShown" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, how many random runs each check makes, and how many steps each run
 // takes (20 unless the model says). The discount model's steps are slower to evaluate, so it makes fewer runs; every
@@ -447,5 +455,13 @@ export const models = [
 		equivalents: [],
 		exhaustive: [],
 		samples: "100000",
+	},
+	{
+		file: "verification/market-refresh.qnt",
+		current: ["refresh"],
+		mutants: refreshMutants,
+		equivalents: [],
+		exhaustive: ["refresh"],
+		samples: "20000",
 	},
 ];

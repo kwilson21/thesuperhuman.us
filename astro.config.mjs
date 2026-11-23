@@ -24,6 +24,8 @@ export default defineConfig({
 	adapter: cloudflare({
 		imageService: "compile",
 		platformProxy,
+		// Astro's own request handler, plus the daily scheduled market refresh (docs/plans/2026-11-market-refresh.md).
+		workerEntryPoint: { path: "src/worker.ts" },
 	}),
 	integrations: [
 		sitemap({
