@@ -40,8 +40,9 @@ const EXPIRED_TITLE = "This link has expired.";
 
 const LINK_READ = /SELECT \* FROM software_agreement_links WHERE token_hash=\?/;
 
+/** The offer's signing state: the link route reads it before its batch, the signing page's GET in place of A1. */
 const LIVE_CHECK =
-	/SELECT CASE WHEN EXISTS\(SELECT 1 FROM software_offers o JOIN software_offer_links/;
+	/SELECT o\.status,o\.recipient_email_snapshot,r\.status AS request_status/;
 
 const OFFER_READ =
 	/SELECT o\.\* FROM software_offers o JOIN software_offer_links/;
