@@ -1013,6 +1013,33 @@ today's function beside the rule on the same database. What it found, for the st
   `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.
 - **New reads.** Before claiming a packet, a copy or a notice, and before the contractor's save, the flows read the row
   they decide on; PR 2 checks each new read against the golden hook patterns, which count statements by `nth`.
+- **Hook patterns PR 4 re-points:** the store keeps today's text wherever a golden hook picks a statement; where a
+  read had to change, the pattern below no longer picks it, and PR 4's re-record commit re-points it to the converted
+  statement (the same operation, table and access, so its `trigger-hit` marker is unchanged). Each store test lists its
+  own and checks them against the corpora.
+  - `offer-link`, "the used_at update after a sent email fails": `/UPDATE software_agreement_links SET used_at=\? WHERE
+    purpose/`. A6 consumes the older links through `consumeLinks` (`WHERE id IN (...)`), as `agreements-link` does.
+  - `offer-verify-page`, "outage: the GET's live check: the expired page": `/SELECT CASE WHEN EXISTS\(SELECT 1 FROM
+    software_offers o JOIN software_offer_links/` at `nth: 2`. The GET reads `readSigningFacts` for
+    `stillOpenForSigning` in place of running A1 as a read.
+  - `offer-review`: `/SELECT \* FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/` (every case that
+    uses it), since `readOfferAgreements` reads the abandoned agreements too; and `/SELECT \* FROM software_agreements
+    WHERE id=\? AND kind='msa'/`, since `readReusedMsa` reads the plain row with its copy's status.
+  - `offer-sign`: `/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/`, both reads of the agreements
+    (the first and `nth: 2`).
+  - `owner-request-agreement-abandon`: `/SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("outage: the first deposit
+    check", "... only") and `/^SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("... and the recheck after it",
+    with its `nth: 2` entry and the `optionalTriggers` text that names it). `readOfferDeposits` is one plain read of the
+    offer's invoices; left as it is, the unanchored pattern would pick the batch's A12 guard instead.
+  - `owner-request-agreement-end`: `/SELECT 1 FROM software_offers o JOIN owner_requests r/` ("outage: the open-offer
+    check of an MSA") and `/^SELECT 1 FROM software_offers o JOIN owner_requests r/` ("outage: the batch of an MSA, and
+    the recheck", `nth: 2`, with its `optionalTriggers` text). `readMsaUse` is one plain read of the reusing offers;
+    left as it is, the unanchored pattern would pick the batch's A13 guard instead.
+  - `owner-agreements-retention-preview`, "the orphan reference check fails": `/SELECT 1 WHERE\s+EXISTS/`.
+    `readOrphanReferences` reads the references as rows for `orphanUnreferenced`.
+
+  `tests/api/signing-owner-outages.test.ts` picks today's deposit check by the same text (`DEPOSIT_CHECK`); it tests
+  today's route, which PR 4 deletes with its tests.
 
 ## Open questions from reading the code
 
