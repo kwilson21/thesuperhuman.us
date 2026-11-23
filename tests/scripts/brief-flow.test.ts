@@ -193,6 +193,8 @@ async function setup(
 	// with `interpret`; without it the page is as the server renders it with the switch off.
 	board?: {
 		interpret: (body: string, signal: AbortSignal) => Promise<InterpretAnswer>;
+		// The page's board refuses to leave a lane screen with words it cannot add; the core alone has no editors.
+		leaveField?: (core: BriefBoardCore) => boolean;
 	},
 ) {
 	form = Object.assign(new Node(), { elements: [] });
@@ -450,7 +452,11 @@ async function setup(
 						interpret: board.interpret,
 					});
 
-					return core;
+					const { leaveField } = board;
+
+					return leaveField
+						? { ...core, leaveField: () => leaveField(core) }
+						: core;
 				}
 			: undefined,
 	);
@@ -1962,10 +1968,13 @@ const reply = async (cards: unknown[]) => {
 	await vi.advanceTimersByTimeAsync(0);
 };
 
-const boardSetup = async (path: string | undefined = "website") => {
+const boardSetup = async (
+	path: string | undefined = "website",
+	board: Parameters<typeof setup>[3] = route,
+) => {
 	bodies = [];
 	waiting = [];
-	await setup(path, grantedPass, path, route);
+	await setup(path, grantedPass, path, board);
 };
 
 const savedBoard = () =>
@@ -2234,6 +2243,25 @@ it("skips the outline from the second lane screen: Back reaches the last written
 	fill("email", "alex@example.com");
 	choose("updates", "self");
 	expect(visit()).toEqual([1, 7, 8, 3, 4, 5, 6]);
+});
+
+it("skips from a full lane with words in the Add editor: the visitor lands on the step after the lanes, with nothing refused", async () => {
+	// Leaving a lane screen is refused while the outline is on, as a full list refuses its open editor's words.
+	await boardSetup("website", {
+		...route,
+		leaveField: (board) => current() < 9 || board.skipped(),
+	});
+	fill("purpose", ANSWER);
+	await readAnswers();
+	expect(core.tryAddNote("audience", "Venues")).toBe(true);
+	expect(core.tryAddNote("audience", "Press")).toBe(true);
+	click("[data-next]");
+	expect(current()).toBe(9);
+	click("[data-next]");
+	expect(current()).toBe(9);
+	fire(steps[9].nodes["[data-board-skip]"], "click");
+	expect(current()).toBe(7);
+	expect(core.skipped()).toBe(true);
 });
 
 it("offers to add the outline back from the review after a skip, with the three screens and the cards", async () => {

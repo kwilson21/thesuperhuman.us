@@ -392,16 +392,22 @@ export function noteOnLeaving(input: {
 
 /**
  * The board after the visitor leaves with a card's editor still open: the edit (or the answer to a question) as the
- * editor's own confirm would apply it. Null when it would change nothing (blank, or the same words), so a blank or
- * unchanged editor does nothing.
+ * editor's own confirm would apply it. Null when nothing is to be applied: the words are those the editor opened with
+ * (so a card reworded under an untouched editor keeps its new words), or confirming them would change nothing (a blank
+ * edit). An emptied answer is applied, as confirming would clear that answer.
  */
 export function editOnLeaving(input: {
 	readonly board: Board;
 	readonly id: string;
 	readonly mode: "edit" | "answer";
+	/** What the editor holds now. */
 	readonly text: string;
+	/** What the editor held when it opened. */
+	readonly opened: string;
 }): Board | null {
-	const { board, id, mode, text } = input;
+	const { board, id, mode, text, opened } = input;
+
+	if (text === opened) return null;
 
 	const next =
 		mode === "edit" ? editCard(board, id, text) : answerCard(board, id, text);

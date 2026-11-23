@@ -200,7 +200,16 @@ async function quotesEndOnce(page) {
 	const live = page.locator("[data-board-live]");
 	const screen = page.locator("[data-lane-screen]:not([hidden])");
 
+	// The live region is set a moment after it is cleared, so a repeated message is read again.
 	const said = async (expected) => {
+		await page
+			.waitForFunction(
+				(want) =>
+					document.querySelector("[data-board-live]")?.textContent === want,
+				expected,
+				{ timeout: 1000 },
+			)
+			.catch(() => {});
 		const text = await live.textContent();
 
 		if (text !== expected)
@@ -662,6 +671,54 @@ export default {
 
 					if (!/Pages: (Shop|Photos)/.test(review))
 						throw new Error(`The review lists no new page: ${review}`);
+					await page.mouse.move(0, 0);
+				},
+			);
+
+			// Skip never blocks: with a full lane and words in the Add editor, the visitor still lands past the lanes.
+			await shot(
+				"skip-full-lane",
+				"The review after skipping from a full audience lane with words typed in Add",
+				async (page) => {
+					const state = await open(page);
+
+					await write(page, state, PURPOSE);
+					await toLane(page, "audience");
+					const screen = page.locator('[data-lane-screen="audience"]');
+					const input = screen.locator("[data-lane-input]");
+
+					// Fill the lane (the scripted reply may have left room for fewer than three notes).
+					for (let n = 1; n <= 3 && !(await input.isVisible()); n++) {
+						await screen.locator("[data-lane-add]").click();
+
+						if (!(await input.isVisible())) break;
+						await input.fill(`Note ${n}`);
+						await input.press("Enter");
+					}
+
+					// One card aside makes room to open Add; bringing it back fills the lane under the open editor.
+					await screen
+						.getByRole("button", { name: /^Not this:/ })
+						.first()
+						.click();
+					await screen.locator("[data-lane-add]").click();
+					await input.fill("Bookers at small venues");
+					await screen.locator("[data-lane-aside-summary]").click();
+					await screen
+						.getByRole("button", { name: /^Bring back:/ })
+						.first()
+						.click();
+					await screen
+						.getByRole("button", { name: "Skip these, no AI outline" })
+						.click();
+					await toReview(page);
+
+					if (
+						!(await page
+							.getByRole("button", { name: "Add the outline back" })
+							.isVisible())
+					)
+						throw new Error("Skip from a full lane did not reach the review");
 					await page.mouse.move(0, 0);
 				},
 			);

@@ -2890,41 +2890,70 @@ describe("editOnLeaving", () => {
 	const board = started(said("audience", "Fans", "Fans should hear new music"));
 	const id = board.cards[0].id;
 
-	it("applies an edit left in a card's editor as its confirm would", () => {
+	it("applies words the visitor typed over what the editor opened with", () => {
 		const next = editOnLeaving({
 			board,
 			id,
 			mode: "edit",
 			text: "  Local   fans ",
+			opened: "Fans",
 		});
 
 		expect(next?.cards.find((c) => c.id === id)?.text).toBe("Local fans");
 		expect(next).toEqual(editCard(board, id, "Local fans"));
 	});
 
-	it("applies an answer left in a question's editor", () => {
+	it("applies nothing when the editor still holds what it opened with, though the card was reworded under it", () => {
+		const reworded = editCard(board, id, "Y");
+
+		expect(
+			editOnLeaving({
+				board: reworded,
+				id,
+				mode: "edit",
+				text: "Fans",
+				opened: "Fans",
+			}),
+		).toBeNull();
+	});
+
+	it("applies an answer, an emptied one included, as confirming would", () => {
 		const q = started(
 			said("questions", "Who adds shows?", "see upcoming shows near them"),
 		);
 
 		const qid = q.cards[0].id;
 
-		const next = editOnLeaving({
+		const answered = editOnLeaving({
 			board: q,
 			id: qid,
 			mode: "answer",
 			text: "Me",
+			opened: "",
 		});
 
-		expect(next).toEqual(answerCard(q, qid, "Me"));
-		expect(next).not.toBeNull();
+		expect(answered).toEqual(answerCard(q, qid, "Me"));
+		expect(answered).not.toBeNull();
+
+		// SAFETY: the answer above changed the board, so it is not null.
+		const cleared = editOnLeaving({
+			board: answered as Board,
+			id: qid,
+			mode: "answer",
+			text: "",
+			opened: "Me",
+		});
+
+		expect(cleared?.cards.find((c) => c.id === qid)?.answer).toBe("");
 	});
 
-	it("does nothing for blank or unchanged words", () => {
-		expect(editOnLeaving({ board, id, mode: "edit", text: "   " })).toBeNull();
-		expect(editOnLeaving({ board, id, mode: "edit", text: "Fans" })).toBeNull();
+	it("does nothing for a blank edit or a card that is gone", () => {
 		expect(
-			editOnLeaving({ board, id: "nope", mode: "edit", text: "x" }),
+			editOnLeaving({ board, id, mode: "edit", text: "   ", opened: "Fans" }),
+		).toBeNull();
+
+		expect(
+			editOnLeaving({ board, id: "nope", mode: "edit", text: "x", opened: "" }),
 		).toBeNull();
 	});
 });

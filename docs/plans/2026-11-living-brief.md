@@ -40,8 +40,11 @@ no heading says "I".
 
 Words left in an open editor when the visitor leaves a lane screen (Next, Back or a review Edit link) are applied as if
 they had confirmed them, with the AI on or off: the open "Add" field adds its note, and a card being edited in place
-takes its edit or answer. A blank or unchanged editor does nothing. If the words cannot be applied (the list is full) the
-visitor stays on the screen and sees the usual reason, so nothing typed is dropped.
+takes its edit or answer. A blank "Add" editor adds nothing. An editor left unchanged (its words are those it opened
+with) is closed without applying anything, so a card the outline reworded meanwhile keeps its new words. Emptying an
+answer and leaving clears that answer, as confirming would. If a note cannot be added (the list is full) the visitor
+stays on the screen and sees the usual reason, so nothing typed is dropped. "Skip these, no AI outline" applies what it
+can, drops what a full list refuses without showing a refusal, closes every editor and never blocks.
 
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|

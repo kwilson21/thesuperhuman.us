@@ -119,10 +119,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	const currentAnswers = () => answerText(options.answers(), options.path());
 
 	/** Says `text` to screen readers. */
+	let announcing: ReturnType<typeof setTimeout> | undefined;
+
 	const announce = (text: string) => {
-		// Cleared first, so the same sentence said twice in a row is read twice.
+		// Cleared first and set a moment later, in another task, so the same sentence said twice is read twice; the
+		// newest sentence always lands.
+		clearTimeout(announcing);
 		live.textContent = "";
-		live.textContent = text;
+		announcing = setTimeout(() => {
+			live.textContent = text;
+		}, 50);
 	};
 
 	// ---- Drawing ------------------------------------------------------------------------------------------------------
@@ -426,6 +432,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			mode === "edit" ? `Edit “${card.text}”` : `Your answer to “${card.text}”`;
 		input.maxLength = mode === "edit" ? textLimits[card.lane] : ANSWER_MAX;
 		input.value = mode === "edit" ? card.text : card.answer;
+		// What the editor opened with: leaving applies the editor only if its words differ from these.
+		editor.dataset.opened = input.value;
 		editor.hidden = false;
 		input.focus();
 		input.select();
@@ -579,6 +587,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 		if (input?.matches("[data-card-input]") && id) {
 			if (event.key === "Enter") {
+				// Enter that confirms a word in an input method confirms nothing (Safari reports it as keyCode 229).
+				if (event.isComposing || event.keyCode === 229) return;
 				event.preventDefault();
 				closeEditor(id, true);
 			} else if (event.key === "Escape") {
@@ -703,53 +713,79 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 	render();
 
-	return {
-		...core,
-		leaveField() {
-			const lane = shown();
+	/**
+	 * Applies what the shown lane screen's open editors hold, as if confirmed, and closes every card editor. False when a
+	 * note could not be added because the list is full: the screen then says why, unless `silent`, when the words are dropped.
+	 */
+	function flushEditors(lane: Lane, silent: boolean) {
+		const parts = lanes[lane];
 
-			if (!lane) return true;
-			const parts = lanes[lane];
+		for (const input of parts.section.querySelectorAll<HTMLInputElement>(
+			"[data-card-input]",
+		)) {
+			const editor = input.closest<HTMLElement>("[data-card-editor]");
+			const id = input.closest<HTMLElement>("[data-card]")?.dataset.card;
 
-			// A card's editor left open: its edit or answer is applied as its own confirm would.
-			for (const input of parts.section.querySelectorAll<HTMLInputElement>(
-				"[data-card-input]",
-			)) {
-				const editor = input.closest<HTMLElement>("[data-card-editor]");
-				const id = input.closest<HTMLElement>("[data-card]")?.dataset.card;
+			if (!editor || editor.hidden || !id) continue;
 
-				if (!editor || editor.hidden || !id) continue;
-
-				const next = editOnLeaving({
-					board: core.board(),
-					id,
-					mode: editor.dataset.mode === "answer" ? "answer" : "edit",
-					text: input.value,
-				});
-
-				if (!next) continue;
-				editor.hidden = true;
-				core.change(next);
-			}
-
-			const text = noteOnLeaving({
-				editorOpen: !parts.editor.hidden,
-				text: parts.input.value,
+			const next = editOnLeaving({
+				board: core.board(),
+				id,
+				mode: editor.dataset.mode === "answer" ? "answer" : "edit",
+				text: input.value,
+				opened: editor.dataset.opened ?? input.value,
 			});
 
-			if (text === null) return true;
+			editor.hidden = true;
+			input.value = "";
 
-			if (!core.tryAddNote(lane, text)) {
+			if (next) core.change(next);
+		}
+
+		const text = noteOnLeaving({
+			editorOpen: !parts.editor.hidden,
+			text: parts.input.value,
+		});
+
+		if (text !== null && !core.tryAddNote(lane, text)) {
+			if (silent) {
+				parts.input.value = "";
+			} else {
 				announce(core.fullNote(lane));
 				parts.input.focus();
 				revealUnlessMouse(parts.full);
 
 				return false;
 			}
+		}
 
-			parts.input.value = "";
+		parts.input.value = "";
 
-			return true;
+		// With the AI on the Add editor closes with the screen; by hand the field stays open.
+		if (!core.byHand()) {
+			parts.editor.hidden = true;
+			parts.add.hidden = false;
+		}
+
+		return true;
+	}
+
+	return {
+		...core,
+		skip() {
+			const lane = shown();
+
+			// What can be applied is applied first, so the words are there if the outline is added back; the rest is dropped.
+			if (lane) flushEditors(lane, true);
+			core.skip();
+		},
+		leaveField() {
+			const lane = shown();
+
+			// A skipped outline's screens are out of the plan: nothing to flush, nothing to refuse.
+			if (!lane || core.skipped()) return true;
+
+			return flushEditors(lane, false);
 		},
 	};
 }
