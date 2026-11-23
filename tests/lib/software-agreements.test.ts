@@ -32,6 +32,7 @@ import {
 	agreementSession,
 	completeAgreementLink,
 	issueAgreementLink,
+	type RedeemFailures,
 } from "~/lib/agreement-access";
 import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import {
@@ -73,6 +74,14 @@ import { fakeR2Bucket } from "../helpers/r2";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 
 type TestEnv = TestRuntime["env"];
+
+/** What the verify pages pass the redeem; a failure on the site's side fails the test with its own error. */
+const redeemFailures: RedeemFailures = {
+	isGuard: raisedByJsonGuard,
+	unexpected: (error) => {
+		throw error;
+	},
+};
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -1109,7 +1118,15 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	expect(Date.parse(stored.expires_at) - Date.parse(stored.issued_at)).toBe(
 		3600000,
 	);
-	const landing = await completeAgreementLink(env, req, key, token);
+
+	const landing = await completeAgreementLink(
+		env,
+		req,
+		key,
+		token,
+		redeemFailures,
+	);
+
 	expect(landing.status).toBe(200);
 	expect(
 		sql
@@ -1122,12 +1139,15 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 		new Request(req.url, { method: "POST" }),
 		key,
 		token,
+		redeemFailures,
 	);
 
 	expect(opened.status).toBe(303);
 	expect(opened.headers.get("location")).toBe(`/offer/${token}/sign`);
 	expect(opened.headers.get("set-cookie")).toContain("Max-Age=7200");
-	expect((await completeAgreementLink(env, req, key, token)).status).toBe(401);
+	expect(
+		(await completeAgreementLink(env, req, key, token, redeemFailures)).status,
+	).toBe(401);
 	expect(
 		(
 			await issueAgreementLink(
@@ -1165,6 +1185,7 @@ it("rejects expired links without creating a session", async () => {
 				new Request(request(), { method: "POST" }),
 				key,
 				token,
+				redeemFailures,
 			)
 		).status,
 	).toBe(401);
@@ -2275,12 +2296,14 @@ it("consumes a link atomically under parallel verification", async () => {
 			new Request(request(), { method: "POST" }),
 			key,
 			token,
+			redeemFailures,
 		),
 		completeAgreementLink(
 			env,
 			new Request(request(), { method: "POST" }),
 			key,
 			token,
+			redeemFailures,
 		),
 	]);
 
@@ -3511,6 +3534,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 		new Request(request(), { method: "POST" }),
 		key,
 		token,
+		redeemFailures,
 	);
 
 	const newSession = await agreementSession(
@@ -4593,6 +4617,7 @@ it.each(["agreement", "archive"])(
 						new Request("https://example.com"),
 						key,
 						offerToken,
+						redeemFailures,
 					)
 				).status,
 			).toBe(200);
@@ -4618,6 +4643,7 @@ it.each(["agreement", "archive"])(
 					new Request("https://example.com", { method: "POST" }),
 					key,
 					offerToken,
+					redeemFailures,
 				)
 			).status,
 		).toBe(401);
@@ -4632,6 +4658,7 @@ it.each(["agreement", "archive"])(
 			new Request("https://example.com", { method: "POST" }),
 			key,
 			offerToken,
+			redeemFailures,
 		);
 
 		expect(response.status).toBe(303);
@@ -4650,6 +4677,7 @@ it.each(["agreement", "archive"])(
 						new Request("https://example.com", { method }),
 						key,
 						offerToken,
+						redeemFailures,
 					)
 				).status,
 			).toBe(401);
@@ -5028,6 +5056,7 @@ it.each(["agreement", "archive"])(
 					foreign,
 					token,
 					purpose === "agreement" ? token : undefined,
+					redeemFailures,
 				)
 			).status,
 		).toBe(404);

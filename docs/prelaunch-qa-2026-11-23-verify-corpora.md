@@ -44,8 +44,8 @@ only.
 - Cookies set with `Astro.cookies` are appended as `Set-Cookie` headers, as the adapter does; today's pages set none
   that way.
 - Limits: the container runs no middleware (as no corpus does), so two cases record the page alone. In production the
-  middleware answers the cross-site POST 403 first (`src/middleware.ts:139-144`), and the PUT with no Origin and no
-  content type ("a PUT with a good key in the query") 403 first (`src/middleware.ts:124-144`). The HEAD case records a
+  middleware answers the cross-site POST 403 first (`src/middleware.ts:140-145`), and the PUT with no Origin and no
+  content type ("a PUT with a good key in the query") 403 first (`src/middleware.ts:125-145`). The HEAD case records a
   body that production never sends (an answer to a HEAD has none). The page's own stylesheet links (`/_astro/*.css`)
   are missing from the recorded HTML: the styles are stubbed when the page is compiled for the container.
 - Reviews: Codex's security and code reviews of `2e36efa8` found nothing. The first independent Claude Code pass found
