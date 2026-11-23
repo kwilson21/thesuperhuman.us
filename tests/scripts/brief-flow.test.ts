@@ -2290,6 +2290,43 @@ it("offers to add the outline back from the review after a skip, with the four s
 	expect(visit().slice(0, 6)).toEqual([1, 9, 10, 11, 12, 7]);
 });
 
+it("asks again after the outline is added back, though nothing was written since the skip", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	click("[data-next]");
+	click("[data-next]");
+	click("[data-next]");
+	fire(steps[11].nodes["[data-board-skip]"], "click");
+	const asked = bodies.length;
+	toReview();
+	// Skipped: nothing is asked, however long the visitor waits on a question.
+	click("[data-back]");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked);
+	toReview();
+	fire(form.nodes["[data-outline-add-back]"], "click");
+	expect(bodies).toHaveLength(asked);
+
+	// A written question is next showing: one request goes out, with no edit.
+	while (current() !== 1) click("[data-back]");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked + 1);
+});
+
+it("asks again when suggestions are turned back on, though nothing was written while they were off", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await readAnswers();
+	const asked = bodies.length;
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked);
+	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(asked + 1);
+});
+
 it("keeps the lane screens when suggestions are turned off, and asks nothing", async () => {
 	await boardSetup("website");
 	fire(steps[1].nodes["[data-suggestions-toggle]"], "click");

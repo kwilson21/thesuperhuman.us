@@ -262,6 +262,14 @@ export function createBriefBoardCore(
 		requests < REQUESTS_PER_PAGE &&
 		currentAnswers().split(/\s+/).filter(Boolean).length >= MIN_WORDS;
 
+	/** The board needs a request again, though its answers are as they were when the last one was sent. */
+	const forgetSent = () => {
+		for (const path of Object.keys(lastSent)) {
+			// SAFETY: lastSent is only ever written under a SoftwarePath key, so its own keys are all SoftwarePath values.
+			delete lastSent[path as SoftwarePath];
+		}
+	};
+
 	/** Whether a request is waiting for the visitor to stop writing or choosing. */
 	const waiting = () => canAsk() && lastSent[options.path()] !== answersKey();
 
@@ -583,6 +591,8 @@ export function createBriefBoardCore(
 		},
 		aiChanged() {
 			if (!options.aiEnabled()) stopAsking();
+			// Turned back on: the reply dropped while it was off is asked for again, though nothing was written since.
+			else forgetSent();
 			render();
 			schedule();
 		},
@@ -606,6 +616,8 @@ export function createBriefBoardCore(
 		},
 		addBack() {
 			skipped = false;
+			// The reply dropped at the skip is asked for again, though nothing was written since.
+			forgetSent();
 			persist();
 			schedule();
 		},

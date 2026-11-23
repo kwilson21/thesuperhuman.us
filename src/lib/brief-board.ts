@@ -1124,8 +1124,8 @@ function reconcile<L extends string>(
 
 		if (!mayChange(card, n) || !touches(card.lane)) continue;
 
-		// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, a duplicate, or a
-		// new idea earlier in this reply.
+		// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, a duplicate, a
+		// new idea earlier in this reply, or one a delivery added during the visit (`notAdded`).
 		if (
 			cards.some(
 				(other, at) =>
@@ -1135,6 +1135,9 @@ function reconcile<L extends string>(
 			) ||
 			fresh.some(
 				(other) => other.lane === item.lane && sameIdea(other.text, item.text),
+			) ||
+			scope.notAdded.some(
+				(idea) => idea.lane === item.lane && sameIdea(idea.text, item.text),
 			) ||
 			removedIdea(board, item)
 		)
@@ -1298,8 +1301,8 @@ export function applyReplyIn<L extends string>(
  * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
  * listed before the held reply applied, so a card the leave adds counts as new and one it withdraws as removed. A
  * idea a delivery added to the lane while it was on screen (any reply's, including one a newer reply replaced) is not
- * added again, though a reply still carries it: the held reply is applied whole, so the card still counts as named, and
- * the visitor may have edited it or set it aside.
+ * added again, and no other card is reworded into it, though a reply still carries it: the held reply is applied whole,
+ * so the card still counts as named, and the visitor may have edited it or set it aside.
  */
 export function leaveLane(
 	board: Board,

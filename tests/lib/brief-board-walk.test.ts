@@ -1,5 +1,5 @@
 // The Quint model's properties (verification/brief-board.qnt), checked on the real code. A seeded random walk mixes the
-// visitor's writing and actions (Keep, Edit, Answer, Not this, Bring back, notes, Undo, Pause) with requests that are
+// visitor's writing and actions (Keep, Edit, Answer, Not this, Bring back, notes, Undo, skipping the outline) with requests that are
 // answered late, out of order and overlapping, by an adversarial model: any idea, any claim that it was read from the
 // answers, passages that are not there, refs to owned or set-aside cards. The visitor also moves between the lane screens
 // and the written questions, so replies arrive while a lane is on screen. After every step the nine properties must hold.
@@ -78,6 +78,9 @@ function walk(seed: number, steps: number) {
 
 	// The ideas a delivery added to the lane on screen during this visit, and how often each shows on the lane.
 	let visitAdded: { lane: Lane; text: string }[] = [];
+	// Set when a reply says an idea the visitor edited away again, naming another open card: the visitor then leaves soon,
+	// so the held reply is applied before another replaces it.
+	let leaveSoon = false;
 
 	const onLane = (b: Board, lane: Lane, text: string) =>
 		b.cards.filter((c) => c.lane === lane && sameIdea(c.text, text)).length;
@@ -97,17 +100,38 @@ function walk(seed: number, steps: number) {
 		restated: 0,
 		repeated: 0,
 		addedThenGone: 0,
+		rewordIntoEdited: 0,
 	};
 
 	const fail = (step: number, what: string) =>
 		failures.push(`seed ${seed}, step ${step}: ${what}`);
 
 	for (let step = 0; step < steps; step++) {
-		const roll = next();
+		let roll = next();
 		const before = board;
 
+		// A directed case: the visitor edited away an idea a delivery added during this visit, and a reply then sent says
+		// that idea again, naming another open card of the lane. It arrives at once, and the visitor soon leaves, so the
+		// leave applies it (and must not reword that card into the idea).
+		let aimed: { lane: Lane; text: string } | undefined;
+
+		if (screen && !paused && next() < 0.3) {
+			aimed = pick(
+				visitAdded.filter((i) => onLane(board, i.lane, i.text) === 0),
+			);
+
+			if (aimed) {
+				let n: number;
+				[board, n] = sendRequest(board);
+				requests.push({ n, live: true });
+				roll = 1;
+			}
+		}
+
 		// The visitor moves to another lane, or to none. Leaving a lane applies the reply held for it.
-		if (next() < 0.1) {
+		if (leaveSoon || next() < 0.1) {
+			leaveSoon = false;
+
 			const target = pick(
 				([null, "parts", "audience"] as const).filter((l) => l !== screen),
 			);
@@ -234,7 +258,30 @@ function walk(seed: number, steps: number) {
 				// 10. leaveAddsNothingTwice: no idea a delivery added to the lane during this visit is on more cards after
 				// the leave than before it, whatever the visitor did to the cards meanwhile.
 				for (const idea of visitAdded) {
-					if (onLane(board, idea.lane, idea.text) === 0) seen.addedThenGone++;
+					if (onLane(board, idea.lane, idea.text) === 0) {
+						seen.addedThenGone++;
+
+						// The held reply says that idea again, naming an open card of the lane it may still change (so the leave could reword
+						// that card into the idea).
+						if (
+							held &&
+							!paused &&
+							held.n >= board.applied &&
+							held.reply.some(
+								(item) =>
+									item.lane === idea.lane &&
+									sameIdea(item.text, idea.text) &&
+									board.cards.some(
+										(c) =>
+											c.id === item.ref &&
+											c.lane === idea.lane &&
+											c.status === "proposed" &&
+											c.since < held.n,
+									),
+							)
+						)
+							seen.rewordIntoEdited++;
+					}
 
 					if (
 						onLane(left, idea.lane, idea.text) >
@@ -340,7 +387,9 @@ function walk(seed: number, steps: number) {
 				requests.push({ n, live: true });
 			}
 		} else {
-			const request = pick(requests.filter((r) => r.live));
+			const request = aimed
+				? requests[requests.length - 1]
+				: pick(requests.filter((r) => r.live));
 
 			if (!request) continue;
 			request.live = false;
@@ -370,8 +419,16 @@ function walk(seed: number, steps: number) {
 
 			if (visitAdded.length && next() < 0.4) {
 				const again = pick(visitAdded)!;
+
+				// Half the time it names another card of the lane by its id, so a leave could reword that card into the idea.
+				const other = pick(
+					board.cards.filter(
+						(c) => c.lane === again.lane && c.status === "proposed",
+					),
+				);
+
 				reply.push({
-					ref: "",
+					ref: next() < 0.7 ? (other?.id ?? "") : "",
 					lane: again.lane,
 					text: again.text,
 					basis: "suggested",
@@ -379,6 +436,31 @@ function walk(seed: number, steps: number) {
 					reason: "",
 				});
 				seen.restated++;
+
+				if (reply[reply.length - 1].ref && next() < 0.7) leaveSoon = true;
+			}
+
+			if (aimed) {
+				const other = pick(
+					board.cards.filter(
+						(c) =>
+							c.lane === aimed.lane &&
+							c.status === "proposed" &&
+							c.since < request.n,
+					),
+				);
+
+				if (other) {
+					reply.push({
+						ref: other.id,
+						lane: aimed.lane,
+						text: aimed.text,
+						basis: "suggested",
+						quote: "",
+						reason: "",
+					});
+					leaveSoon = true;
+				}
 			}
 
 			const applied: Board = applyReply(
@@ -557,6 +639,7 @@ describe("the board's properties on the real code", () => {
 			"restated",
 			"repeated",
 			"addedThenGone",
+			"rewordIntoEdited",
 		] as const)
 			expect(total(key), key).toBeGreaterThan(20);
 	});

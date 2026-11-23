@@ -1948,6 +1948,52 @@ describe("the lane on screen", () => {
 		expect(texts(left, "parts")).toEqual(["Shows", "Song words and credits"]);
 	});
 
+	it.each([
+		["names the card by its id", suggested("parts", "Lyrics", "c1")],
+		["names no card, but says its idea", suggested("parts", "Music lyrics")],
+	])(
+		"does not reword another card, on leave, into an idea a delivery added and the visitor edited away (held reply %s)",
+		(_how, item) => {
+			let b = started(
+				suggested("parts", "Music"),
+				suggested("parts", "Contact"),
+			);
+
+			let n: number;
+			[b, n] = sendRequest(b);
+			b = applyReply(
+				b,
+				[
+					suggested("parts", "Music", "c1"),
+					suggested("parts", "Contact", "c2"),
+					suggested("parts", "Lyrics"),
+				],
+				n,
+				ANSWERS,
+				false,
+				"parts",
+			).board;
+			b = editCard(b, "c3", "Merch store");
+			[b, n] = sendRequest(b);
+			b = applyReply(
+				b,
+				[
+					item,
+					suggested("parts", "Contact", "c2"),
+					suggested("parts", "Merch store", "c3"),
+				],
+				n,
+				ANSWERS,
+				false,
+				"parts",
+			).board;
+
+			const left = leaveLane(b, "parts", ANSWERS);
+
+			expect(texts(left, "parts")).toEqual(["Music", "Contact", "Merch store"]);
+		},
+	);
+
 	it("does not bring back, on leave, a card the delivery added and the visitor then set aside", () => {
 		let b = started(suggested("parts", "Shows"));
 		let n: number;

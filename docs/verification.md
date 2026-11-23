@@ -601,9 +601,9 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 ## The brief-board model
 
-File: `verification/brief-board.qnt` (module `board`), written from the design in `docs/plans/2026-11-living-brief.md` before the code. The living brief's board shows the interpreting model's cards beside the brief's answers while the visitor keeps writing and keeps, edits, answers, sets aside, brings back and undoes cards, and pauses the board. Requests are numbered; replies arrive late, out of order and overlapping (the page sends one at a time, but the model does not rely on it); and the model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or set-aside ideas. The code modelled is `applyReply`, the visitor's actions and `briefOutline` in `src/lib/brief-board.ts`.
+File: `verification/brief-board.qnt` (module `board`), written from the design in `docs/plans/2026-11-living-brief.md` before the code. The living brief's outline shows the interpreting model's cards on four lane screens after the written questions, while the visitor keeps, edits, answers, sets aside, brings back and undoes cards, and may go back to change an answer. The model's `paused` flag stands for the outline being skipped ("Skip these, no AI outline") or its AI turned off: nothing a reply says changes the board while it is set. Requests are numbered; replies arrive late, out of order and overlapping (the page sends one at a time, but the model does not rely on it); and the model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or set-aside ideas. The code modelled is `applyReply`, the visitor's actions and `briefOutline` in `src/lib/brief-board.ts`.
 
-**State.** Two lanes holding three ideas (two can be read from a passage of the answers, one only inferred), each a card with a status, a basis and `since` (how many requests had been sent when it last became unowned); the passages in the answers; the requests (what they showed); the number of the newest reply applied; Pause; the Undo history; and ghosts for what the visitor set aside and when Undo last made each card unowned.
+**State.** Two lanes holding three ideas (two can be read from a passage of the answers, one only inferred), each a card with a status, a basis and `since` (how many requests had been sent when it last became unowned); the passages in the answers; the requests (what they showed); the number of the newest reply applied; `paused` (the outline skipped or its AI off); the Undo history; and ghosts for what the visitor set aside and when Undo last made each card unowned.
 
 **Properties** (`allProperties`):
 1. `ownedUntouched`: a reply never changes a card the visitor owns (kept, edited, set aside, or their own note).
@@ -612,7 +612,7 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 4. `groundedOnApply`: a reply never makes a card "from your answers" from a passage that is not in the answers now.
 5. `outlineGrounded`: everything the outline sends as read from the answers is in the answers being sent.
 6. `newestWins`: an older reply never changes the board after a newer one has applied.
-7. `pausedHolds`: nothing a reply says changes the board while it is paused.
+7. `pausedHolds`: nothing a reply says changes the board while it is skipped or its AI is off (`paused`).
 8. `onScreenStable`: no card listed on the lane on screen is changed or withdrawn by a delivery (sections 1 and 2 rule 6 of the living brief: a reply only adds there; its changes and withdrawals are held and applied when the visitor leaves the lane).
 9. `leaveKeepsReply`: leaving a lane gives it every idea the held reply names that the answers support, as an off-screen delivery of the same reply would have (a lane that was full on screen is not left empty).
 
@@ -625,7 +625,7 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 | `SnapshotQuote` | A passage is checked against the answers as they were sent, so a stale reply brings back words the visitor deleted | `groundedOnApply` |
 | `OutlineQuote` | The outline marks a card as read from the answers without checking its passage again | `outlineGrounded` |
 | `NoNumberGuard` | A reply older than the last applied is applied | `newestWins` |
-| `ApplyPaused` | A reply applies while the board is paused | `pausedHolds` |
+| `ApplyPaused` | A reply applies while the outline is skipped or its AI is off (`paused`) | `pausedHolds` |
 | `ApplyOnScreen` | A reply is applied in full to the lane on screen too | `onScreenStable` |
 | `LeaveNoAdd` | Leaving a lane applies only the held changes and withdrawals, not the additions the delivery could not make | `leaveKeepsReply` |
 

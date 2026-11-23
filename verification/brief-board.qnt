@@ -1,6 +1,6 @@
 // Quint model of the living brief's board (docs/plans/2026-11-living-brief.md). Replies from the interpreting model arrive
 // late, out of order and overlapping, while the visitor keeps writing and keeps, edits, sets aside, brings back and undoes
-// cards, and pauses the board. Written before the code, from the design.
+// cards, and may skip the outline or turn its AI off (the model's `paused`). Written before the code, from the design.
 // Code modelled:
 //   reconcile:   src/lib/brief-board.ts `applyReply` (the request number guard, pause, the passage checked against the
 //                current answers, owned cards left alone, set-aside ideas not added again, and a card changed only by a
@@ -188,11 +188,13 @@ module briefBoard {
 
   action undo = all { history.length() > 0, undoLast }
 
+  // The outline is skipped ("Skip these, no AI outline") or its AI is turned off.
   action pause = all {
     not(paused), paused' = true,
     text' = text, cards' = cards, history' = history, rejected' = rejected, restoredAt' = restoredAt, keepRequestsAndGhosts,
   }
 
+  // The outline is added back, or its AI turned back on.
   action resume = all {
     paused, paused' = false,
     text' = text, cards' = cards, history' = history, rejected' = rejected, restoredAt' = restoredAt, keepRequestsAndGhosts,
