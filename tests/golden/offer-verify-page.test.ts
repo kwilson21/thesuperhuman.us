@@ -40,24 +40,28 @@ import {
 // link, makes a two-hour signing session and redirects to /offer/<token>/sign with the agreement_session cookie. The
 // page is rendered by Astro's container (tests/golden/harness/page.ts), streamed and compact as production renders it,
 // so each step records the page's own status, headers, cookies and HTML. A case issues the link through POST
-// /api/offer/[token]/link first, as a client does, then follows it through the page. Recorded on today's code, before
-// the behaviour fixes and the conversion that docs/plans/2026-11-signing-conversion.md plans (B1, B2 and B5 change some
-// of these cases; that PR lists them). The container runs no middleware, as no corpus does (tests/golden/README.md);
-// the cases it would answer first are marked where they are listed.
+// /api/offer/[token]/link first, as a client does, then follows it through the page. Recorded on the code before the
+// conversion that docs/plans/2026-11-signing-conversion.md plans, and re-recorded for its behaviour fixes B1, B2 and B5
+// (section 5): a failure on the site's side answers 500 with Q2's failure page, logged once ("Agreement verify"), and a
+// POST whose body is not a form answers 401 with the expired page. The eight cases that changed keep their names (which
+// say what they answered before) so they compare as the same cases. The container runs no middleware, as no corpus does
+// (tests/golden/README.md); the cases it would answer first are marked where they are listed.
 //
 // Every response branch of the page and of what it calls (completeAgreementLink and liveSigningGuard in
 // src/lib/agreement-access.ts, canonicalAgreementRequest in src/lib/agreement-host.ts, getLinkedOffer in
 // src/lib/software-offers.ts), and the cases that reach it:
 //
-//   the key (verify.astro:7-10)
+//   the key (verify.astro)
 //   a GET reads ?key=, a POST reads the form's `key`
 //                                     every case; "a POST with the key only in the query string" and "a GET with no
 //                                     key" send none (""), "a multipart form with a good key" posts multipart, "a PUT
 //                                     ..." and "a HEAD ..." read the query as a GET does
-//   the page throws: rejected         formData() fails on a body that is not a form: "a POST whose body is JSON, not a
-//                                     form: the page throws", "a POST of plain text: the page throws"
+//   no key ("")                       formData() refuses a body that is not a form (a TypeError), and the POST reads as
+//                                     one with no key, so it gets the 401 below (B5; the page threw before): "a POST
+//                                     whose body is JSON, not a form: the page throws", "a POST of plain text: the page
+//                                     throws"
 //
-//   completeAgreementLink, then the page (verify.astro:12-27)
+//   completeAgreementLink, then the page
 //   404, the expired page             the request's origin or Host is not SITE_ORIGIN, or SITE_ORIGIN is not a URL: "a
 //                                     GET from another host", "a POST from another host", "a Host header that differs
 //                                     from the site", "a SITE_ORIGIN that is not a URL"
@@ -65,7 +69,8 @@ import {
 //                                     characters: "a GET with a key that is too short", "a POST with a key that is too
 //                                     short", "a key of 44 characters", "a key with characters outside the alphabet",
 //                                     "a GET with no key", "a POST with no key in the form", "a POST with an empty
-//                                     key", "a POST with the key only in the query string"
+//                                     key", "a POST with the key only in the query string", the two POSTs whose body is
+//                                     not a form
 //   401, the expired page             no unused, unexpired signing link for the key's hash: "a GET with an unknown
 //                                     key", "a POST with an unknown key", "an archive key on the signing page", "a GET
 //                                     after an hour: the key has expired", "a POST after an hour ...", "a GET at
@@ -76,13 +81,14 @@ import {
 //                                     the offer"
 //   401, the expired page             the link's offer token differs from the URL's: "another offer's token with the
 //                                     key", "a token of the wrong shape with a good key"
-//   the page throws: rejected         the link read fails: "outage: the link read on a GET: the page throws", "outage:
-//                                     the link read on a POST: the page throws"
-//   401, the expired page             GET: liveSigningGuard refuses (A1) or fails: the GET of each "... the emailed
-//                                     link left unused" case (the offer superseded or withdrawn, its link revoked, the
-//                                     request withdrawn or resolved, the recipient changed), "signing switched off: a
-//                                     GET and a POST", "a project started: a GET and a POST", "outage: the GET's live
-//                                     check: the expired page"
+//   500, the failure page             the link read fails (B2; the page threw before): "outage: the link read on a
+//                                     GET: the page throws", "outage: the link read on a POST: the page throws"
+//   401, the expired page             GET: liveSigningGuard refuses (A1, its guard raised): the GET of each "... the
+//                                     emailed link left unused" case (the offer superseded or withdrawn, its link
+//                                     revoked, the request withdrawn or resolved, the recipient changed), "signing
+//                                     switched off: a GET and a POST", "a project started: a GET and a POST"
+//   500, the failure page             GET: liveSigningGuard fails for no guard (B1; the expired page before): "outage:
+//                                     the GET's live check: the expired page"
 //   200, "Your agreement is ready."   "a GET with a good key shows the agreement is ready, with the offer's outcome",
 //                                     "a GET, then the page's Continue form posts the key", "a GET leaves the link
 //                                     unused, so a second GET still shows it ready", "the outcome's markup is escaped",
@@ -91,8 +97,8 @@ import {
 //     the offer read (getLinkedOffer) finds nothing: an empty kicker
 //                                     "the request's email is emptied after the link is sent: the page shows no
 //                                     outcome"
-//     the page throws: rejected       the offer read fails (in the frontmatter, before the answer exists): "outage: the
-//                                     offer read on a GET: the page throws"
+//     500, the failure page           the offer read fails (in the frontmatter; B2, the page threw before): "outage:
+//                                     the offer read on a GET: the page throws"
 //     the body fails at once          the terms are not JSON: the layout's slot reads the outcome after the status and
 //                                     headers are set, and throws while the renderer still holds the page's bytes, so
 //                                     the body fails before its first byte. The recording keeps the ready page's status
@@ -105,13 +111,14 @@ import {
 //                                     Origin and no content type 403 before the page runs, src/middleware.ts:124-144),
 //                                     "a HEAD with a good key" (its recorded body is one production never sends: an
 //                                     answer to a HEAD carries no body)
-//   401, the expired page             POST: the batch refuses (A1, A5) or fails: the POST of each "... the emailed link
-//                                     left unused" case, "signing switched off ...", "a project started ...", "another
-//                                     tab consumes the link between the POST's read and its batch", "the offer is
-//                                     superseded between the POST's read and its batch", "signing is switched off
-//                                     between ...", "a project starts between ...", "outage: the POST's batch (the
-//                                     session insert): the expired page, the link left unused", "outage: the POST's
-//                                     batch (the event insert) ..."
+//   401, the expired page             POST: a guard of the batch raised (A1, A5): the POST of each "... the emailed
+//                                     link left unused" case, "signing switched off ...", "a project started ...",
+//                                     "another tab consumes the link between the POST's read and its batch", "the offer
+//                                     is superseded between the POST's read and its batch", "signing is switched off
+//                                     between ...", "a project starts between ..."
+//   500, the failure page             POST: the batch fails for no guard, the link left unused (B1; the expired page
+//                                     before): "outage: the POST's batch (the session insert): the expired page, the
+//                                     link left unused", "outage: the POST's batch (the event insert) ..."
 //   303 to /offer/<token>/sign        POST: the link used, the `verified` event, the session, the agreement_session
 //                                     cookie (Secure over https): "a POST with a good key consumes the link and
 //                                     redirects to the signing page with the session cookie", the POST of "a GET, then
@@ -123,10 +130,12 @@ import {
 //                                     src/middleware.ts:139-144, and no corpus runs middleware), the second POST of "a
 //                                     newer link makes the older one useless"
 //
-// The ready and expired pages keep completeAgreementLink's status and add `Referrer-Policy: no-referrer` and
-// `Cache-Control: no-store` (streamed, they carry no Content-Length); the expired page's "Send a new link" goes to
-// /offer/<token>/sign with the URL's token, as written ("a token of the wrong shape with a good key"). The 303 is
-// completeAgreementLink's own Response, answered as it is.
+// The ready, expired and failure pages keep the status and add `Referrer-Policy: no-referrer` and `Cache-Control:
+// no-store` (streamed, they carry no Content-Length); the expired page's "Send a new link" goes to /offer/<token>/sign
+// with the URL's token, as written ("a token of the wrong shape with a good key"). The failure page (Q2: "This link could
+// not be opened." and "Something went wrong on my side. Try the link again in a few minutes.") has no such link: the
+// emailed link still works. Each failure is logged once ("Agreement verify failed unexpectedly: Error <the injected
+// message>"), never shown. The 303 is completeAgreementLink's own Response, answered as it is.
 
 const pages = await astroPages({
 	verify: "src/pages/offer/[token]/verify.astro",
@@ -477,6 +486,9 @@ const cases: Case[] = [
 	]),
 	// The recorded body is one production never sends: an answer to a HEAD carries no body.
 	scene("a HEAD with a good key", [issue(), openPage({}, { method: "HEAD" })]),
+	// The two names below record the answer before B5 (docs/plans/2026-11-signing-conversion.md, section 5): the page
+	// threw. Each answers 401 with the expired page now, as a POST with no key; the names stay so the fixture compares
+	// them as the same cases.
 	scene("a POST whose body is JSON, not a form: the page throws", [
 		issue(),
 		postPage(
@@ -573,7 +585,9 @@ const cases: Case[] = [
 		"the project starts",
 		"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r1','o-r1','{}','standard','t','t','t','o','t','t')",
 	),
-	// outages
+	// outages: a failure on the site's side answers 500 with the failure page, logged once (B1 and B2,
+	// docs/plans/2026-11-signing-conversion.md, section 5). The names record the answers before those fixes (the page
+	// threw, or showed the expired page) and stay so the fixture compares them as the same cases.
 	scene(
 		"outage: the link read on a GET: the page throws",
 		[issue(), openPage()],

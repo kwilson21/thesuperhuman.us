@@ -74,7 +74,11 @@ import { allowanceRow } from "./areas/studio-access";
 //   email content                       greeting from the request name (first word, "there" when empty), outcome from the offer terms,
 //                                       markup and unicode escaped in the html part and raw in the text part
 //   the emailed link followed           GET preview, POST consume (303 and the agreement_session cookie), used once, an hour, another
-//                                       offer's token, a newer link, liveSigningGuard failing at consume time
+//                                       offer's token, a newer link, liveSigningGuard failing at consume time (its guard raised: 401);
+//                                       a consume batch that fails for no guard answers 500 {ok:false, error:"This link could not be
+//                                       opened."}, logged once ("Agreement verify"), the link left unused (B1; 401 before). The
+//                                       `follow` steps record completeAgreementLink's own Response, as the signing verify page
+//                                       calls it (tests/golden/areas/agreement-access.ts)
 
 const PATH = `/api/offer/${TOKEN}/link`;
 
