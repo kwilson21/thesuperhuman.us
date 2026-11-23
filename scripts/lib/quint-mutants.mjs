@@ -203,7 +203,7 @@ export const publicationMutants = {
 };
 
 // verification/agreement-link.qnt: the archive link's issue (cooldown, executed lookup, the guarded batch) and its single
-// redeem before expiry (src/server/flows/agreement-link.ts, src/lib/agreement-access.ts completeAgreementLink). Module name
+// redeem before expiry (src/server/flows/agreement-link.ts, src/server/flows/signing-redeem.ts). Module name
 // -> the property its change must break.
 export const agreementLinkMutants = {
 	agreementLinkNoGuard: { property: "oneIssuePerWindow" },

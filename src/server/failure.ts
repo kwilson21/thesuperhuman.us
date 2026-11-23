@@ -30,8 +30,8 @@
 //     a signature of the same document and party, a notice of the same agreement ......... UNIQUE, 409
 //     a document or its client deleted since the read (another tab's review replaces them) .. FOREIGN KEY, 409 through
 //       `LostRace`: every row the batch refers to was read just before it, so the failure is itself the evidence
-//   Agreement verify, Archive verify (the verify pages: `completeAgreementLink`'s consume batch, and the signing page's
-//   live check on a GET)
+//   Agreement verify, Archive verify (the verify pages: the redeem's consume batch, src/server/flows/signing-redeem.ts;
+//   the signing page's GET reads the offer's signing state and decides)
 //     guards (the link still unused, A5; for a signing link the offer still open for signing, A1) ... JSON guard, 401 (the
 //       expired page); the ids and the session token are new, so nothing else in the batch can lose a race
 //   Owner request agreement (`POST /api/owner/requests/[id]/agreement`: its reads and batches, countersign's included,

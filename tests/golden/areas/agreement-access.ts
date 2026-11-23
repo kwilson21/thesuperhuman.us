@@ -3,12 +3,10 @@
 // reviewing the generated agreement (GET and POST /api/offer/[token]/review). Nothing here changes the harness. It only
 // builds the rows a case starts from (an offer with a live link, a verified session, agreements in each state) and the
 // two wire formats a client sends (JSON, and a native urlencoded form post).
-import { completeAgreementLink } from "~/lib/agreement-access";
 import { templateFields } from "~/lib/agreement-templates";
 import { hashOfferToken } from "~/lib/software-offers";
 import { isObject, isText } from "~/lib/type-guards";
-import { logUnexpected } from "~/server/failure";
-import { raisedByJsonGuard } from "~/server/guarded-save";
+import { redeemLinkPage } from "~/server/redeem-page";
 import type { JsonValue } from "../../helpers/json";
 import { mergeSeeds } from "./studio-access";
 import {
@@ -351,22 +349,15 @@ export function issuedKey(prior: Prior, n = 0): string {
 
 /**
  * What the verify pages do (src/pages/offer/[token]/verify.astro, and src/pages/agreements/verify.astro with no token):
- * complete the emailed link, with the pages' recogniser and log label, and answer its Response as it is.
+ * redeem the emailed link (`redeemLinkPage`, src/server/redeem-page.ts, which runs the flow
+ * src/server/flows/signing-redeem.ts and logs under the page's label), and answer its Response as it is.
  */
 export const verify: Handler = (context) =>
-	completeAgreementLink(
+	redeemLinkPage(
 		context.locals.runtime.env,
 		context.request,
 		new URL(context.request.url).searchParams.get("key") ?? "",
 		context.params.token,
-		{
-			isGuard: raisedByJsonGuard,
-			unexpected: (error) =>
-				logUnexpected(
-					context.params.token ? "Agreement verify" : "Archive verify",
-					error,
-				),
-		},
 	);
 
 /** A step that follows the emailed link of the n-th email, as GET (preview) or POST (consume). */
@@ -393,7 +384,7 @@ export const follow = (
 // The verify pages themselves (src/pages/offer/[token]/verify.astro and src/pages/agreements/verify.astro), as a
 // browser reaches them: the emailed link opened (a GET with the key in the query) and the page's Continue form posted
 // (a urlencoded body with the key, from the site). Their corpora render the page (tests/golden/harness/page.ts), so
-// these steps carry no handler of their own; `follow` above calls completeAgreementLink instead.
+// these steps carry no handler of their own; `follow` above calls the redeem the pages call instead.
 
 /** What a verify page step dumps: the links, the sessions a POST makes and the `verified` event it writes. */
 export const PAGE_TABLES = [
