@@ -6,7 +6,7 @@ import PersonalName from "~/components/PersonalName.astro";
 
 interface Props {
 	title: string;
-	current: "today" | "requests" | "campaigns" | "agreements";
+	current: "today" | "requests" | "campaigns" | "agreements" | "pricing";
 	newRequestCount: number;
 	ownerEmail: string;
 }
@@ -18,6 +18,7 @@ const links = [
 	{ id: "requests", href: "/owner/requests", label: "Requests" },
 	{ id: "campaigns", href: "/owner/campaigns", label: "Campaigns" },
 	{ id: "agreements", href: "/owner/agreements", label: "Agreements" },
+	{ id: "pricing", href: "/owner/pricing", label: "Pricing" },
 ] as const;
 ---
 <!doctype html>

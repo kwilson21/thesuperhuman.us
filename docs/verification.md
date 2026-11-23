@@ -352,16 +352,17 @@ found within about 2,100 runs, 20 states, shortened to the steps that matter):
 4. Time 5: the entry's write runs. Its guards compare with 3, the time it read (`expires_at>?`, `access.ts:366-383`),
    so the attempt is counted and the code accepted and a session made, though the code expired at 4.
 
-In the code the gap is one round trip: the decision and the token's hash run between the entry's read batch and its
-write batch, so an entry that read just before its code expired can be accepted just after. The issue has the same
-shape (a code is stamped, and the cap guard counts, at the time the request read), which no property depends on. The
-model now states property 6 as what the code guarantees: a code never signs in if it was used when the write ran (the
-write re-checks `used_at IS NULL`, which needs no time) or had expired at the time the entry read. The alternative is
-a write that re-checks expiry against a later time (a clock read just before the write batch, bound in its guards),
-at the cost of a second clock reading after the first gated batch, which the non-interference test's clock guard
-(`watchClock`) fails on today. Nothing under `src/` changed with this model. The owner decides. Both pass runs also
-passed 100,000 runs each (2026-11-22, again once properties 17 and 18 and the page step were added), past the 20,000
-CI makes, with no other property failing.
+In the code the gap runs from the entry's clock reading, which comes before its two hashes and its read batch, to its
+write batch: a few milliseconds of work and two round trips, so an entry that read the clock just before its code
+expired can be accepted just after. The issue has the same shape (a code is stamped, and the cap guard counts, at the
+time the request read), which no property depends on. The model now states property 6 as what the code guarantees: a
+code never signs in if it was used when the write ran (the write re-checks `used_at IS NULL`, which needs no time) or
+had expired at the time the entry read. The alternative is a write that re-checks expiry against a later time (a clock
+read just before the write batch, bound in its guards), at the cost of a second clock reading after the first gated
+batch, which the non-interference test's clock guard (`watchClock`) fails on today. Nothing under `src/` changed with
+this model. Decided on 2026-11-22: the owner answered "You decide" (in conversation), and Claude Code decided as
+recommended, to keep the code as it is. Both pass runs also passed 100,000 runs each (2026-11-22, again once properties
+17 and 18 and the page step were added), past the 20,000 CI makes, with no other property failing.
 
 **How the code is arranged.** Converted to the back-end form of `CLAUDE.md` (design: `docs/plans/2026-11-studio-signin-conversion.md`). Nothing decides in SQL: the facts are read, and the code machine and the rules decide. The machine (`src/server/machines/signin-code.ts`, asked through `next()`) says from a code row's state (none, used, expired, locked, live) whether ENTER or DISCARD is allowed; the rules in `src/server/rules/` decide the rest from the rows read (`sweepCodes` in `signin-sweep.ts`, `issueCode` in `signin-issue.ts`, `enterCode` in `signin-complete.ts`, `discardCode` in `signin-discard.ts`, `takeAllowance` in `studio-allowance.ts`, each unit-tested over its whole table in `tests/rules/`, and the machine over a fixed table of row states in `tests/server/machines-signin-code.test.ts`). Which codes are live (unused, expiring after the time read), whether a project is open and whether there is room are all decided there from rows that were read. The flows (`src/server/flows/signin-code.ts`, `signin-session.ts`, `signin-sign-out.ts`) sequence the reads, the decisions and the writes by hand, so every request makes the round trips below whatever the answer, and take the time and each random value as inputs. The store (`src/server/studio-signin-store.ts`) keeps one function per statement or batch, with SQL that only re-checks, at write time, a fact the decision relied on, or writes values the decision computed: a statement that repeats a predicate such as "unused and unexpired" is a guard, which exists to notice that a fact changed since it was read. The hashes and the code's email are services (`src/server/signin-services.ts`), and the answers are fixed in `src/lib/studio-signin.ts`.
 
@@ -632,6 +633,95 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 
 **What it does not cover.** Lanes and lane limits (each lane is reconciled on its own, and cards never move between lanes; a reply card naming a card in another lane only keeps it, which the model's replies cover by naming any idea; see above), a reply naming a card whose new version is dropped (the card stays while its passage is in the answers; unit tested), the similarity of two wordings (`sameIdea`), and a reply rewording one card into another card's idea (an idea is one key here, so the model cannot express it; review found it, and `tests/lib/brief-board.test.ts` holds the fix), holding a reply while the visitor is in the board (the same as a later delivery), and the scheduler's timing.
 
+## The offer-board model
+
+File: `verification/offer-board.qnt` (module `offerBoard`), written after the first review of the offer board (PR #308) found five bugs by reading where Use couples the board to the offer editor: one press changes the board and the offer's own fields, and Undo must put back both. The owner asked (2026-11-15) for these risky areas to be checked by search. The code modelled is `use`, `setField`, `milestoneFor`, `setFee`, `undoLast`, `apply`, `ask` and `failed` in `src/scripts/offer-board.ts`, over `useCard`, `undoIn` and `applyReplyIn` in `src/lib/brief-board.ts`.
+
+**State.** Four ideas: two fill the same field (the outcome), two are milestones that each fill a row. The offer: the field, one or two milestone rows (name, deliverables, fee, and the parts Use never fills: the checkpoint and the agreement details) and a count of the owner's own edits. A value is empty, a card's number (what Use put there), or the owner's own words. The board: each card's status, `since` and milestone detail; which cards Use put in the offer and in which row; the Undo history, capped at two steps (the page keeps 40); requests, the newest reply applied, and whether the board asks on its own. Ghosts record what the code must never do.
+
+**Properties** (`allProperties`):
+1. `ownerWordsKept`: nothing the board does writes over words the owner typed. Use into the one field the owner chose to replace is the exception; Undo, a milestone's Use and Set its fee (beyond the fee) are not.
+2. `undoMatchesStep`: Undo puts back what the step it undoes changed, never another step's.
+3. `everyUseUndoable`: every Use that changes the offer is a step Undo can reach.
+4. `useNeverOverwritesOther`: a milestone's Use never writes into a row that holds another milestone.
+5. `ownedUntouched`: a reply never changes a card the owner used, kept, edited or set aside, nor its milestone detail.
+6. `undoRespected`: a reply never changes a card (or its detail) that Undo reopened after that reply's request was sent.
+7. `noAutoAfterFailure`: after a failed request the board asks again only when the owner presses Suggest.
+8. `undoComplete`: when the owner has not touched the offer since a step, its Undo gives back the offer exactly as it was before it.
+9. `feeOnItsOwnRow`: Set its fee writes only into the row that holds its milestone.
+10. `rowsBounded`: the offer keeps one to two rows.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `KeyByLength` | What Use changed is remembered under the history's length, not the step (first review) | `undoMatchesStep` |
+| `RestoreAlways` | Undo puts a field back even when the owner typed in it since (first review) | `ownerWordsKept` |
+| `KeepOnlyProposed` | Use on an edited or brought-back card changes the offer but records no step (first review) | `everyUseUndoable` |
+| `FeeIsUse` | The fee button uses the milestone again, over the owner's deliverables (first review) | `ownerWordsKept` |
+| `StaleUsedIn` | Undo leaves where a milestone went, and Use trusts it without checking the row (first review) | `useNeverOverwritesOther` |
+| `DetailIgnoresSince` | A reply's milestone detail lands on any open card it mentions, even one Undo reopened (first review) | `undoRespected` |
+| `DetailOnOwned` | A reply's milestone detail is matched by idea alone and lands on a used card | `ownedUntouched` |
+| `RetryOnFail` | A failed request leaves the board asking on its own (first review) | `noAutoAfterFailure` |
+| `NameOnlyEmpty` | A row counts as empty when its name is empty: the code before this model | `ownerWordsKept` |
+| `NoRowRemoval` | Undo empties a row Use added but leaves it | `undoComplete` |
+| `RemoveLastRow` | Undo removes a row Use added even when it is the only row left | `rowsBounded` |
+| `FourFieldsOnly` | Undo removes a row Use added once the fields Use fills are empty, though the owner filled in its checkpoint or agreement details (second review) | `ownerWordsKept` |
+| `FeeAnyRow` | Set its fee writes into the row the milestone last filled, even when another milestone now holds it (second review) | `feeOnItsOwnRow` |
+| `FeeNoStep` | Set its fee is no step on the history, so Undo leaves the fee behind (second review) | `undoComplete` |
+
+**Found by writing it.** `NameOnlyEmpty` was the code: a milestone's Use filled the first row whose name was empty, so deliverables or a fee the owner had typed in a row without a name were written over. The code now treats a row as empty only when every field Use fills is empty, and `RemoveLastRow` was the first counterexample the design run found (an Undo emptying the only row left), which the editor already prevents by refusing to remove its last row; the model now says so.
+
+**Found by the second review, and what the model lacked.** Three bugs got past the first version of the model because it could not express them: its row had no part that Use leaves alone (so Undo removing a row with the owner's checkpoint in it looked harmless), its Set its fee had no check of which row it wrote into, and it counted Set its fee as the owner typing, so `undoComplete` never asked whether Undo puts the fee back. The row now has that part, Set its fee is offered only while its row holds its milestone and is its own step on the history (`markStep` in `src/lib/brief-board.ts`), and each bug is a mutant above.
+
+**Tied to the code.** The coupling lives in the page, so it is tied by a browser check against the real page: `tests/browser/offer-board.cjs`, which the Screenshots workflow runs on the local preview, tries `RestoreAlways`, `NameOnlyEmpty`, `NoRowRemoval`, `StaleUsedIn`, `FeeIsUse`, `KeepOnlyProposed`, `DetailIgnoresSince`, `KeyByLength` (42 board steps, past the history's limit), `FourFieldsOnly`, `FeeNoStep`, `FeeAnyRow` and `RetryOnFail` on the owner's request page, and none may happen. Planting `NameOnlyEmpty` in the real code makes its check fail (checked by hand). `tests/lib/offer-board.test.ts` holds `useCard`'s rules.
+
+**Exhaustive.** Run by hand (`quint verify verification/offer-board.qnt --main offerBoard --init init --step stepOrEnd --invariant allProperties --max-steps N`, 2026-11-15, the Apalache that `quint` 0.33.1 downloads, a cloud container): no violation at 3 steps (14 seconds) or 5 steps (50 seconds).
+
+**What it does not cover.** The text of a card, lanes and their limits (the brief-board model's rules), one-per-line fields (Use adds a line and Undo removes that line only: the same rule as a field, browser checked), the questions lane, the estimate range buttons (the owner's own press, no Undo), held replies (a later delivery) and the scheduler's timing.
+
+## The daily-allowance model
+
+File: `verification/daily-allowance.qnt` (module `allowance`). Both boards reserve each AI call against a daily count in `brief_suggestion_budget`: read the counts, decide with a pure rule, and save behind a guard in one batch that re-checks them, reading and deciding again after a lost race, three tries in all; the day's first reservation removes rows older than yesterday. The code modelled is `readBoardBudget`, `reserveBoardBudget` and `forgetOldBudgetDays` in `src/server/brief-board-store.ts`, `reserveInterpretation` in `src/server/rules/brief-board.ts` and `decideAndSave` in `src/server/guarded-save.ts`. The offer board's `reserveOfferBudget` is the same guard with one scope.
+
+**State.** Two visitors (limit 2 each) and the site (limit 3), three days, up to seven concurrent requests each reading, deciding, saving and cleaning in separate steps, and a ghost of the reservations really granted per day and scope.
+
+**Properties** (`allProperties`): `limitsHold` (no visitor and not the site is granted more in a day than its limit, however requests interleave), `countsTrue` (today's and yesterday's stored counts are exactly the reservations granted), `limitAnswersTrue` ("today's limit" is answered only when the limit really was reached) and `retriesBeforeAnswer` ("kept changing" only after three lost races).
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoGuard` | The batch writes without re-checking the counts | `limitsHold` |
+| `SnapshotGuard` | The guard re-checks the counts as read, not as stored | `limitsHold` |
+| `VisitorGuardOnly` | The guard re-checks the visitor's count and not the site's | `limitsHold` |
+| `SplitBatch` | The guard and the two counts are separate statements | `limitsHold` |
+| `CleanToday` | The day's first reservation removes today's rows too | `countsTrue` |
+| `NoRetry` | A lost race is answered at once | `retriesBeforeAnswer` |
+| `OffByOne` | The rule refuses one reservation early | `limitAnswersTrue` |
+
+**Found by writing it.** Without a bound on how long a request lives, a request stalled across two midnights saves after its day's rows were cleaned and is granted past the limit. A Worker request lasts seconds, so the model lets the day turn only while every running request started today; this is why the cleanup keeps yesterday's rows, and it must keep doing so.
+
+**Exhaustive.** Run by hand as above with `--main allowance`: no violation at 3 steps (6 seconds) or 6 steps (49 seconds).
+
+**What it does not cover.** The model call after a reservation (a reservation is spent whether or not the model answers), the Cloudflare rate limits and Turnstile in front of the route, and D1 errors (a failed batch writes nothing). The real-SQL race for the day's last place in `tests/api/brief-board.test.ts` ties the guard's SQL to the model's batch.
+
+## The pricing-save model
+
+File: `verification/pricing-save.qnt` (module `pricing`). The owner's pricing page has two forms (the day value and contingency, and the market research), each saving one part of a single record with the version its page last saw; another tab may be open. The code modelled is `src/pages/api/owner/pricing.ts` with `savePricing` (`src/server/rules/pricing.ts`), `src/server/pricing-store.ts` and `src/scripts/owner-pricing.ts`.
+
+**This model describes the intended code, not today's.** The module that must keep every property checks the version and writes the record in one step against the latest record: a compare-and-set, which D1 gives and KV does not. Today the record is in KV, whose reads may be cached for up to about a minute and whose read and write are separate steps. That is the `TodayKv` mutant, and it breaks all three properties. Its shortest counterexample: two tabs are open; one saves the market research; seconds later the other saves the day value, its read returns the record from before the research was saved, the versions match, and the write puts the old research back. With one tab, a stale read can refuse a second save that should succeed. Cloudflare says a change is usually visible at once in the location where it was made, so the owner should rarely meet either; moving the record to D1 removes both, and is the owner's decision (a new table changes the digest of every golden case).
+
+Each save carries the version its page had when Save was pressed, and a page sends one save at a time (`src/scripts/owner-pricing.ts`: every Save button waits while one is on its way). A save's answer is its own step after the write, and it can be lost (a timeout at the edge, a cut connection): the page cannot tell whether the save was written, so it asks for a reload before another save (`needsReload`). A reload is a new page, which never reads an answer sent to the page it replaced. Left out: a request the page gave up on that the route still runs after the reload (the reloaded page could then be refused once, and reloads again).
+
+**Properties** (`allProperties`): `noBlindOverwrite` (a save never replaces a save its page had not seen), `otherPartKept` (saving one form never puts the other form's part back to an older value) and `noFalseConflict` (a save is refused only when another page's save came in since the version it was sent with; a reload counts as another page, since it did not see the saves of the page it replaced).
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoVersionCheck` | A save is written without comparing versions | `noBlindOverwrite` |
+| `SplitReadWrite` | The record is read, then written in a later step | `otherPartKept` |
+| `StaleRead` | The version is compared against a record that may be a few saves old | `noFalseConflict` |
+| `TodayKv` | Both: the code as it is today, on KV | `otherPartKept` (and the other two) |
+| `ParallelSaves` | A page sends a second save before the first answers, carrying the version the first replaces (second review: the values, then the research, from one tab) | `noFalseConflict` |
+| `RetryAfterLost` | After a lost answer the page lets the owner save again without a reload, with the version from before the save that may have been written (third review: the model had written the store and the page's version in one step, so a lost answer could not happen) | `noFalseConflict` |
+
+**Exhaustive.** Run by hand as above with `--main pricing`: no violation at 3 steps (7 seconds) or 6 steps (9 seconds). Run again after the third review split the answer from the write: no violation at 3 steps (8 seconds) or 6 steps (16 seconds); at 6 steps Apalache finds the `RetryAfterLost` counterexample in 8 seconds.
 ## The software-inquiry model
 
 File: `verification/software-inquiry.qnt`, written for the conversion of the public intake routes (module `inquiry`). The software brief form makes its submission id when it opens, so a retry or a second tab sends the same id again, to a Worker that serves several requests at once. Each delivery is separate steps, as the code makes them: deliver; look up the brief stored under the id (ONE statement, one step); count the address against its request limit (a KV key per address, made once however many passes there are, in two steps as the code makes them: the key is read, and a later step writes it; a delivery that read the key as set is refused with 429, any other sets it); insert, guarded by the unique index on the submission id; and, after a stored brief, send the client's copy. A brief found by the look-up is answered at once with nothing counted. A delivery whose insert meets the index looks up again (`decideAndSave`): it finds the other brief and answers with it, and keeps the allowance it spent (the key is not deleted); when the look-up finds nothing, the try ends on the lost-brief path (no second insert, the key is given back, the visitor is told the brief was not stored).
@@ -835,6 +925,7 @@ Tally's four questions decide whether a function carries a contract: is it pure,
 | `nextStatus`, `statusAfter` | Lemmas by induction over a sequence of events, not restatements of the body: a paid invoice stays paid whatever follows, and a sequence of events that contains a paid event ends paid in whatever order the events arrive (so for any two events where one is paid, both orders end paid). |
 | `invoiceEventDecision` (called by the audio handlers) | A paid invoice is never changed, and a paid event applies to any invoice that is not paid, whatever the times. The time comparison itself is not specified (see below). |
 | `tests/fixtures/discount-installments.ts` (reference, not product code) `discountedInstallment`, `milestoneCharged`, `offerCharged` | For every usual fee up to $1,000,000 and whole-dollar discount (a multiple of 100 cents; decision 6 of the plan) that leaves the client at least $1 per milestone: every installment is whole, non-negative and never more than without the discount (a deposit at least 50 cents), equals today's amount when the discount is 0, and the installments of up to three milestones add up exactly to the usual total less every discount. `allowedMilestone` is exactly the validation rule: a discount that is not whole dollars, or leaves less than $1, is refused. |
+| `src/lib/offer-pricing.ts` `upToRounding`, `exactLow`, `twiceExactHigh`, `estimateLow`, `estimateHigh`, `withinRange` (the offer board, docs/plans/2026-11-offer-board.md) | Each end of an estimate from the owner's day value is a whole $50, never below the exact amount and less than $50 above it (the high end with the contingency, a half cent rounded up), and a market figure always lies in the researched range: unchanged inside it, the nearer end outside it. Each exact amount is its own function, so the prover never multiplies. Planted bugs (rounding the high end down, rounding up one step too far, the wrong end of the range) each fail. |
 | `src/lib/software-deposit-block.ts` `depositBlock` (helpers `countsAsFirstDeposit`, `mayStillBeCharged`, `openDepositIn`, `paidDepositIn`) | For any list of the request's invoices: only a first-milestone deposit that is not refunded counts, on any offer version; a decline is stopped exactly when one may still be charged (creating, open, payment_failed or uncollectible); new terms are stopped exactly when one may still be charged or is paid; and the answer is "open" whenever one may still be charged, otherwise "paidOnSent" when a paid one's offer is the sent one, otherwise "paidEarlier" (decision 9 of the discount plan; section 7 of the offers conversion plan). |
 
 The contract is stated over the time relation, not two time strings. `invoiceEventDecision` computes the relation with `relateTimes` and calls `decideByOrder`. That split is a behaviour-preserving rewrite for the tool, and the status ranks moved from a `Map` to `rankOf` for the same reason. The relation is named `first` (not `none`) because the tool's generated Dafny already has a `None`.
