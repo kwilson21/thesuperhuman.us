@@ -7,8 +7,11 @@
 //      with a session): SessionMissing unless all three hold and the session is the offer's; then the body's nonce:
 //      CsrfMismatch; then the values (`readDraft`): DraftRefused, with the errors by field.
 //   2. `saveSigningDraft`, with the offer's agreements and a project of the offer, read just before the batch because
-//      only its guards checked them before: the same three, then SigningStarted (the project A1 checks) and AlreadySigned
-//      (A3), in the batch's order. It writes the upsert of the draft.
+//      only its guards checked them before. For the draft route the values are first read a second time, where the rule
+//      is asked, as today's `saveAgreementDraft` reads them before its batch: a value that reads once but not twice
+//      throws `FieldsRefused` there, so a flow asks this stage inside `Effect.gen` (or `Effect.suspend`), where the throw
+//      is a defect, the route's logged 500. Then the same three, then SigningStarted (the project A1 checks) and
+//      AlreadySigned (A3), in the batch's order. It writes the upsert of the draft.
 // Re-checked at write time by the batch's A1 (`liveSigningGuard`: the offer still open for signing), A2 (`sessionGuard`:
 // the session unexpired and unrevoked; at read time `openSession` of src/server/rules/agreement-session.ts decides it,
 // through `visitorSession`) and A3 (no agreement of the offer client-signed or executed), in that order. A raised guard is
