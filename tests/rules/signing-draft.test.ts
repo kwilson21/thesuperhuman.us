@@ -5,7 +5,6 @@ import * as Exit from "effect/Exit";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { parseDraft, readDraft } from "../../src/lib/agreement-draft-fields";
 import { FieldsRefused } from "../../src/lib/fields";
-import { sessionGuard } from "../../src/lib/software-agreements";
 import { AGREEMENT_STATUSES } from "../../src/server/machines/agreement-document";
 import {
 	openSession,
@@ -20,12 +19,14 @@ import {
 	saveSigningDraft,
 	type StoredAgreementStatus,
 } from "../../src/server/rules/signing-draft";
+import { SESSION_GUARD, sessionGuard } from "../helpers/signing-guards";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
 // The draft's rules as stories in the route's order (docs/plans/2026-11-signing-conversion.md, section 2): the session,
 // the nonce and the values before anything else is read, then a project and a signed agreement, read just before the
 // batch, and the draft written. Then, on sqlite with the real schema (db/music.sql), the batch's guards held to the
-// decisions: A2 (`sessionGuard`, imported from src/lib/software-agreements.ts) to `openSession`, which decides the
+// decisions: A2 (`sessionGuard`, copied in tests/helpers/signing-guards.ts and held here to the store's text) to
+// `openSession`, which decides the
 // session the draft is given (through `visitorSession`), and A3 (the draft's own guard, copied from
 // `saveAgreementDraft` in src/lib/agreement-draft.ts) to `saveSigningDraft`'s AlreadySigned. A1 is held to
 // `openForSigning` in tests/rules/signing-offer.test.ts.
@@ -446,9 +447,17 @@ describe("A2 and the session the draft is given", () => {
 	});
 });
 
-/** A3 as `saveAgreementDraft` runs it today, copied. */
+/** A3 as `saveAgreementDraft` ran it before the conversion (the store's `saveDraftBatch` builds the same text), copied. */
 const A3 =
 	"SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreements WHERE offer_id=? AND status IN ('client_signed','executed')) THEN 1 ELSE json_extract('Already signed','$') END";
+
+describe("A2 as copied", () => {
+	it("is the store's guard, text for text", () => {
+		expect(readFileSync("src/server/agreement-store.ts", "utf8")).toContain(
+			SESSION_GUARD,
+		);
+	});
+});
 
 describe("A3 and AlreadySigned", () => {
 	let stored = 0;

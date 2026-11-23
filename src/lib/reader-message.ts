@@ -6,14 +6,14 @@
 export class ReaderMessage extends Error {}
 
 /**
- * Another request changed the facts this one was built on, found by a check written for one batch (see
- * `reviewAgreements`): a lost race, which a route answers with 409 and its own sentence. A route never shows its message.
+ * Another request changed the facts this one was built on, found by a check written for one batch: a lost race, which a
+ * route answers with 409 and its own sentence. A route never shows its message.
  */
 export class LostRace extends Error {}
 
 /**
  * A database call that rejected, marked where it was made so a route can tell it from a refusal the code threw (see
- * `signAgreements`), as `PreflightReadFailed` marks the preflight's reads. `failure` is the rejection itself: a route
+ * `countersignAgreements`), as `PreflightReadFailed` marks the preflight's reads. `failure` is the rejection itself: a route
  * sorts it with `classifyFailure` (a guard or a unique index is a lost race; anything else is a fault of the site, which
  * the route logs once and answers with its fixed 500).
  */

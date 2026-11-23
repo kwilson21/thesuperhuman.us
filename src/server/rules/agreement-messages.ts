@@ -285,3 +285,31 @@ export const messagesToReset = alwaysWrites({
 	writesText:
 		"each failed row, and each row sending past the cutoff once the owner confirmed it, back to pending",
 });
+
+/** The two signing notices, in the order today's delivery takes them. */
+export const NOTICE_KINDS = [
+	"signature-receipt",
+	"countersign-notice",
+] as const;
+
+export type NoticeKind = (typeof NOTICE_KINDS)[number];
+
+/**
+ * A signing notice's words, as today's delivery writes them (`deliverAgreementNotifications`): the client's receipt, or
+ * the owner's link to the request to countersign (`origin` is the site's).
+ */
+export function noticeMessage(
+	kind: NoticeKind,
+	agreement: NoticeAgreementRow,
+	origin: string,
+) {
+	return kind === "signature-receipt"
+		? {
+				subject: "Your signature is saved",
+				text: `Your signature is saved. Waiting for Kazon to countersign. The project has not started. Receipt: ${agreement.receipt_id}`,
+			}
+		: {
+				subject: "Agreement ready for countersignature",
+				text: `A client signature is saved. Review the exact agreement before countersigning: ${new URL(`/owner/requests/${agreement.request_id}`, origin).href}`,
+			};
+}

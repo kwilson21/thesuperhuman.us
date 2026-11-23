@@ -1,3 +1,8 @@
+// The sign route's front (`signFront`), before anything else is read: the sent offer the token names, the visitor's
+// signing session for it and the signing setting, as the route has always read them (SessionMissing, 401), then a body the
+// reader refused (ConsentMissing, 400), then a nonce that is not the session's (CsrfMismatch, 403); the first and last are
+// `sessionHeld` and `nonceMatches` of src/server/rules/signing-draft.ts, shared. Then the signature:
+//
 // The client's signature on the documents they reviewed (docs/plans/2026-11-signing-conversion.md, section 2, the
 // `signing-sign.ts` row, and section 3, "signSigningDocuments"): today's `signAgreements`, `signatureInsert` and
 // `reusedMsaGuard` (src/lib/software-agreements.ts), called by POST /api/offer/[token]/sign once the session, the signing
@@ -39,8 +44,13 @@ import {
 	type AgreementStatus,
 	agreementAllows,
 } from "../machines/agreement-document";
-import { alwaysWrites, term, unless } from "../terms";
+import { alwaysWrites, rule, term, unless } from "../terms";
 import { openSession, type StoredAgreementSession } from "./agreement-session";
+import {
+	nonceMatches,
+	type SigningSessionFacts,
+	sessionHeld,
+} from "./signing-draft";
 import { openForSigning, type SigningStateRow } from "./signing-offer";
 import { proved } from "./software-request";
 
@@ -84,6 +94,89 @@ export class EvidenceTooLong extends Data.TaggedError("EvidenceTooLong") {
 export class StoredDataRefused extends Data.TaggedError("StoredDataRefused") {
 	readonly say = SIGNING_CHANGED;
 }
+
+/** The body is not one the sign route reads (a nonce, one or two documents of id and hash, and the consent): 400. */
+export class ConsentMissing extends Data.TaggedError("ConsentMissing") {
+	readonly say = "Agree to sign electronically after reviewing the agreement.";
+}
+
+/** The sign route's body as its reader read it: the nonce and the documents named, or null when the reader refused it. */
+export type SignFrontRequest = {
+	readonly body: {
+		readonly nonce: string;
+		readonly documents: readonly NamedDocument[];
+	} | null;
+};
+
+type SignFrontGiven = {
+	readonly offerId: string | null;
+	readonly session: StoredAgreementSession | null;
+	readonly signingOn: boolean;
+	readonly body: SignFrontRequest["body"];
+	readonly nonce: string | undefined;
+};
+
+/** The session and the documents named, once the front checks passed. */
+export type SignFront = {
+	readonly session: StoredAgreementSession;
+	readonly named: readonly NamedDocument[];
+};
+
+/** The front, in the route's order: the session (and signing on), the body, then the nonce. */
+export const signFront = alwaysWrites({
+	name: "sign: the session, the body and its nonce",
+	given: (
+		request: SignFrontRequest,
+		facts: SigningSessionFacts,
+	): SignFrontGiven => ({
+		offerId: facts.offer?.id ?? null,
+		session: facts.session,
+		signingOn: Boolean(facts.software_signing_enabled),
+		body: request.body,
+		nonce: request.body?.nonce,
+	}),
+	refusals: [
+		sessionHeld,
+		unless(
+			term(
+				"the body names one or two documents and the consent",
+				(given: SignFrontGiven) => given.body !== null,
+			),
+			() => new ConsentMissing(),
+		),
+		nonceMatches,
+	],
+	writes: (given): SignFront => ({
+		session: proved(given.session),
+		named: proved(given.body).documents,
+	}),
+	writesText: "the session and the documents named",
+});
+
+/**
+ * The SOW whose signing notices go out once the signatures are saved: the offer's SOW that is not abandoned, as the route
+ * read it after the batch (`offerAgreements`, then the first of kind "sow"). Nothing to send when there is none.
+ */
+export const signedSow = rule({
+	name: "the SOW whose signing notices go out",
+	given: (
+		_request: null,
+		facts: readonly {
+			readonly id: string;
+			readonly kind: string;
+			readonly status: string;
+		}[],
+	) =>
+		facts.find((row) => row.status !== "abandoned" && row.kind === "sow") ??
+		null,
+	nothingToDoIf: term(
+		"the offer has no SOW that is not abandoned",
+		(sow: { readonly id: string } | null) => sow === null,
+	),
+	refusals: [],
+	writes: (sow) => proved(sow).id,
+	writesText: "nothing: the flow delivers the SOW's notices",
+});
 
 /** An agreement document of the offer, as stored: the columns the signature reads. */
 export type SigningDocumentRow = {

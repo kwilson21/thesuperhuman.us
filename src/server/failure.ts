@@ -7,7 +7,7 @@
 // What counts as a conflict is decided narrowly, per batch. Two things are recognised everywhere because in this schema
 // only a concurrent request can cause them: a guard (`SELECT CASE WHEN ... ELSE json_extract('<sentence>','$') END`, which
 // raises "malformed JSON") and a UNIQUE violation. A foreign key failure is NOT recognised here; a batch that can lose a
-// race to one looks for positive evidence of the race itself and throws `LostRace` only then (see `signAgreements`).
+// race to one looks for positive evidence of the race itself and throws `LostRace` only then.
 //
 // The ways two legitimate requests can make a converted route's batch throw, and what each answers:
 //   Agreement link (`POST /api/offer/[token]/link`: `requestSigningLink`, src/server/flows/signing-link.ts)
@@ -25,11 +25,11 @@
 //       tab's client); a third failure 409 (SaveKeptChanging). Any other foreign key failure, or a failed read of that
 //       evidence, rethrows the ORIGINAL error: 500, logged
 //     the draft's primary key is an upsert; offers, templates and the reused MSA are never deleted: no other way
-//   Agreement signing (`POST /api/offer/[token]/sign`: `signAgreements`, whose reads and batch throw `StoreRejected`)
+//   Agreement signing (`POST /api/offer/[token]/sign`: src/server/flows/signing-sign.ts, the store's named failures)
 //     guards (live signing link, session, the draft as read, the reused MSA, each document in review) .. JSON guard, 409
 //     a signature of the same document and party, a notice of the same agreement ......... UNIQUE, 409
-//     a document or its client deleted since the read (another tab's review replaces them) .. FOREIGN KEY, 409 through
-//       `LostRace`: every row the batch refers to was read just before it, so the failure is itself the evidence
+//     a document or its client deleted since the read (another tab's review replaces them) .. FOREIGN KEY, 409
+//       (GuardRefused): every row the batch refers to was read just before it, so the failure is itself the evidence
 //   Agreement verify, Archive verify (the verify pages: the redeem's consume batch, src/server/flows/signing-redeem.ts;
 //   the signing page's GET reads the offer's signing state and decides)
 //     guards (the link still unused, A5; for a signing link the offer still open for signing, A1) ... JSON guard, 401 (the
