@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { statementOf } from "../../scripts/sql-effects.mjs";
 import { abandonBlocked } from "../../src/lib/software-deposit-block";
 import {
 	type AbandonIds,
@@ -17,7 +18,7 @@ import {
 	readMsaUse,
 	readOfferAgreements,
 	readOfferDeposits,
-	readSentOffer,
+	readRequestOffers,
 	readSigningEnabled,
 	recordCopyBatch,
 } from "../../src/server/agreement-store";
@@ -29,6 +30,7 @@ import {
 import {
 	countersign,
 	type NamedDocument,
+	sentOfferOf,
 } from "../../src/server/rules/agreement-countersign";
 import {
 	type EndRequest,
@@ -299,8 +301,13 @@ async function countersignOf(
 	world: OwnerWorld,
 	documents: readonly NamedDocument[] = BOTH,
 ) {
-	const offer = await world.ok(readSentOffer("r1"));
-	const setting = await world.ok(readSigningEnabled());
+	const offers = await world.ok(readRequestOffers("r1"));
+
+	// The setting is read only for a sent offer, as the route reads it.
+	const setting = sentOfferOf(offers)
+		? await world.ok(readSigningEnabled())
+		: null;
+
 	const signingEnabled = setting?.software_signing_enabled ?? null;
 	const agreements = await world.ok(readOfferAgreements("o1"));
 
@@ -315,7 +322,7 @@ async function countersignOf(
 				at: AT,
 				receiptId: uuidFor(1),
 			},
-			{ offer, signingEnabled, agreements },
+			{ offers, signingEnabled, agreements },
 		),
 	);
 
@@ -336,7 +343,7 @@ async function abandonOf(
 	world: OwnerWorld,
 	documents: readonly NamedDocument[] = BOTH,
 ) {
-	const offer = await world.ok(readSentOffer("r1"));
+	const offers = await world.ok(readRequestOffers("r1"));
 	const agreements = await world.ok(readOfferAgreements("o1"));
 	const invoices = await world.ok(readOfferDeposits("o1"));
 
@@ -349,7 +356,7 @@ async function abandonOf(
 				actor: OWNER,
 				at: AT,
 			},
-			{ offer, agreements, invoices },
+			{ offers, agreements, invoices },
 		),
 	);
 }
@@ -482,8 +489,9 @@ describe("the batches, against the recorded corpora", () => {
 
 		await msa.ok(endBatch(await endOf(msa, MSA_ID)));
 
-		// The MSA's use is read as a batch of two statements, so the end's batch is the second.
-		expect(asRecorded(msa.batches.at(-1))).toEqual(
+		// The MSA's use is one plain read (`.all()`), not a batch, so the end's batch is the only one.
+		expect(msa.batches).toHaveLength(1);
+		expect(asRecorded(msa.batches[0])).toEqual(
 			recordedBatch("end", "end the MSA today"),
 		);
 
@@ -578,32 +586,84 @@ describe("the batches, against the recorded corpora", () => {
 });
 
 describe("the reads", () => {
-	it("reads the request's sent offer, its five columns only", async () => {
+	it("reads every version of the request, newest first, its six columns only, and the rule picks the sent one", async () => {
 		const world = await ownerWorld(clientSigned());
 
-		expect(await world.ok(readSentOffer("r1"))).toEqual({
-			id: "o1",
-			request_id: "r1",
-			contractor_snapshot_json: JSON.stringify({
-				...CONTRACTOR,
-				config_version: 1,
-			}),
-			recipient_email_snapshot: CLIENT_EMAIL,
-			reused_msa_id: null,
-		});
-		expect(await world.ok(readSentOffer("r9"))).toBeNull();
+		expect(await world.ok(readRequestOffers("r1"))).toEqual([
+			{
+				id: "o1",
+				request_id: "r1",
+				status: "sent",
+				contractor_snapshot_json: JSON.stringify({
+					...CONTRACTOR,
+					config_version: 1,
+				}),
+				recipient_email_snapshot: CLIENT_EMAIL,
+				reused_msa_id: null,
+			},
+		]);
+		expect(await world.ok(readRequestOffers("r9"))).toEqual([]);
 
 		const reused = await ownerWorld(reusing);
 
-		expect(await reused.ok(readSentOffer("r1"))).toMatchObject({
-			reused_msa_id: OLD_MSA_ID,
-		});
+		expect(sentOfferOf(await reused.ok(readRequestOffers("r1")))).toMatchObject(
+			{ reused_msa_id: OLD_MSA_ID },
+		);
 
 		const superseded = await ownerWorld(
 			clientSigned({ offer: { status: "superseded" } }),
 		);
 
-		expect(await superseded.ok(readSentOffer("r1"))).toBeNull();
+		expect(await superseded.ok(readRequestOffers("r1"))).toMatchObject([
+			{ id: "o1", status: "superseded" },
+		]);
+		expect(
+			sentOfferOf(await superseded.ok(readRequestOffers("r1"))),
+		).toBeNull();
+	});
+
+	it("reads the sent version among the others, and the rule picks the row today's status='sent' read answered", async () => {
+		const versions = (status: string) =>
+			ownerWorld(
+				clientSigned({
+					offer: { version: 2, status },
+					extra: {
+						software_offers: [
+							rows.softwareOffer("o0", "r1", { status: "superseded" }),
+							...(status === "draft"
+								? []
+								: [
+										rows.softwareOffer("o2", "r1", {
+											version: 3,
+											status: "draft",
+										}),
+									]),
+						],
+					},
+				}),
+			);
+
+		for (const status of ["draft", "sent", "superseded", "withdrawn"]) {
+			const world = await versions(status);
+			const offers = await world.ok(readRequestOffers("r1"));
+
+			expect(
+				offers.map((offer) => [offer.id, offer.status]),
+				status,
+			).toEqual([
+				...(status === "draft" ? [] : [["o2", "draft"]]),
+				["o1", status],
+				["o0", "superseded"],
+			]);
+
+			const [today] = world.all(
+				"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
+				"r1",
+			);
+
+			expect(today?.id, status).toBe(status === "sent" ? "o1" : undefined);
+			expect(sentOfferOf(offers)?.id, status).toBe(today?.id);
+		}
 	});
 
 	it("reads the signing setting as stored, and null without its row", async () => {
@@ -768,7 +828,7 @@ describe("the reads", () => {
 		][] = [
 			[
 				/FROM software_offers WHERE request_id/,
-				(w) => w.failed(readSentOffer("r1")),
+				(w) => w.failed(readRequestOffers("r1")),
 			],
 			[/FROM software_signing_settings/, (w) => w.failed(readSigningEnabled())],
 			[
@@ -812,6 +872,7 @@ describe("the guards the rules decide first, against their rules", () => {
 		"uncollectible",
 	] as const;
 
+	// 72 worlds on the real schema: more than the default five seconds when the whole suite runs in parallel.
 	it("A12 refuses the abandon exactly when abandonBlocked blocks on the invoices readOfferDeposits reads", async () => {
 		let refused = 0;
 
@@ -867,7 +928,7 @@ describe("the guards the rules decide first, against their rules", () => {
 
 		// Milestone 0's deposit: four statuses that may still be charged, refunded or not, and paid without a refund.
 		expect(refused).toBe(9);
-	});
+	}, 60_000);
 
 	it("A13 refuses an MSA's end exactly when the rule finds an open offer in what readMsaUse reads", async () => {
 		let refused = 0;
@@ -1185,11 +1246,30 @@ describe("the records' refusals", () => {
 describe("the SQL, against the golden corpora", () => {
 	/**
 	 * The texts that replace a recorded one: each picked by every hook pattern that picked the old text, less the ones
-	 * PR 4 re-points, and by no other. The deposit and MSA-use reads are plain reads of the rows the rules decide on, so
-	 * their texts no longer start as today's checks did; each re-pointed pattern, left as it is, would pick the guard
-	 * that keeps the check in its batch instead (the unanchored one) or nothing at all (the anchored one).
+	 * PR 4 re-points, and by no other, and each the same operation on the same table as the old text (`statementOf`), so
+	 * a re-pointed hook's `trigger-hit` marker is unchanged. The offer, deposit and MSA-use reads are plain reads of the
+	 * rows the rules decide on, so their texts no longer read as today's did: the sent-offer pattern picks nothing left as
+	 * it is, and of the deposit and MSA-use patterns the unanchored one would pick the guard that keeps the check in its
+	 * batch instead and the anchored one nothing at all. `to`, where given, is the pattern PR 4 re-points them to.
 	 */
-	const CHANGED = [
+	const CHANGED: readonly {
+		readonly text: string;
+		readonly old: string;
+		readonly repoint: readonly string[];
+		readonly to?: RegExp;
+	}[] = [
+		{
+			text: "SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC",
+			old: "SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
+			// owner-request-agreement-{abandon,countersign,end,hold,record-copy,retry-artifact,retry-copy}: "outage: the offer
+			// lookup".
+			repoint: [
+				String(
+					/SELECT \* FROM software_offers WHERE request_id=\? AND status='sent'/,
+				),
+			],
+			to: /SELECT \* FROM software_offers WHERE request_id=\? ORDER BY version DESC/,
+		},
 		{
 			text: "SELECT id,kind,status,client_id,canonical_text,text_sha256,values_json,review_session_hash FROM software_agreements WHERE offer_id=? ORDER BY kind",
 			old: "SELECT * FROM software_agreements WHERE offer_id=? AND status<>'abandoned' ORDER BY kind",
@@ -1203,15 +1283,15 @@ describe("the SQL, against the golden corpora", () => {
 		{
 			text: "SELECT milestone_index,kind,status,refunded_at FROM software_invoices WHERE offer_id=? ORDER BY id",
 			old: "SELECT 1 FROM software_invoices WHERE offer_id=? AND milestone_index=0 AND kind='deposit' AND (status IN ('creating','open','payment_failed','uncollectible') OR (status='paid' AND refunded_at IS NULL))",
-			// owner-request-agreement-abandon: "outage: the first deposit check", "... only", and "... and the recheck after
-			// it" (with its second match and the optional trigger that names it).
+			// owner-request-agreement-abandon: "outage: the first deposit check only", and "outage: the first deposit check
+			// and the recheck after it" (with its second match and the optional trigger that names it).
 			repoint: [
 				String(/SELECT 1 FROM software_invoices WHERE offer_id=\?/),
 				String(/^SELECT 1 FROM software_invoices WHERE offer_id=\?/),
 			],
 		},
 		{
-			text: "SELECT o.status,r.status AS request_status,(SELECT p.offer_id FROM software_projects p WHERE p.offer_id=o.id LIMIT 1) AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? ORDER BY o.id",
+			text: "SELECT o.status,r.status AS request_status,p.offer_id AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id LEFT JOIN (SELECT DISTINCT offer_id FROM software_projects) p ON p.offer_id=o.id WHERE o.reused_msa_id=? ORDER BY o.id",
 			old: "SELECT 1 FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? AND o.status IN ('draft','sent') AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id)",
 			// owner-request-agreement-end: "outage: the open-offer check of an MSA", and "outage: the batch of an MSA, and
 			// the recheck" (its second match and the optional trigger that names it).
@@ -1220,7 +1300,7 @@ describe("the SQL, against the golden corpora", () => {
 				String(/^SELECT 1 FROM software_offers o JOIN owner_requests r/),
 			],
 		},
-	] as const;
+	];
 
 	/** Every text the owner's actions run: each read, and each batch in each of its forms. */
 	async function everyText() {
@@ -1310,6 +1390,29 @@ describe("the SQL, against the golden corpora", () => {
 			expect(recordedTexts.has(text), text).toBe(false);
 			expect(matching(old), old).toEqual(expect.arrayContaining([...repoint]));
 			expect(matching(text), text).toEqual(kept);
+		}
+	});
+
+	it("keeps each changed text's operation and table, which a trigger-hit marker records", () => {
+		for (const { text, old } of CHANGED)
+			expect(statementOf(text), text).toEqual(statementOf(old));
+	});
+
+	it("re-points to patterns that pick the new read and no other text the corpora recorded or the store runs", async () => {
+		const texts = await everyText();
+
+		for (const { text, to } of CHANGED) {
+			if (to === undefined) continue;
+
+			expect(to.test(text), String(to)).toBe(true);
+			expect(
+				[...recordedTexts].filter((recordedText) => to.test(recordedText)),
+				String(to),
+			).toEqual([]);
+			expect(
+				[...texts].filter((run) => to.test(run)),
+				String(to),
+			).toEqual([text]);
 		}
 	});
 });
