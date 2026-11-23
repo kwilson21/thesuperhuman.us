@@ -71,10 +71,12 @@ import type {
 import type { StoredSignature } from "./rules/agreement-link";
 import type {
 	CopyClaimFacts,
+	CopySignatureFacts,
 	MessageAgreement,
 	MessageClaim,
 	MessageReset,
 	MessageSettled,
+	NoticeAgreementRow as NoticeAgreementFacts,
 	NoticeClaimFacts,
 	StoredCopy,
 	StoredNotice,
@@ -2454,7 +2456,9 @@ export const readCopyArtifact = (id: string) =>
 export const readReceiptId = (id: string, role: string) =>
 	readAll(ReceiptIdRow, (db) =>
 		db.prepare(MESSAGE_SQL.receiptId).bind(id, role),
-	).pipe(Effect.map((rows): CopyClaimFacts["signature"] => rows[0] ?? null));
+	).pipe(
+		Effect.map((rows): CopySignatureFacts["signature"] => rows[0] ?? null),
+	);
 
 /** Plain reads (new), in one batch: the party's copy and the agreement, which `copyClaimable` decides on with the signature. */
 export const readCopyClaim = (id: string, role: string) =>
@@ -2551,7 +2555,12 @@ export type NoticeAgreement = typeof NoticeAgreementRow.Type;
 export const readNoticeAgreement = (id: string) =>
 	readAll(NoticeAgreementRow, (db) =>
 		db.prepare(MESSAGE_SQL.noticeAgreement).bind(id),
-	).pipe(Effect.map((rows): NoticeAgreement | null => rows[0] ?? null));
+	).pipe(
+		Effect.map(
+			(rows): NoticeAgreement | null =>
+				(rows[0] ?? null) satisfies NoticeAgreementFacts | null,
+		),
+	);
 
 /** Plain reads (new), in one batch: the notice and its agreement, which `noticeClaimable` decides on. */
 export const readNoticeClaim = (id: string, kind: string) =>
