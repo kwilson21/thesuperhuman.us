@@ -1862,7 +1862,7 @@ describe("the living brief's outline", () => {
 				ok: false,
 				errors: {
 					outline:
-						"Your brief outline no longer matches your answers. Go back to your first answer, check the outline and send again.",
+						"Your brief outline no longer matches your answers. Go back to the outline screens, check them and send again.",
 				},
 			});
 			expect(

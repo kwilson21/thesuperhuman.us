@@ -649,6 +649,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			reply.n,
 			currentAnswers(),
 			paused || !options.aiEnabled() || plain,
+			null,
 			reply.refs,
 		);
 
@@ -709,6 +710,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			n,
 			currentAnswers(),
 			false,
+			null,
 			refs,
 		);
 

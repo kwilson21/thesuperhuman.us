@@ -1,13 +1,15 @@
 // The Quint model's properties (verification/brief-board.qnt), checked on the real code. A seeded random walk mixes the
 // visitor's writing and actions (Keep, Edit, Answer, Not this, Bring back, notes, Undo, Pause) with requests that are
 // answered late, out of order and overlapping, by an adversarial model: any idea, any claim that it was read from the
-// answers, passages that are not there, refs to owned or set-aside cards. After every step the seven properties must hold.
+// answers, passages that are not there, refs to owned or set-aside cards. The visitor also moves between the lane screens
+// and the written questions, so replies arrive while a lane is on screen. After every step the eight properties must hold.
 import { describe, expect, it } from "vitest";
 import {
 	type Board,
 	type BoardCard,
 	type ReplyCard,
 	LANES,
+	type Lane,
 	addNote,
 	answerCard,
 	applyReply,
@@ -18,6 +20,7 @@ import {
 	isOwned,
 	keepCard,
 	laneLimits,
+	leaveLane,
 	quotedFrom,
 	sameIdea,
 	sendRequest,
@@ -64,6 +67,8 @@ function walk(seed: number, steps: number) {
 	let board: Board = emptyBoard();
 	let present = new Set<string>();
 	let paused = false;
+	// The lane on screen: none (a written question) or one of two lanes the walk's replies write to.
+	let screen: Lane | null = null;
 	const requests: Request[] = [];
 	// Ghosts: ids the visitor set aside and has not brought back, and the requests sent when Undo last made a card unowned.
 	const rejected = new Set<string>();
@@ -79,6 +84,9 @@ function walk(seed: number, steps: number) {
 		reofferBlocked: 0,
 		staleQuoteDropped: 0,
 		ownedNamed: 0,
+		heldReplies: 0,
+		heldChangesApplied: 0,
+		heldDropped: 0,
 	};
 
 	const fail = (step: number, what: string) =>
@@ -87,6 +95,86 @@ function walk(seed: number, steps: number) {
 	for (let step = 0; step < steps; step++) {
 		const roll = next();
 		const before = board;
+
+		// The visitor moves to another lane, or to none. Leaving a lane applies the reply held for it.
+		if (next() < 0.1) {
+			const target = pick(
+				([null, "parts", "audience"] as const).filter((l) => l !== screen),
+			);
+
+			if (screen) {
+				const held = board.deferred;
+				const left = leaveLane(board, screen, answers(), paused);
+
+				if (left.deferred) fail(step, "a reply is still held after leaving");
+
+				if (
+					JSON.stringify(left.seen[screen]) !==
+					JSON.stringify(
+						left.cards
+							.filter((c) => c.lane === screen && c.status !== "dismissed")
+							.map((c) => c.id),
+					)
+				)
+					fail(step, `the last-seen list of ${screen} is not what it listed`);
+
+				// Held changes go under the rules of any reply: owned cards, Undo and grounding hold, and nothing else
+				// changes (no card added, no other lane touched, the numbers as they were); paused or older drops them.
+				for (const c of board.cards) {
+					const now = left.cards.find((x) => x.id === c.id);
+					const same = JSON.stringify(c) === JSON.stringify(now);
+
+					if (isOwned(c) && !same)
+						fail(step, `leaving ${screen} changed owned card ${c.id}`);
+
+					if (held && (restoredAt.get(c.id) ?? -1) >= held.n && !same)
+						fail(
+							step,
+							`leaving ${screen} changed ${c.id}, brought back by Undo after the held reply was sent`,
+						);
+
+					if (c.lane !== screen && !same)
+						fail(
+							step,
+							`leaving ${screen} changed card ${c.id} of another lane`,
+						);
+
+					if (
+						now?.status === "proposed" &&
+						now.basis === "said" &&
+						!same &&
+						!quotedFrom(now.quote, answers())
+					)
+						fail(
+							step,
+							`leaving ${screen} made "${now.text}" from a passage not in the answers`,
+						);
+				}
+
+				if (left.cards.some((c) => !board.cards.some((b) => b.id === c.id)))
+					fail(step, `leaving ${screen} added a card`);
+
+				if (left.applied !== board.applied || left.nextId !== board.nextId)
+					fail(step, `leaving ${screen} changed the request numbers`);
+
+				const moved =
+					JSON.stringify(left.cards) !== JSON.stringify(board.cards);
+
+				if (held && (paused || held.n < board.applied)) {
+					seen.heldDropped++;
+
+					if (moved)
+						fail(
+							step,
+							`leaving ${screen} applied a held reply it should have dropped`,
+						);
+				} else if (moved) seen.heldChangesApplied++;
+
+				board = left;
+			}
+
+			screen = target ?? null;
+		}
 
 		if (roll < 0.1) present = new Set([...present, pick(PASSAGES)!]);
 		else if (roll < 0.15)
@@ -165,7 +253,7 @@ function walk(seed: number, steps: number) {
 					? [
 							{
 								ref: next() < 0.4 ? (pick(board.cards)?.id ?? "") : "",
-								lane: "parts",
+								lane: next() < 0.25 ? "audience" : "parts",
 								text: next() < 0.2 ? `${text} page` : text,
 								basis: next() < 0.6 ? "said" : "suggested",
 								quote: next() < 0.8 ? passage : "words nobody wrote",
@@ -181,6 +269,7 @@ function walk(seed: number, steps: number) {
 				request.n,
 				answers(),
 				paused,
+				screen,
 			).board;
 
 			if (request.n <= board.applied) seen.olderDropped++;
@@ -205,6 +294,23 @@ function walk(seed: number, steps: number) {
 
 				return JSON.stringify(a) !== JSON.stringify(b);
 			};
+
+			// 8. onScreenStable: no card listed on the lane on screen changes or leaves by a delivery.
+			if (screen) {
+				if (
+					!paused &&
+					request.n > board.applied &&
+					applied.deferred?.n === request.n
+				)
+					seen.heldReplies++;
+
+				for (const card of board.cards.filter((c) => c.lane === screen))
+					if (changed(card.id))
+						fail(
+							step,
+							`reply ${request.n} changed or withdrew ${card.id}, listed on the lane on screen`,
+						);
+			}
 
 			// 1. ownedUntouched
 			for (const card of board.cards.filter(isOwned))
@@ -301,7 +407,7 @@ describe("the board's properties on the real code", () => {
 		expect(walks.flatMap((w) => w.failures).slice(0, 5)).toEqual([]);
 	});
 
-	it("reach the cases they are for: older and paused replies, Undo in flight, set-aside and owned ideas named, false passages", () => {
+	it("reach the cases they are for: older and paused replies, Undo in flight, set-aside and owned ideas named, false passages, replies held for the lane on screen and applied or dropped when it is left", () => {
 		const total = (key: keyof (typeof walks)[number]["seen"]) =>
 			walks.reduce((sum, w) => sum + w.seen[key], 0);
 
@@ -312,6 +418,9 @@ describe("the board's properties on the real code", () => {
 			"reofferBlocked",
 			"staleQuoteDropped",
 			"ownedNamed",
+			"heldReplies",
+			"heldChangesApplied",
+			"heldDropped",
 		] as const)
 			expect(total(key), key).toBeGreaterThan(20);
 	});

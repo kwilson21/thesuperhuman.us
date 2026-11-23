@@ -62,6 +62,36 @@ export const addLabels: Record<SoftwarePath, Record<Lane, string>> = {
 	},
 };
 
+/**
+ * Each lane's screen heading in the outline steps, by path: the lane's question. The outline does not speak as the owner,
+ * so none says "I".
+ */
+export const laneQuestions: Record<SoftwarePath, Record<Lane, string>> = {
+	website: {
+		purpose: "Is this what it’s for?",
+		audience: "Who is it for?",
+		parts: "Which pages does it need?",
+		questions: "What’s still undecided?",
+	},
+	webapp: {
+		purpose: "Is this what it’s for?",
+		audience: "Who will use it?",
+		parts: "What should people be able to do?",
+		questions: "What’s still undecided?",
+	},
+	workflow: {
+		purpose: "Is this what should change?",
+		audience: "Who does the work?",
+		parts: "What are the steps today?",
+		questions: "What’s still undecided?",
+	},
+};
+
+/** The hint under a lane's heading when it lists cards, and when it lists none. */
+export const LANE_HINT = "From your answers. Keep, change or add your own.";
+
+export const LANE_HINT_EMPTY = "Add your own, or go on.";
+
 /** The most cards a lane holds, set-aside cards not counted. */
 export const laneLimits: Record<Lane, number> = {
 	purpose: 2,
@@ -152,6 +182,18 @@ export type HistoryStep = {
 /** A note the visitor removed: its lane and words, so a reply does not offer the idea back in that lane. */
 export type RemovedNote = { readonly lane: Lane; readonly text: string };
 
+/**
+ * The reply held for the lane on screen (verification/brief-board.qnt `deferred`): the whole reply, of which only its
+ * additions have been applied. Its changes and withdrawals apply, under the rules of any reply, when the lane is left
+ * (`leaveLane`). Only the newest is held. Kept in memory only: a saved board drops it.
+ */
+export type HeldReply = {
+	readonly lane: Lane;
+	readonly n: number;
+	readonly reply: readonly ReplyCard[];
+	readonly refs: readonly string[];
+};
+
 export type Board = {
 	readonly cards: readonly BoardCard[];
 	readonly nextId: number;
@@ -165,6 +207,13 @@ export type Board = {
 	 * the board and never sent to the model, because a removed note is gone as far as the visitor is concerned.
 	 */
 	readonly removed?: readonly RemovedNote[];
+	/** The reply held for the lane on screen, if any. Never saved. */
+	readonly deferred?: HeldReply;
+	/**
+	 * The ids of the cards each lane listed (set-aside ones not counted) when the visitor last left it. A lane not in it
+	 * has not been visited. Saved with the board.
+	 */
+	readonly seen: Partial<Record<Lane, readonly string[]>>;
 };
 
 export const emptyBoard = (): Board => ({
@@ -173,6 +222,7 @@ export const emptyBoard = (): Board => ({
 	sent: 0,
 	applied: 0,
 	history: [],
+	seen: {},
 });
 
 export const isOwned = (card: BoardCard) => card.status !== "proposed";
@@ -730,27 +780,39 @@ export type Applied = {
 	readonly withdrawn: number;
 };
 
+/** What one pass over a reply may do (see applyReply and leaveLane). */
+type Scope = {
+	/** Whether the reply's new cards are added. */
+	readonly add: boolean;
+	/** A lane whose listed cards the pass leaves alone: the lane on screen. */
+	readonly skip: Lane | null;
+	/** The only lane whose cards the pass may change or withdraw (null: any). */
+	readonly only: Lane | null;
+};
+
 /**
- * Applies reply number `n` to the board as it is now. Nothing changes when the reply is older than one already applied
- * or the board is paused. Otherwise each reply card that names an unowned card (by its id, or by saying the same idea)
- * updates it, if the reply's request was sent after the card last became unowned; one that names an owned card, or a
- * set-aside idea, is left out. An unowned card the reply leaves out is withdrawn, again only if the request was sent
- * after it last became unowned; a card the reply names in `refs` (or by a card left out below) is not left out. Then each
- * new idea is added at the end of its lane, within the lane's limit as it is after the withdrawals. A card read from the
- * answers is checked against the answers as they are now (`answers`), not as they were sent.
+ * One pass of reply number `n` over the board as it is now: the shared body of `applyReply` and `leaveLane`. Each reply
+ * card that names an unowned card (by its id, or by saying the same idea) updates it, if the reply's request was sent
+ * after the card last became unowned; one that names an owned card, or a set-aside idea, is left out. An unowned card the
+ * reply leaves out is withdrawn, again only if the request was sent after it last became unowned; a card the reply names
+ * in `refs` (or by a card left out below) is not left out. Then, when the scope adds, each new idea is added at the end
+ * of its lane, within the lane's limit as it is after the withdrawals. A card read from the answers is checked against
+ * the answers as they are now (`answers`), not as they were sent. The scope keeps the pass off the cards of one lane, or
+ * on those of one lane only.
  */
-export function applyReply(
+function reconcile(
 	board: Board,
 	reply: readonly ReplyCard[],
 	n: number,
 	answers: string,
-	paused: boolean,
-	refs: readonly string[] = [],
+	refs: readonly string[],
+	scope: Scope,
 ): Applied {
-	if (paused || n <= board.applied)
-		return { board, added: 0, updated: 0, withdrawn: 0 };
-
 	const cards = [...board.cards];
+
+	// Whether the pass may change or withdraw a card of this lane.
+	const touches = (lane: Lane) =>
+		lane !== scope.skip && (scope.only === null || lane === scope.only);
 
 	// A card named by a reply card that was left out stays, while what it says is still supported: a suggestion, or a
 	// card read from the answers whose passage is still in them. One whose passage the visitor deleted is withdrawn.
@@ -815,7 +877,7 @@ export function applyReply(
 		const card = cards[index];
 		named.add(card.id);
 
-		if (!mayChange(card, n)) continue;
+		if (!mayChange(card, n) || !touches(card.lane)) continue;
 
 		// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, a duplicate, or a
 		// new idea earlier in this reply.
@@ -853,13 +915,13 @@ export function applyReply(
 	}
 
 	const kept = cards.filter(
-		(card) => named.has(card.id) || !mayChange(card, n),
+		(card) => named.has(card.id) || !mayChange(card, n) || !touches(card.lane),
 	);
 
 	let nextId = board.nextId,
 		added = 0;
 
-	for (const item of fresh) {
+	for (const item of scope.add ? fresh : []) {
 		// A card reworded later in this reply may now say the new idea.
 		if (
 			kept.some(
@@ -887,11 +949,134 @@ export function applyReply(
 	}
 
 	return {
-		board: { ...board, cards: kept, nextId, applied: n },
+		board: { ...board, cards: kept, nextId },
 		added,
 		updated,
 		withdrawn: cards.length - (kept.length - added),
 	};
+}
+
+/**
+ * Applies reply number `n` to the board as it is now (see `reconcile`). Nothing changes when the reply is older than one
+ * already applied or the board is paused. The lane on screen (`onScreen`, null when a written question or another step
+ * is showing) only receives the reply's new cards, at the end of its list: nothing listed there changes or leaves while
+ * the visitor looks at it. The whole reply is held for it (`board.deferred`, replacing an older one) and the rest of it is
+ * applied by `leaveLane`. Every other lane takes the reply in full. A card the reply adds to the lane on screen is
+ * stamped like any other (`since`), so the same reply's held changes cannot reach it.
+ */
+export function applyReply(
+	board: Board,
+	reply: readonly ReplyCard[],
+	n: number,
+	answers: string,
+	paused: boolean,
+	onScreen: Lane | null,
+	refs: readonly string[] = [],
+): Applied {
+	if (paused || n <= board.applied)
+		return { board, added: 0, updated: 0, withdrawn: 0 };
+
+	const result = reconcile(board, reply, n, answers, refs, {
+		add: true,
+		skip: onScreen,
+		only: null,
+	});
+
+	return {
+		...result,
+		board: {
+			...result.board,
+			applied: n,
+			deferred: onScreen
+				? { lane: onScreen, n, reply, refs }
+				: result.board.deferred,
+		},
+	};
+}
+
+/**
+ * The visitor leaves `lane`'s screen: the reply held for it is applied now, to that lane's cards only, as any reply is
+ * (owned cards left alone, `since` respected, set-aside ideas not offered again, passages checked against `answers` as
+ * they are now, rewording never into another card's idea). A held reply is dropped, not applied, when the board is
+ * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
+ * lists now.
+ */
+export function leaveLane(
+	board: Board,
+	lane: Lane,
+	answers: string,
+	paused = false,
+): Board {
+	const { deferred, ...rest } = board;
+
+	let next: Board = rest;
+
+	if (
+		deferred &&
+		deferred.lane === lane &&
+		!paused &&
+		deferred.n >= board.applied
+	)
+		next = reconcile(rest, deferred.reply, deferred.n, answers, deferred.refs, {
+			add: false,
+			skip: null,
+			only: lane,
+		}).board;
+
+	return {
+		...next,
+		seen: { ...next.seen, [lane]: listed(next, lane) },
+	};
+}
+
+/** The ids of the cards a lane lists: all but the set-aside ones. */
+const listed = (board: Board, lane: Lane) =>
+	board.cards
+		.filter((card) => card.lane === lane && card.status !== "dismissed")
+		.map((card) => card.id);
+
+/** How a lane differs from when the visitor last left it: cards that are new, and cards that are gone. */
+export type LaneChanges = { readonly added: number; readonly removed: number };
+
+/** What changed in a lane since it was last left; zeros when it has not been visited. */
+export function laneChanges(board: Board, lane: Lane): LaneChanges {
+	const before = board.seen[lane];
+
+	if (!before) return { added: 0, removed: 0 };
+	const now = listed(board, lane);
+
+	return {
+		added: now.filter((id) => !before.includes(id)).length,
+		removed: before.filter((id) => !now.includes(id)).length,
+	};
+}
+
+/** The line a lane shows under its hint after an answer changed: "" for no change, else its non-zero parts. */
+export function laneChangesLine(changes: LaneChanges): string {
+	const parts = [
+		changes.added > 0 ? `${changes.added} new` : "",
+		changes.removed > 0 ? `${changes.removed} removed` : "",
+	].filter(Boolean);
+
+	return parts.length ? `${parts.join(", ")} since you edited your answer` : "";
+}
+
+/**
+ * The open cards read from the answers that their lane has not shown the visitor: still unowned, still grounded in the
+ * answers, and not in the lane's last-seen list (every one, for a lane never visited). They are sent unless removed, so
+ * the review step lists them.
+ */
+export function unseenFromAnswers(board: Board, answers: string): BoardCard[] {
+	return LANES.flatMap((lane) =>
+		board.cards.filter(
+			(card) =>
+				card.lane === lane &&
+				card.status === "proposed" &&
+				card.basis === "said" &&
+				standsOn(card, answers) &&
+				!(board.seen[lane] ?? []).includes(card.id),
+		),
+	);
 }
 
 // ---- The visitor's actions ----------------------------------------------------------------------------------------
@@ -1348,7 +1533,7 @@ function readOutlineItems(raw: RawValue): OutlineItem[] | null {
 
 /** The sentence a visitor sees when the outline sent does not match the brief. */
 export const OUTLINE_CHANGED =
-	"Your brief outline no longer matches your answers. Go back to your first answer, check the outline and send again.";
+	"Your brief outline no longer matches your answers. Go back to the outline screens, check them and send again.";
 
 /**
  * The outline sent with a brief, read on the server: undefined when none was sent; the items when each is within its
@@ -1499,12 +1684,36 @@ export const savedBoards = (saved: SavedBoards) => ({
 	boards: Object.fromEntries(
 		Object.entries(saved.boards).map(([path, board]) => [
 			path,
-			{ cards: savedCards(board).map(({ since: _since, ...card }) => card) },
+			{
+				cards: savedCards(board).map(({ since: _since, ...card }) => card),
+				seen: board.seen,
+			},
 		]),
 	),
 	paused: saved.paused,
 	plain: saved.plain,
 });
+
+/** The last-seen lists read back: for each lane, at most its limit of distinct card ids; anything else is left out. */
+function readSeen(raw: RawValue): Board["seen"] {
+	const seen: Partial<Record<Lane, readonly string[]>> = {};
+
+	for (const lane of LANES) {
+		const ids = listOf(ownField(raw, lane), SAVED_MAX);
+
+		if (!ids) continue;
+
+		seen[lane] = [
+			...new Set(
+				ids.filter(
+					(id): id is string => Predicate.isString(id) && /^c\d{1,6}$/.test(id),
+				),
+			),
+		].slice(0, laneLimits[lane]);
+	}
+
+	return seen;
+}
 
 /**
  * The boards read back from storage, which anything may have written: each path's cards that are well formed (a lane's
@@ -1566,7 +1775,12 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 			...cards.map((card) => Number(card.id.slice(1))),
 		);
 
-		boards[path] = { ...emptyBoard(), cards, nextId: highest + 1 };
+		boards[path] = {
+			...emptyBoard(),
+			cards,
+			nextId: highest + 1,
+			seen: readSeen(ownField(ownField(ownField(raw, "boards"), path), "seen")),
+		};
 	}
 
 	return {

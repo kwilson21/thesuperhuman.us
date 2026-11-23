@@ -16,8 +16,14 @@ import {
 	emptyBoard,
 	fitContext,
 	keepCard,
+	LANE_HINT,
+	LANE_HINT_EMPTY,
+	laneChanges,
+	laneChangesLine,
 	laneLimits,
+	laneQuestions,
 	lastAction,
+	leaveLane,
 	quotedFrom,
 	readBoardAnswer,
 	readBriefOutline,
@@ -29,6 +35,7 @@ import {
 	sendRequest,
 	setAside,
 	undo,
+	unseenFromAnswers,
 } from "~/lib/brief-board";
 
 const ANSWERS =
@@ -65,7 +72,7 @@ const suggested = (
 function started(...cards: ReplyCard[]): Board {
 	const [sent, n] = sendRequest(emptyBoard());
 
-	return applyReply(sent, cards, n, ANSWERS, false).board;
+	return applyReply(sent, cards, n, ANSWERS, false, null).board;
 }
 
 const card = (board: Board, text: string): BoardCard => {
@@ -257,13 +264,14 @@ describe("applying a reply", () => {
 			two,
 			ANSWERS,
 			false,
+			null,
 		).board;
 
 		expect(
-			applyReply(board, [suggested("parts", "Shop")], one, ANSWERS, false)
+			applyReply(board, [suggested("parts", "Shop")], one, ANSWERS, false, null)
 				.board,
 		).toBe(board);
-		expect(applyReply(board, [], 3, ANSWERS, true).board).toBe(board);
+		expect(applyReply(board, [], 3, ANSWERS, true, null).board).toBe(board);
 	});
 
 	it("leaves every owned card alone, by ref or by the same idea", () => {
@@ -290,6 +298,7 @@ describe("applying a reply", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		);
 
 		expect(after.board.cards).toEqual(sent.cards);
@@ -310,6 +319,7 @@ describe("applying a reply", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		);
 
 		expect(after.board.cards.map((c) => c.text)).toEqual(["Contact form"]);
@@ -323,7 +333,7 @@ describe("applying a reply", () => {
 		board = setAside(board, "c1");
 		board = undo(board);
 
-		const after = applyReply(board, [], n, ANSWERS, false);
+		const after = applyReply(board, [], n, ANSWERS, false, null);
 
 		expect(after.board.cards.map((c) => [c.text, c.status])).toEqual([
 			["Contact", "proposed"],
@@ -345,6 +355,7 @@ describe("applying a reply", () => {
 			n,
 			now,
 			false,
+			null,
 		);
 
 		expect(after.board.cards).toEqual([]);
@@ -431,7 +442,8 @@ describe("the visitor's actions", () => {
 			),
 		).not.toContain("EPK");
 		expect(
-			applyReply(board, [suggested("parts", "EPK")], 1, ANSWERS, false).added,
+			applyReply(board, [suggested("parts", "EPK")], 1, ANSWERS, false, null)
+				.added,
 		).toBe(0);
 		board = undo(board);
 		expect(board.cards.map((c) => c.text)).toEqual(["EPK", "Lyrics"]);
@@ -732,6 +744,7 @@ describe("found in review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 
 		expect(after.cards.map((c) => [c.id, c.text, c.status])).toEqual([
@@ -757,6 +770,7 @@ describe("found in review", () => {
 				m,
 				ANSWERS,
 				false,
+				null,
 			).board.cards[0].text,
 		).toBe("Booking");
 	});
@@ -793,6 +807,7 @@ describe("found in review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 		expect(
 			board.cards.filter(
@@ -889,6 +904,7 @@ describe("found in the second review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		);
 
 		expect(after.withdrawn).toBe(3);
@@ -911,17 +927,19 @@ describe("found in the second review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		);
 
 		expect(misquoted.board.cards.map((c) => c.text)).toEqual(["Shows"]);
 
 		// The server dropped the version (a commitment, say) and passed on only that it named c1.
-		const dropped = applyReply(board, [], n, ANSWERS, false, ["c1"]);
+		const dropped = applyReply(board, [], n, ANSWERS, false, null, ["c1"]);
 
 		expect(dropped.board.cards.map((c) => c.text)).toEqual(["Shows"]);
 		// A ref names nothing once the card's own passage has gone from the answers.
 		expect(
-			applyReply(board, [], n, "A home for my band.", false, ["c1"]).withdrawn,
+			applyReply(board, [], n, "A home for my band.", false, null, ["c1"])
+				.withdrawn,
 		).toBe(1);
 	});
 
@@ -1004,6 +1022,7 @@ describe("found in the second review", () => {
 				n,
 				ANSWERS,
 				false,
+				null,
 			).board;
 			const open = board.cards.find((c) => c.status === "proposed");
 
@@ -1043,6 +1062,7 @@ describe("found in the third review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 
 		const texts = after.cards.map((c) => c.text);
@@ -1092,6 +1112,7 @@ describe("found in the third review", () => {
 			n,
 			before,
 			false,
+			null,
 		).board;
 		expect(briefOutline(board, before)).toHaveLength(2);
 		expect(briefOutline(board, after).map((item) => item.text)).toEqual([
@@ -1141,6 +1162,7 @@ describe("found in the third review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 
 		expect(after.cards.map((c) => [c.lane, c.text])).toEqual([
@@ -1163,6 +1185,7 @@ describe("found in the third review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 		expect(board.cards.map((c) => c.text)).toEqual([
 			"Fans",
@@ -1203,6 +1226,7 @@ describe("found in the fourth review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 		expect(board.cards.map((c) => c.text)).toEqual([
 			"Gift cards",
@@ -1224,6 +1248,7 @@ describe("found in the fourth review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 
 		expect(reworded.cards.map((c) => c.text)).toEqual([
@@ -1254,6 +1279,7 @@ describe("found in the fourth review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		).board;
 		[board, n] = sendRequest(board);
 
@@ -1263,6 +1289,7 @@ describe("found in the fourth review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		);
 
 		expect(after.board.cards.map((c) => [c.lane, c.text])).toEqual([
@@ -1297,10 +1324,11 @@ describe("found in the fifth review", () => {
 		};
 
 		expect(
-			applyReply(board, [moved], n, ANSWERS, false).board.cards,
+			applyReply(board, [moved], n, ANSWERS, false, null).board.cards,
 		).toHaveLength(1);
 		expect(
-			applyReply(board, [moved], n, "A home for my band.", false).withdrawn,
+			applyReply(board, [moved], n, "A home for my band.", false, null)
+				.withdrawn,
 		).toBe(1);
 	});
 
@@ -1340,6 +1368,7 @@ describe("found in the sixth review", () => {
 			n,
 			ANSWERS,
 			false,
+			null,
 		);
 
 		expect(after.withdrawn).toBe(0);
@@ -1607,5 +1636,519 @@ describe("found in the twelfth review", () => {
 		"5000년 역사의 전통",
 	])("still accepts the history in %s", (text) => {
 		expect(commits(text)).toBe(false);
+	});
+});
+
+describe("the lane on screen", () => {
+	/** Three cards in "parts" and one in "audience", all unowned, from request 1. */
+	const listed = () =>
+		started(
+			said("parts", "Shows", "upcoming shows near them"),
+			suggested("parts", "Music"),
+			suggested("parts", "Contact"),
+			suggested("audience", "Fans"),
+		);
+
+	const texts = (board: Board, lane: ReplyCard["lane"]) =>
+		board.cards.filter((c) => c.lane === lane).map((c) => c.text);
+
+	/** The reply of review focus 1: rewords one listed card, withdraws another, adds a third; audience is reworded too. */
+	const reply = [
+		said("parts", "Upcoming shows", "upcoming shows near them", "c1"),
+		suggested("parts", "Contact", "c3"),
+		suggested("parts", "Lyrics"),
+		suggested("audience", "Fans and venues", "c4"),
+	];
+
+	it("adds only to the lane on screen and holds its other changes until it is left", () => {
+		const [sent, n] = sendRequest(listed());
+		const after = applyReply(sent, reply, n, ANSWERS, false, "parts");
+
+		// Nothing listed changes or leaves; the new card is at the end; the other lane takes the reply in full.
+		expect(texts(after.board, "parts")).toEqual([
+			"Shows",
+			"Music",
+			"Contact",
+			"Lyrics",
+		]);
+		expect(texts(after.board, "audience")).toEqual(["Fans and venues"]);
+		expect(after).toMatchObject({ added: 1, updated: 1, withdrawn: 0 });
+		expect(after.board.applied).toBe(n);
+
+		const left = leaveLane(after.board, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toEqual([
+			"Upcoming shows",
+			"Contact",
+			"Lyrics",
+		]);
+		expect(left.deferred).toBeUndefined();
+		expect(left.applied).toBe(n);
+		expect(left.seen.parts).toEqual(["c1", "c3", "c5"]);
+	});
+
+	it("shows the changes line when the lane is next visited, against what was listed when it was left", () => {
+		let board = leaveLane(listed(), "parts", ANSWERS);
+
+		expect(laneChanges(board, "parts")).toEqual({ added: 0, removed: 0 });
+
+		const [sent, n] = sendRequest(board);
+		board = applyReply(sent, reply, n, ANSWERS, false, null).board;
+
+		expect(laneChanges(board, "parts")).toEqual({ added: 1, removed: 1 });
+		expect(laneChangesLine(laneChanges(board, "parts"))).toBe(
+			"1 new, 1 removed since you edited your answer",
+		);
+	});
+
+	it("keeps a later reply for the lane on screen, not the first one", () => {
+		let board = listed();
+		let n: number;
+		[board, n] = sendRequest(board);
+		board = applyReply(board, [], n, ANSWERS, false, "parts").board;
+		[board, n] = sendRequest(board);
+
+		board = applyReply(
+			board,
+			[suggested("parts", "Contact", "c3")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		expect(board.deferred?.n).toBe(n);
+
+		const left = leaveLane(board, "parts", ANSWERS);
+
+		// Reply 3 names only Contact, so the other two unowned cards go; reply 2, which named none, was replaced.
+		expect(texts(left, "parts")).toEqual(["Contact"]);
+	});
+
+	it("applies a held reply under the rules of any reply: owned cards, Undo and set-aside ideas", () => {
+		let board = listed();
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		board = applyReply(
+			board,
+			[
+				suggested("parts", "Shows page", "c1"),
+				suggested("parts", "Gigs", "c2"),
+				suggested("parts", "Contact", "c3"),
+			],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		// While the lane is on screen the visitor keeps one card, and sets one aside and takes it back with Undo.
+		board = keepCard(board, "c1");
+		board = setAside(board, "c3");
+		board = undo(board);
+		const left = leaveLane(board, "parts", ANSWERS);
+
+		expect(left.cards.find((c) => c.id === "c1")).toMatchObject({
+			text: "Shows",
+			status: "kept",
+		});
+
+		// c3 was made unowned again after request 2 was sent, so its reply leaves it.
+		expect(left.cards.find((c) => c.id === "c3")?.text).toBe("Contact");
+		expect(left.cards.find((c) => c.id === "c2")?.text).toBe("Gigs");
+	});
+
+	it("never changes a card the same reply added to the lane", () => {
+		let board = listed();
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		board = applyReply(
+			board,
+			[
+				suggested("parts", "Lyrics"),
+				suggested("parts", "Lyrics page", "c5"),
+				suggested("parts", "Music", "c2"),
+				suggested("parts", "Shows", "c1"),
+				suggested("parts", "Contact", "c3"),
+			],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		const left = leaveLane(board, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toContain("Lyrics");
+		expect(texts(left, "parts")).not.toContain("Lyrics page");
+	});
+
+	it("drops a held reply when the board is paused as the lane is left, or a newer reply has applied", () => {
+		const [sent, n] = sendRequest(listed());
+		const held = applyReply(sent, reply, n, ANSWERS, false, "parts").board;
+
+		const whilePaused = leaveLane(held, "parts", ANSWERS, true);
+
+		expect(texts(whilePaused, "parts")).toEqual([
+			"Shows",
+			"Music",
+			"Contact",
+			"Lyrics",
+		]);
+		expect(whilePaused.deferred).toBeUndefined();
+		expect(whilePaused.seen.parts).toEqual(["c1", "c2", "c3", "c5"]);
+
+		const [again, later] = sendRequest(held);
+		const newer = applyReply(again, [], later, ANSWERS, false, null).board;
+
+		expect(newer.deferred).toBe(held.deferred);
+		expect(texts(leaveLane(newer, "parts", ANSWERS), "parts")).toEqual(
+			texts(newer, "parts"),
+		);
+	});
+
+	it("leaves another lane's held reply alone, and holds nothing for a screen that is not a lane", () => {
+		const [sent, n] = sendRequest(listed());
+		const none = applyReply(sent, reply, n, ANSWERS, false, null).board;
+
+		expect(none.deferred).toBeUndefined();
+
+		const held = applyReply(sent, reply, n, ANSWERS, false, "parts").board;
+		const other = leaveLane(held, "audience", ANSWERS);
+
+		expect(other.deferred).toBeUndefined();
+		expect(texts(other, "parts")).toEqual(texts(held, "parts"));
+	});
+
+	it("ignores an older or paused reply for the lane on screen", () => {
+		const [sent, n] = sendRequest(listed());
+
+		expect(applyReply(sent, reply, n, ANSWERS, true, "parts").board).toBe(sent);
+		expect(applyReply(sent, reply, 1, ANSWERS, false, "parts").board).toBe(
+			sent,
+		);
+	});
+
+	it("does not add a card to the lane on screen that the visitor set aside or a note says", () => {
+		let board = listed();
+		board = setAside(board, "c2");
+		const [sent, n] = sendRequest(board);
+
+		const after = applyReply(
+			sent,
+			[suggested("parts", "Music"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		expect(texts(after, "parts")).toEqual([
+			"Shows",
+			"Music",
+			"Contact",
+			"Lyrics",
+		]);
+		expect(after.cards.filter((c) => c.text === "Music")).toHaveLength(1);
+	});
+
+	it("is not changed on the lane on screen by a reply for a card it holds only by name", () => {
+		const [sent, n] = sendRequest(listed());
+
+		// A reply card in another lane that names a card on screen leaves it as it is, now and when the lane is left.
+		const after = applyReply(
+			sent,
+			[suggested("audience", "Shows page", "c1")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		expect(texts(leaveLane(after, "parts", ANSWERS), "parts")).toContain(
+			"Shows",
+		);
+	});
+});
+
+describe("what changed in a lane since it was left", () => {
+	const board = () =>
+		started(
+			said("parts", "Shows", "upcoming shows near them"),
+			suggested("parts", "Music"),
+			said("audience", "Fans", "see upcoming shows near them"),
+		);
+
+	it("counts nothing for a lane that has not been visited", () => {
+		expect(laneChanges(board(), "parts")).toEqual({ added: 0, removed: 0 });
+		expect(laneChanges(emptyBoard(), "questions")).toEqual({
+			added: 0,
+			removed: 0,
+		});
+	});
+
+	it("does not count a card the visitor set aside and left that way, or one they added before leaving", () => {
+		let left = board();
+		left = setAside(left, "c2");
+		left = addNote(left, "parts", "Press kit");
+		left = leaveLane(left, "parts", ANSWERS);
+
+		expect(left.seen.parts).toEqual(["c1", "c4"]);
+		expect(laneChanges(left, "parts")).toEqual({ added: 0, removed: 0 });
+	});
+
+	it("counts a card set aside after the lane was left as removed, and an added one as new", () => {
+		let left = leaveLane(board(), "parts", ANSWERS);
+		left = setAside(left, "c1");
+		left = addNote(left, "parts", "Press kit");
+
+		expect(laneChanges(left, "parts")).toEqual({ added: 1, removed: 1 });
+	});
+
+	it("words the line with only the parts that are not zero", () => {
+		expect(laneChangesLine({ added: 0, removed: 0 })).toBe("");
+		expect(laneChangesLine({ added: 2, removed: 0 })).toBe(
+			"2 new since you edited your answer",
+		);
+		expect(laneChangesLine({ added: 0, removed: 1 })).toBe(
+			"1 removed since you edited your answer",
+		);
+		expect(laneChangesLine({ added: 1, removed: 3 })).toBe(
+			"1 new, 3 removed since you edited your answer",
+		);
+	});
+
+	it("lists the open cards read from the answers that their lane has not shown", () => {
+		let b = board();
+
+		// In lane order: audience before parts.
+		expect(unseenFromAnswers(b, ANSWERS).map((c) => c.text)).toEqual([
+			"Fans",
+			"Shows",
+		]);
+
+		b = leaveLane(b, "parts", ANSWERS);
+		expect(unseenFromAnswers(b, ANSWERS).map((c) => c.text)).toEqual(["Fans"]);
+
+		b = leaveLane(b, "audience", ANSWERS);
+		expect(unseenFromAnswers(b, ANSWERS)).toEqual([]);
+
+		const [sent, n] = sendRequest(b);
+
+		const added = applyReply(
+			sent,
+			[
+				said("parts", "Mailing list", "join the mailing list"),
+				suggested("parts", "Photos"),
+			],
+			n,
+			ANSWERS,
+			false,
+			null,
+		).board;
+
+		expect(unseenFromAnswers(added, ANSWERS).map((c) => c.text)).toEqual([
+			"Mailing list",
+		]);
+		expect(unseenFromAnswers(added, "A home for my band.")).toEqual([]);
+
+		const kept = keepCard(added, "c4");
+
+		expect(unseenFromAnswers(kept, ANSWERS)).toEqual([]);
+	});
+});
+
+describe("a board saved with its last-seen lists", () => {
+	it("starts with none, and reads a board saved without them as none", () => {
+		expect(emptyBoard().seen).toEqual({});
+
+		const read = readSavedBoards({
+			boards: {
+				website: {
+					cards: [
+						{
+							id: "c1",
+							lane: "parts",
+							text: "Shows",
+							status: "kept",
+							basis: "suggested",
+							quote: "",
+							reason: "",
+							answer: "",
+						},
+					],
+				},
+			},
+			paused: false,
+			plain: true,
+		});
+
+		expect(read.boards.website?.seen).toEqual({});
+		expect(read.boards.website?.cards).toHaveLength(1);
+		expect(read.boards.website?.deferred).toBeUndefined();
+	});
+
+	it("round-trips the lists and drops a held reply", () => {
+		let board = started(
+			suggested("parts", "Contact"),
+			suggested("audience", "Fans"),
+		);
+
+		board = leaveLane(board, "parts", ANSWERS);
+		const [sent, n] = sendRequest(board);
+
+		board = applyReply(
+			sent,
+			[suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"audience",
+		).board;
+
+		expect(board.deferred).toBeDefined();
+
+		const saved = JSON.parse(
+			JSON.stringify(
+				savedBoards({
+					boards: { website: board },
+					paused: false,
+					plain: false,
+				}),
+			),
+		);
+
+		const read = readSavedBoards(saved).boards.website;
+
+		expect(read?.seen).toEqual({ parts: ["c1"] });
+		expect(read?.deferred).toBeUndefined();
+	});
+
+	it("reads a list that is not one, with ids that are not cards, or past a lane's limit, as the ids that fit", () => {
+		const read = readSavedBoards({
+			boards: {
+				website: {
+					cards: [],
+					seen: {
+						purpose: ["c1", "c1", "x", 5, "c2", "c3"],
+						parts: "c1",
+						other: ["c1"],
+					},
+				},
+			},
+		}).boards.website;
+
+		expect(read?.seen).toEqual({ purpose: ["c1", "c2"] });
+	});
+});
+
+describe("the outline screens' words", () => {
+	it("gives each path the twelve headings, none speaking as the owner", () => {
+		expect(laneQuestions).toEqual({
+			website: {
+				purpose: "Is this what it’s for?",
+				audience: "Who is it for?",
+				parts: "Which pages does it need?",
+				questions: "What’s still undecided?",
+			},
+			webapp: {
+				purpose: "Is this what it’s for?",
+				audience: "Who will use it?",
+				parts: "What should people be able to do?",
+				questions: "What’s still undecided?",
+			},
+			workflow: {
+				purpose: "Is this what should change?",
+				audience: "Who does the work?",
+				parts: "What are the steps today?",
+				questions: "What’s still undecided?",
+			},
+		});
+	});
+
+	it("has the two hints and the refusal that points to the outline screens", () => {
+		expect(LANE_HINT).toBe("From your answers. Keep, change or add your own.");
+		expect(LANE_HINT_EMPTY).toBe("Add your own, or go on.");
+		expect(OUTLINE_CHANGED).toBe(
+			"Your brief outline no longer matches your answers. Go back to the outline screens, check them and send again.",
+		);
+		expect(OUTLINE_CHANGED).not.toContain("—");
+	});
+});
+
+describe("going back and editing an answer", () => {
+	const edited = "A home for my band. Fans should hear new music.";
+
+	it("lets the reply land two screens later: the lane on screen stays, the others update, the review lists what is unseen", () => {
+		// Request 1 answered while a written question showed: every lane takes it, none has been visited.
+		let board = started(
+			said("parts", "Shows", "upcoming shows near them"),
+			said("parts", "Music", "hear new music"),
+			suggested("audience", "Fans"),
+		);
+
+		// The visitor edits the first answer, presses Next at once and is on the purpose screen when the reply lands.
+		board = leaveLane(board, "purpose", edited);
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		board = applyReply(
+			board,
+			[
+				said("parts", "Music", "hear new music", "c2"),
+				said("purpose", "A home for a band", "A home for my band"),
+				suggested("audience", "Venues", "c3"),
+			],
+			n,
+			edited,
+			false,
+			"purpose",
+		).board;
+
+		// The purpose lane on screen got its new card; "Shows" left the parts lane (its passage is gone) at once.
+		expect(board.cards.map((c) => [c.lane, c.text])).toEqual([
+			["parts", "Music"],
+			["audience", "Venues"],
+			["purpose", "A home for a band"],
+		]);
+
+		// Review: the cards read from the answers that no lane has shown are listed, and each lane's line says what changed.
+		expect(unseenFromAnswers(board, edited).map((c) => c.text)).toEqual([
+			"A home for a band",
+			"Music",
+		]);
+
+		board = leaveLane(board, "purpose", edited);
+		expect(unseenFromAnswers(board, edited).map((c) => c.text)).toEqual([
+			"Music",
+		]);
+		expect(laneChanges(board, "purpose")).toEqual({ added: 0, removed: 0 });
+		expect(board.seen.audience).toBeUndefined();
+	});
+
+	it("keeps a card the visitor kept when the sentence it quotes is deleted, and sends it without the refusal", () => {
+		let board = started(said("parts", "Shows", "upcoming shows near them"));
+
+		board = keepCard(board, "c1");
+		const [sent, n] = sendRequest(board);
+
+		// A reply for the edited answers leaves the card out; it is owned, so it stays.
+		const after = applyReply(sent, [], n, edited, false, null).board;
+
+		expect(after.cards.map((c) => [c.text, c.status])).toEqual([
+			["Shows", "kept"],
+		]);
+
+		const outline = briefOutline(after, edited);
+
+		expect(outline).toEqual([{ lane: "parts", text: "Shows", origin: "kept" }]);
+
+		// What the server reads back against the edited answers is accepted.
+		expect(readBriefOutline(outline, edited)).toEqual({
+			ok: true,
+			value: outline,
+		});
 	});
 });
