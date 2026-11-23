@@ -1686,7 +1686,9 @@ describe("the lane on screen", () => {
 		]);
 		expect(left.deferred).toBeUndefined();
 		expect(left.applied).toBe(n);
-		expect(left.seen.parts).toEqual(["c1", "c3", "c5"]);
+		// The visitor saw Shows, Music, Contact and Lyrics (c1, c2, c3, c5): Music is withdrawn by the leave.
+		expect(left.seen.parts).toEqual(["c1", "c2", "c3", "c5"]);
+		expect(laneChanges(left, "parts")).toEqual({ added: 0, removed: 1 });
 	});
 
 	it("shows the changes line when the lane is next visited, against what was listed when it was left", () => {
@@ -1828,7 +1830,9 @@ describe("the lane on screen", () => {
 			"Reach new fans",
 		]);
 		expect(texts(left, "purpose")).toEqual(texts(offScreen, "purpose"));
-		expect(left.seen.purpose).toEqual(left.cards.map((c) => c.id));
+		// The visitor saw the two cards it listed on screen; the two the leave added are new to them.
+		expect(left.seen.purpose).toEqual(["c1", "c2"]);
+		expect(laneChanges(left, "purpose")).toEqual({ added: 2, removed: 2 });
 	});
 
 	it("never changes a card the same reply added to the lane", () => {
@@ -1855,6 +1859,120 @@ describe("the lane on screen", () => {
 
 		expect(texts(left, "parts")).toContain("Lyrics");
 		expect(texts(left, "parts")).not.toContain("Lyrics page");
+	});
+
+	it("counts a card added on leave as new, since the visitor never saw it, and one it withdraws as removed", () => {
+		// Purpose holds two cards and has been visited once.
+		let b = started(
+			said("purpose", "A home for the band", "A home for my band"),
+			said("purpose", "Grow the mailing list", "join the mailing list"),
+		);
+
+		b = leaveLane(b, "purpose", ANSWERS);
+
+		let n: number;
+		[b, n] = sendRequest(b);
+
+		// A reply arrives while purpose is on screen: both cards kept, a third idea held back because the lane is full.
+		b = applyReply(
+			b,
+			[
+				said("purpose", "A home for the band", "A home for my band", "c1"),
+				said("purpose", "Grow the mailing list", "join the mailing list", "c2"),
+				said(
+					"purpose",
+					"Share new music with fans",
+					"Fans should hear new music",
+				),
+			],
+			n,
+			ANSWERS,
+			false,
+			"purpose",
+		).board;
+
+		// The visitor sets c2 aside (the page records it with ownChange), then presses Next.
+		const before = b;
+		b = ownChange(before, setAside(before, "c2"));
+
+		const left = leaveLane(b, "purpose", ANSWERS);
+		const added = card(left, "Share new music with fans");
+
+		expect(left.seen.purpose).toEqual(["c1"]);
+		expect(laneChanges(left, "purpose")).toEqual({ added: 1, removed: 0 });
+		expect(unseenFromAnswers(left, ANSWERS).map((c) => c.id)).toEqual([
+			added.id,
+		]);
+	});
+
+	it("counts a card the held reply withdraws on leave as removed", () => {
+		let b = listed();
+		b = leaveLane(b, "parts", ANSWERS);
+		const visited = texts(b, "parts");
+		let n: number;
+		[b, n] = sendRequest(b);
+
+		// A reply while parts is on screen names every card but Contact.
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Music", "c2")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).not.toContain("Contact");
+		expect(visited).toContain("Contact");
+		expect(laneChanges(left, "parts").removed).toBe(1);
+	});
+
+	it("does not add again, on leave, a card the delivery added and the visitor then edited", () => {
+		let b = started(suggested("parts", "Shows"));
+		let n: number;
+		[b, n] = sendRequest(b);
+		b = applyReply(
+			b,
+			[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+			n,
+			ANSWERS,
+			false,
+			"parts",
+		).board;
+		b = editCard(b, card(b, "Lyrics").id, "Song words and credits");
+
+		const left = leaveLane(b, "parts", ANSWERS);
+
+		expect(texts(left, "parts")).toEqual(["Shows", "Song words and credits"]);
+	});
+
+	it("does not bring back, on leave, a card the delivery added and the visitor then set aside or removed", () => {
+		for (const away of [
+			(b: Board, id: string) => setAside(b, id),
+			(b: Board, id: string) => removeNote(editCard(b, id, "Song words"), id),
+		]) {
+			let b = started(suggested("parts", "Shows"));
+			let n: number;
+			[b, n] = sendRequest(b);
+			b = applyReply(
+				b,
+				[suggested("parts", "Shows", "c1"), suggested("parts", "Lyrics")],
+				n,
+				ANSWERS,
+				false,
+				"parts",
+			).board;
+			b = away(b, card(b, "Lyrics").id);
+
+			const left = leaveLane(b, "parts", ANSWERS);
+
+			// No second Lyrics card appears: the lane has the cards it had.
+			expect(left.cards.filter((c) => c.lane === "parts")).toHaveLength(
+				b.cards.filter((c) => c.lane === "parts").length,
+			);
+		}
 	});
 
 	it("drops a held reply when the board is paused as the lane is left, or a newer reply has applied", () => {

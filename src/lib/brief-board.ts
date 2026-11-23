@@ -211,6 +211,8 @@ export type HeldReply<L extends string = Lane> = {
 	readonly n: number;
 	readonly reply: readonly ReplyCard<L>[];
 	readonly refs: readonly string[];
+	/** The items of `reply` the delivery added to the lane while it was on screen: leaving does not add them again. */
+	readonly added: readonly ReplyCard<L>[];
 };
 
 export type Board<L extends string = Lane> = {
@@ -1045,7 +1047,7 @@ function reconcile<L extends string>(
 	answers: string,
 	refs: readonly string[],
 	scope: Scope<L>,
-): Applied<L> {
+): Applied<L> & { readonly addedItems: readonly ReplyCard<L>[] } {
 	const cards = [...board.cards];
 
 	// Whether the pass may change or withdraw a card of this lane.
@@ -1159,6 +1161,8 @@ function reconcile<L extends string>(
 	let nextId = board.nextId,
 		added = 0;
 
+	const addedItems: ReplyCard<L>[] = [];
+
 	for (const item of scope.add ? fresh : []) {
 		// A pass limited to one lane adds to that lane only: the others took the reply in full when it arrived.
 		if (scope.only !== null && item.lane !== scope.only) continue;
@@ -1187,10 +1191,12 @@ function reconcile<L extends string>(
 			edited: false,
 		});
 		added++;
+		addedItems.push(item);
 	}
 
 	return {
 		board: { ...board, cards: kept, nextId },
+		addedItems,
 		added,
 		updated,
 		withdrawn: cards.length - (kept.length - added),
@@ -1249,13 +1255,15 @@ export function applyReplyIn<L extends string>(
 		only: null,
 	});
 
+	const { addedItems, ...applied } = result;
+
 	return {
-		...result,
+		...applied,
 		board: {
 			...result.board,
 			applied: n,
 			deferred: onScreen
-				? { lane: onScreen, n, reply, refs }
+				? { lane: onScreen, n, reply, refs, added: addedItems }
 				: result.board.deferred,
 		},
 	};
@@ -1267,7 +1275,8 @@ export function applyReplyIn<L extends string>(
  * they are now, rewording never into another card's idea), with the new cards the delivery could not add while the lane
  * was full. Cards it did add are not touched again (their `since` is not before the reply). A held reply is dropped, not applied, when the board is
  * paused or a newer reply has applied since. Nothing is held afterwards, and the lane's last-seen list is the cards it
- * lists now.
+ * listed before the held reply applied, so a card the leave adds counts as new and one it withdraws as removed. A
+ * reply's items the delivery already added are not added again (the visitor may have edited or set them aside).
  */
 export function leaveLane(
 	board: Board,
@@ -1279,6 +1288,10 @@ export function leaveLane(
 
 	let next: Board = rest;
 
+	// What the visitor saw: the lane as it was before the held reply applies, so what the leave adds is new to them and
+	// what it withdraws is removed.
+	const saw = listed(rest, lane);
+
 	if (
 		deferred &&
 		deferred.lane === lane &&
@@ -1288,7 +1301,7 @@ export function leaveLane(
 		next = reconcile(
 			BRIEF_LANES,
 			rest,
-			deferred.reply,
+			deferred.reply.filter((item) => !deferred.added.includes(item)),
 			deferred.n,
 			answers,
 			deferred.refs,
@@ -1297,7 +1310,7 @@ export function leaveLane(
 
 	return {
 		...next,
-		seen: { ...next.seen, [lane]: listed(next, lane) },
+		seen: { ...next.seen, [lane]: saw },
 	};
 }
 

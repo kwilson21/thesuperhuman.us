@@ -335,6 +335,37 @@ export default {
 					},
 				);
 
+			// A lane with no cards left: the visitor set aside every card, so the hint says to add their own or go on.
+			await shot(
+				"lane-empty",
+				"A lane with no cards: Add your own, or go on",
+				async (page) => {
+					const state = await open(page);
+
+					await write(page, state, PURPOSE);
+					await toLane(page, "audience");
+					const screen = page.locator('[data-lane-screen="audience"]');
+					const asides = screen.getByRole("button", { name: /^Not this: / });
+
+					for (let i = 0; i < 10 && (await asides.count()) > 0; i++)
+						await asides.first().click();
+
+					if ((await screen.locator(".board-card").count()) > 0)
+						throw new Error("The audience screen still lists cards");
+
+					// The lane's request for what the visitor just did settles first, so the status line is empty.
+					await until(
+						page,
+						"the lane's status to settle",
+						async () => !(await statusOf(page, "audience")).includes("Reading"),
+					);
+
+					if (!(await screen.innerText()).includes("Add your own, or go on."))
+						throw new Error("The empty lane does not say to add your own");
+					await page.mouse.move(0, 0);
+				},
+			);
+
 			// Going back to edit an answer: the lane that gained cards says what changed, and nothing moved while it was open.
 			await shot(
 				"edited",

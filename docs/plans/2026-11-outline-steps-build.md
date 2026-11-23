@@ -18,7 +18,7 @@ one commit per task. The route, the model call, the limits and what is stored on
 - `CLAUDE.md` in full. In particular: no em-dashes in copy; browser code stays plain TypeScript and imports only the
   modules `tests/helpers/browser-modules.ts` allows; `src/lib/brief-board.ts` stays pure and reads fields with
   `src/lib/fields.ts`; no ratchets, baselines or disabled lint findings.
-- Copy is exactly what section 10 gives (headings, hints, "Skip these, no AI outline", "Add the outline back",
+- Copy is exactly what section 1 of the design gives (headings, hints, "Skip these, no AI outline", "Add the outline back",
   "Reading your answers…", "New since you last looked"). Any other new visitor-facing sentence is listed in the task's
   report so the owner can approve it.
 - New UI uses the existing intake classes and tokens (`intake-*`, `board-card*`, `site-button`); no new colours, fonts
@@ -44,7 +44,7 @@ one commit per task. The route, the model call, the limits and what is stored on
 **Files:** `verification/brief-board.qnt`, and whatever `scripts/verify-quint.mjs` reads to list properties and mutants.
 
 - Add the lane on screen to the state: a visitor action moves it between "none" and one lane; ideas belong to lanes.
-- Replace today's held state and visible-board condition with section 10.3 rules 2 and 3: `send` no longer needs the
+- Replace today's held state and visible-board condition with section 4 and section 2 rule 6 of the design: `send` no longer needs the
   board visible; `deliver` applies in full to lanes not on screen; on the lane on screen it only adds cards, and its
   changes and withdrawals for that lane apply when the visitor leaves it (still subject to rules 2, 4 and 5 at that
   moment).
@@ -58,8 +58,7 @@ one commit per task. The route, the model call, the limits and what is stored on
 ## Task 2: the library
 
 **Files:** `src/lib/brief-board.ts`, `tests/lib/brief-board.test.ts`, `tests/lib/brief-board-walk.test.ts`,
-`docs/plans/2026-11-living-brief.md` (rewrite sections 1, 2.6, 4 and 9 to match section 10, then delete section 10's
-status line and fold what remains into those sections).
+`docs/plans/2026-11-living-brief.md` (rewrite sections 1, 2.6, 4 and 9 to match the lane-screen design).
 
 **Produces (exact names, used by Task 3):**
 
@@ -74,7 +73,7 @@ status line and fold what remains into those sections).
   answer" (only the non-zero parts).
 - `unseenFromAnswers(board: Board, answers: string): BoardCard[]`: open cards read from the answers, still grounded,
   whose id is not in their lane's `seen`.
-- `laneQuestions: Record<SoftwarePath, Record<Lane, string>>` with section 10.2's twelve headings, and
+- `laneQuestions: Record<SoftwarePath, Record<Lane, string>>` with section 1's twelve headings, and
   `LANE_HINT = "From your answers. Keep, change or add your own."`, `LANE_HINT_EMPTY = "Add your own, or go on."`.
 - `OUTLINE_CHANGED` reworded: "Your brief outline no longer matches your answers. Go back to the outline screens, check
   them and send again."
@@ -86,9 +85,10 @@ adds a third (only the third appears until `leaveLane`).
 ## Task 3: the page
 
 **Files:** `src/pages/software/start.astro`, `src/components/BriefBoard.astro`, `src/scripts/software-inquiry.ts`,
-`src/scripts/brief-board.ts`, `src/styles/global.css` (or wherever `.brief-board` is styled), `src/pages/privacy.astro`,
-`tests/scripts/brief-flow.test.ts`, `scripts/screenshots/scenarios/software-board.mjs`,
-`scripts/screenshots/brief-board-script.mjs`, `tests/helpers/browser-modules.ts` only if a reached module changes.
+`src/scripts/brief-board.ts`, `src/scripts/brief-board-core.ts`, `src/styles/software-intake.css`,
+`src/pages/privacy.astro`, `tests/scripts/brief-flow.test.ts`, `tests/scripts/screenshots.test.ts`,
+`tests/pages/software-offer.test.ts`, `scripts/screenshots/scenarios/software-board.mjs`, `software-brief.mjs`,
+`website-brief.mjs`, `scripts/screenshots/brief-board-script.mjs`, `tests/helpers/browser-modules.ts` only if a reached module changes.
 
 - Remove the footnote sentence for every path (page and `configureQuestions`), keeping "See example answers". Remove
   the board's explanation paragraph, the side column and its sticky layout, "Your brief so far", the pulse link, "Show
@@ -101,12 +101,12 @@ adds a third (only the third appears until `leaveLane`).
   while a request waits or is in flight, in a `role="status"` element), the cards in a list with a bounded height that
   scrolls inside, Add, the lane's set-aside list, Undo, and "Skip these, no AI outline". Card markup and actions are
   the existing template's.
-- Requests per section 10.3 rule 2; replies per rule 3, calling `leaveLane` whenever the step changes away from a lane
+- Requests per section 4; replies per section 2 rule 6, calling `leaveLane` whenever the step changes away from a lane
   screen. The "Show updates" button and the pointer and focus holding are deleted.
 - Review step: the outline as it will be sent (as today), then, when `unseenFromAnswers` is not empty, "New since you
   last looked" with each card and a link to its lane screen. After a skip, a button "Add the outline back" restores the
   four screens and the cards.
-- Section 10.4 for AI off, limits and failures; the existing status sentences are reused.
+- Section 4 and section 6 for AI off, limits and failures; the existing status sentences are reused.
 - An old draft (review focus 3) is read without error: a saved `plain` flag means skipped; a saved step index beyond
   the plan opens the first written question.
 - Privacy page: only where it says the outline sits beside the answers.

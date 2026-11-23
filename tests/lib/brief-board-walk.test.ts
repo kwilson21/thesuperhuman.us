@@ -112,12 +112,15 @@ function walk(seed: number, steps: number) {
 				if (
 					JSON.stringify(left.seen[screen]) !==
 					JSON.stringify(
-						left.cards
+						board.cards
 							.filter((c) => c.lane === screen && c.status !== "dismissed")
 							.map((c) => c.id),
 					)
 				)
-					fail(step, `the last-seen list of ${screen} is not what it listed`);
+					fail(
+						step,
+						`the last-seen list of ${screen} is not what the visitor saw on it`,
+					);
 
 				// Held changes go under the rules of any reply: owned cards, Undo and grounding hold, and nothing else
 				// changes (no card added, no other lane touched, the numbers as they were); paused or older drops them.
@@ -190,6 +193,7 @@ function walk(seed: number, steps: number) {
 						if (
 							item.lane !== screen ||
 							named ||
+							held.added.includes(item) ||
 							(item.basis === "said" && !quotedFrom(item.quote, answers()))
 						)
 							continue;
