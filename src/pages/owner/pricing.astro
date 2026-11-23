@@ -12,6 +12,7 @@ import {
 	marketRange,
 } from "~/lib/pricing-reference";
 import { loadRefreshView } from "~/server/market-refresh-store";
+import { rebaseProposal } from "~/server/rules/market-refresh";
 import { loadPricing } from "~/server/pricing-store";
 
 export const prerender = false;
@@ -66,6 +67,10 @@ const refresh =
 	kv && !readFailed ? await loadRefreshView(kv).catch(() => null) : null;
 
 const proposal = refresh?.proposal ?? null;
+
+// The proposal laid over the research as it is now, which is what Use saves: "Now" is the current research, and a cell
+// the search found nothing for stays as it is. Null when the research changed so that the proposal no longer fits.
+const shown = proposal && rebaseProposal(proposal, market);
 
 /** Why the last search failed, in words. */
 const failedBecause = (status: number | undefined) => {
@@ -152,16 +157,20 @@ const updated = pricing.updatedAt
           : <p class="rail-muted">To have the site search the web for new figures every three months, add your Tavily key as the secret TAVILY_API_KEY: in Cloudflare, open Workers, then thesuperhuman-us, then Settings, Variables and Secrets.</p>}
         {lastSearch && <p class="rail-muted">{lastSearch}</p>}
         {refresh.askedAt && <p class="rail-muted">You asked for a search {inEastern(refresh.askedAt)}. It runs at the next daily check, within a day.</p>}
-        {proposal && <div data-proposal={proposal.id}>
-          <p>Proposed figures from a web search on {proposal.market.researchedOn}. Each new figure appears in the text of a source it cites; read the sources before you use them.</p>
+        {proposal && !shown && <div data-proposal={proposal.id}>
+          <p>A web search on {proposal.market.researchedOn} found figures, but your research changed after it and they no longer make research on their own. Discard them and ask for a new search.</p>
+          <div class="software-actions"><button class="studio-quiet" type="button" data-refresh-discard>Discard</button></div>
+        </div>}
+        {shown && <div data-proposal={shown.id}>
+          <p>Proposed figures from a web search on {shown.market.researchedOn}. Each new figure appears in the text of a source it cites; read the sources before you use them.</p>
           <div class="pricing-table-scroll" role="region" aria-labelledby="pricing-proposal-caption" tabindex="0">
           <table class="pricing-table">
             <caption id="pricing-proposal-caption" class="visually-hidden">Your current ranges beside the proposed ones</caption>
             <thead><tr><th scope="col">Kind and size</th><th scope="col">Now</th><th scope="col">Proposed</th><th scope="col">Sources</th></tr></thead>
-            <tbody>{proposal.changes.map(change => <tr><th scope="row">{cellLabel(change.cell)}</th><td>{change.before ? span(change.before) : 'None'}</td><td>{change.after ? span(change.after) : 'No new figure; stays as it is'}</td><td>{change.sourceIds.join(', ')}</td></tr>)}</tbody>
+            <tbody>{shown.changes.map(change => <tr><th scope="row">{cellLabel(change.cell)}</th><td>{change.before ? span(change.before) : 'None'}</td><td>{change.after ? span(change.after) : 'No new figure; stays as it is'}</td><td>{change.sourceIds.join(', ')}</td></tr>)}</tbody>
           </table>
           </div>
-          {proposal.market.sources.length > 0 && <details><summary>Sources ({proposal.market.sources.length})</summary><ol class="pricing-sources">{proposal.market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && <span class="pricing-source-meta">{source.published}</span>}</li>)}</ol></details>}
+          {shown.market.sources.length > 0 && <details><summary>Sources ({shown.market.sources.length})</summary><ol class="pricing-sources">{shown.market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && <span class="pricing-source-meta">{source.published}</span>}</li>)}</ol></details>}
           <div class="software-actions"><button class="studio-button" type="button" data-refresh-use>Use these figures</button><button class="studio-quiet" type="button" data-refresh-discard>Discard</button></div>
         </div>}
         {hasSearchKey && !proposal && !refresh.askedAt && <button class="studio-quiet" type="button" data-refresh-ask>Search for new figures</button>}

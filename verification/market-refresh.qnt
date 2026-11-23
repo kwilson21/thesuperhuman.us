@@ -1,17 +1,19 @@
 // Quint model of refreshing the market research (docs/plans/2026-11-market-refresh.md). A daily run searches when the
 // owner asked or the research is old, and saves a proposal; the owner uses or discards a proposal from /owner/pricing.
 // Code modelled:
-//   ask:      src/pages/api/owner/pricing.ts, action "ask-refresh" (stores the time of the ask)
+//   ask:      src/pages/api/owner/pricing-refresh.ts, action "ask" (stores the time of the ask)
 //   run:      src/server/flows/market-refresh.ts (reads the ask when it starts; saves the proposal, which replaces older
 //             ones, then clears the ask only if it was made before the run started)
 //   load:     src/pages/owner/pricing.astro (shows the newest proposal and its id)
-//   accept:   action "accept-proposal" (the proposal the page showed, by its id, through the versioned save; then that id
-//             is removed)
-//   discard:  action "discard-proposal" (removes that id only)
+//   accept:   action "use" (the proposal the page showed, by its id, laid over the current research and saved through
+//             the versioned save; then that id is removed)
+//   discard:  action "discard" (removes that id only)
 // The module that must keep every property (`refresh`) is the design. What is left out, on purpose: whether a run
 // searches (the rule in src/server/rules/market-refresh.ts decides from facts read first, and any run may search here),
 // the versioned save itself (verification/pricing-save.qnt), search failures (a failed run saves nothing), and KV's
-// delay (a read a few seconds old moves an ask to the next day's run).
+// delay (a read a few seconds old moves an ask to the next day's run). The run's read of the ask and its delete are one
+// step here; in the code they are two KV calls, so an ask written between them is lost. The harm is one search not run
+// until the owner asks again or the research turns 90 days old; KV has no compare-and-delete to close it.
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
 module marketRefreshModel {

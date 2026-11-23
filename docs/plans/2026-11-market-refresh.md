@@ -12,8 +12,12 @@ On `/owner/pricing`, under "Market research":
 - **A proposed update.** After a search, a section "Proposed figures" shows, for each kind of work and size, the current
   range beside the proposed one, the sources each proposed figure came from (with links), and a caption saying when the
   search ran. A size the search found no checked figure for says "No new figure; stays as it is".
-- **Use these figures** replaces the research with the proposal, through the same versioned save the research box uses,
-  so a save from another tab since the page loaded is refused as today. The proposal then goes.
+- **Use these figures** changes only the figures the search found: they are laid over the research as it is now, so
+  every other size, the day rate when the search found none, and a save or clear the owner made after the search stay
+  as they are. "Now" on the page is that same current research. The save goes through the same versioned save the
+  research box uses, so a save from another tab since the page loaded is refused as today. The proposal then goes. If
+  the research changed so that the search's figures no longer make research on their own (it found only a day rate and
+  the research was cleared), the page offers only Discard.
 - **Discard** removes the proposal and changes nothing else.
 - **Search for new figures** asks for a search at the next daily run (within a day). Without the Tavily key, the page
   says the key is not set and the button is not offered.
@@ -42,7 +46,8 @@ For each of the nine cells (website, web app, workflow; small, medium, large) an
 2. **Reads** the results with Workers AI (the offer board's model, JSON mode): the low and high figure, in whole US
    dollars, that the results give for this kind and size, and which results state them; or none.
 3. **Checks** the reading in ordinary code: a figure stands only when both ends appear as dollar amounts in the text of
-   a result it cites, and the low end is not above the high end. A cell that fails keeps its current figures and is
+   a result it cites, given per hour there exactly when the reading says so, and the low end is not above the high
+   end. A "k" or "M" after an amount counts only when it ends the word, so the k of "kit" is not a thousand. A cell that fails keeps its current figures and is
    marked as kept. This is the automated form of the November research's rule that each figure is re-read in its
    source.
 

@@ -40,7 +40,9 @@ import {
 	dollarAmounts,
 	proposeMarket,
 	queryOf,
+	rebaseProposal,
 	startRefresh,
+	statedAmounts,
 	useProposal,
 	workOf,
 } from "~/server/rules/market-refresh";
@@ -173,8 +175,27 @@ describe("dollarAmounts", () => {
 		["$1.2M platforms", [1_200_000]],
 		["$95/hr", [95]],
 		["15 pages, 3 rounds, 2026", []],
+		["$5k-$10k", [5_000, 10_000]],
+		// A letter that starts a word is not a scale, and a year before "dollars" is not an amount.
+		["A $15 kit", [15]],
+		["$99 keyboard", [99]],
+		["$12 kWh", [12]],
+		["$5 MB", [5]],
+		["priced in 2024 dollars", []],
 	])("reads %s", (text, amounts) => {
 		expect(dollarAmounts(text)).toEqual(amounts);
+	});
+
+	it.each([
+		["$90 to $140 per hour", [true, true]],
+		["$90/hr or $120 an hour", [true, true]],
+		["$100 - $150/hr", [true, true]],
+		["$800 to $1,200 per day", [false, false]],
+		["$5,000 a project, $100 per hour", [false, true]],
+	])("marks the amounts in %s given per hour", (text, perHour) => {
+		expect(statedAmounts(text).map((amount) => amount.perHour)).toEqual(
+			perHour,
+		);
 	});
 });
 
@@ -242,6 +263,54 @@ describe("checkReading", () => {
 				small,
 				{ lowUsd: 5_000, highUsd: 1_500, perHour: false, sources: [1] },
 				results,
+			),
+		).toBeNull();
+	});
+
+	it("refuses figures a cited result gives only inside words (the review of PR #378)", () => {
+		expect(
+			checkReading(
+				small,
+				{ lowUsd: 15_000, highUsd: 99_000, perHour: false, sources: [1] },
+				[
+					result(
+						"Starter themes are $15 kits; premium is $99 keyboard-friendly.",
+					),
+				],
+			),
+		).toBeNull();
+	});
+
+	it("refuses a rate read per hour that the source gives per day, and one read per day that it gives per hour", () => {
+		expect(
+			checkReading(
+				{ kind: "dayRate" },
+				{ lowUsd: 800, highUsd: 1_200, perHour: true, sources: [1] },
+				[result("Seniors charge $800 to $1,200 per day.")],
+			),
+		).toBeNull();
+		expect(
+			checkReading(
+				{ kind: "dayRate" },
+				{ lowUsd: 90, highUsd: 140, perHour: false, sources: [1] },
+				[result("Seniors charge $90 to $140 per hour.")],
+			),
+		).toBeNull();
+		expect(
+			checkReading(
+				{ kind: "dayRate" },
+				{ lowUsd: 800, highUsd: 1_200, perHour: false, sources: [1] },
+				[result("Seniors charge $800 to $1,200 per day.")],
+			),
+		).toMatchObject({ lowUsd: 800, highUsd: 1_200 });
+	});
+
+	it("does not cite a link longer than research holds", () => {
+		expect(
+			checkReading(
+				small,
+				{ lowUsd: 1_500, highUsd: 5_000, perHour: false, sources: [1] },
+				[result("$1,500 to $5,000", `https://example.com/${"a".repeat(600)}`)],
 			),
 		).toBeNull();
 	});
@@ -321,6 +390,29 @@ describe("proposeMarket", () => {
 		expect(readMarketReference(proposal?.market).ok).toBe(true);
 	});
 
+	it("names a source with no title by its link, within the length research holds", () => {
+		const url = `https://example.com/${"a".repeat(400)}`;
+
+		const proposal = proposeMarket(
+			"1",
+			NOW,
+			null,
+			new Map([
+				[
+					"website small",
+					{
+						lowUsd: 1,
+						highUsd: 2,
+						cited: [{ title: "", url, content: "", published: "" }],
+					},
+				],
+			]),
+		);
+
+		expect(proposal?.market.sources[0]?.title).toBe(url.slice(0, 300));
+		expect(readMarketReference(proposal?.market).ok).toBe(true);
+	});
+
 	it("proposes nothing when no cell has a new figure", () => {
 		expect(proposeMarket("1", NOW, research, new Map())).toBeNull();
 	});
@@ -341,6 +433,77 @@ describe("proposeMarket", () => {
 	});
 });
 
+describe("rebaseProposal", () => {
+	const proposal = proposeMarket(
+		"001763882580000",
+		NOW,
+		research,
+		new Map([
+			[
+				"website small",
+				{
+					lowUsd: 1_200,
+					highUsd: 2_400,
+					cited: [result("$1,200 to $2,400", "https://example.com/new")],
+				},
+			],
+		]),
+	);
+
+	// The owner saved research by hand after the search: a new medium app range, a new day rate and a new caveat.
+	const saved: MarketReference = {
+		...research,
+		researchedOn: "2026-11-20",
+		ranges: [
+			research.ranges[0],
+			{ ...research.ranges[1], lowUsd: 12_000, highUsd: 25_000 },
+		],
+		dayRate: { lowUsd: 700, highUsd: 1_100 },
+	};
+
+	it("changes only the figures the search found and keeps a save made after it (the review of PR #378)", () => {
+		const rebased = proposal && rebaseProposal(proposal, saved);
+
+		expect(rebased?.market.ranges).toEqual([
+			expect.objectContaining({
+				kind: "website",
+				size: "small",
+				lowUsd: 1_200,
+				highUsd: 2_400,
+			}),
+			expect.objectContaining({
+				kind: "webapp",
+				size: "medium",
+				lowUsd: 12_000,
+				highUsd: 25_000,
+			}),
+		]);
+		expect(rebased?.market.dayRate).toEqual({ lowUsd: 700, highUsd: 1_100 });
+		expect(rebased?.changes).toContainEqual({
+			cell: "webapp medium",
+			before: { lowUsd: 12_000, highUsd: 25_000 },
+			after: null,
+			sourceIds: [],
+		});
+		expect(rebased?.market.sources.map((source) => source.url)).toEqual([
+			"https://example.com/new",
+			"https://example.org/two",
+		]);
+		expect(readMarketReference(rebased?.market).ok).toBe(true);
+	});
+
+	it("is the proposal itself over the research it was made from", () => {
+		expect(proposal && rebaseProposal(proposal, research)).toEqual(proposal);
+	});
+
+	it("keeps no figure from research the owner cleared after the search", () => {
+		const rebased = proposal && rebaseProposal(proposal, null);
+
+		expect(rebased?.market.ranges).toHaveLength(1);
+		expect(rebased?.market.dayRate).toBeNull();
+	});
+});
+
 describe("useProposal", () => {
 	const proposal = proposeMarket(
 		"001763882580000",
@@ -351,26 +514,65 @@ describe("useProposal", () => {
 		]),
 	);
 
+	const rateOnly = proposeMarket(
+		"001763882580000",
+		NOW,
+		research,
+		new Map([
+			["the day rate", { lowUsd: 600, highUsd: 900, cited: [result("$600")] }],
+		]),
+	);
+
 	it("uses only the proposal the page showed, while it is stored (acceptedWasShown)", () => {
 		expect(
 			Effect.runSync(
-				useProposal.decide({ proposalId: "001763882580000" }, proposal),
+				useProposal.decide(
+					{ proposalId: "001763882580000" },
+					{ stored: proposal, current: research },
+				),
 			).researchedOn,
 		).toBe("2026-11-23");
 		expect(
 			Effect.runSync(
 				Effect.flip(
-					useProposal.decide({ proposalId: "001763882599999" }, proposal),
+					useProposal.decide(
+						{ proposalId: "001763882599999" },
+						{ stored: proposal, current: research },
+					),
 				),
 			)._tag,
 		).toBe("ProposalGone");
 		expect(
 			Effect.runSync(
 				Effect.flip(
-					useProposal.decide({ proposalId: "001763882580000" }, null),
+					useProposal.decide(
+						{ proposalId: "001763882580000" },
+						{ stored: null, current: research },
+					),
 				),
 			)._tag,
 		).toBe("ProposalGone");
+	});
+
+	it("refuses a day rate alone once the owner cleared the research it was proposed over", () => {
+		expect(
+			Effect.runSync(
+				useProposal.decide(
+					{ proposalId: "001763882580000" },
+					{ stored: rateOnly, current: research },
+				),
+			).dayRate,
+		).toEqual({ lowUsd: 600, highUsd: 900 });
+		expect(
+			Effect.runSync(
+				Effect.flip(
+					useProposal.decide(
+						{ proposalId: "001763882580000" },
+						{ stored: rateOnly, current: null },
+					),
+				),
+			)._tag,
+		).toBe("ProposalOutdated");
 	});
 });
 

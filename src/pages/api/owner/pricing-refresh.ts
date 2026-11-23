@@ -1,10 +1,12 @@
 // The market refresh's owner actions (docs/plans/2026-11-market-refresh.md, section 1), from /owner/pricing. Owner only
 // (the Access check every /api/owner/ route has, in src/middleware.ts).
 //   ask      stores the time of the ask; the next daily run searches                        200 { ok }
-//   use      the proposal the page showed becomes the research, through the versioned save  200 { ok, version }
+//   use      the proposal the page showed, laid over the research as it is now, is saved      200 { ok, version }
+//            through the versioned save
 //   discard  removes the proposal the page showed, and only it                               200 { ok }
 //   400 { ok: false, error } a request the page never sends
-//   409 { ok: false, error } the proposal was replaced or discarded, or the pricing was saved from another page
+//   409 { ok: false, error } the proposal was replaced or discarded, no longer makes research over the current one, or
+//                            the pricing was saved from another page
 //   500 / 503                the store failed, or is not bound
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
@@ -74,9 +76,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			return Response.json({ ok: true }, { headers: noStore });
 		}
 
+		const pricing = yield* readPricing;
+
 		const market = yield* useProposal.decide(
 			{ proposalId: read.proposalId },
-			yield* readProposal(read.proposalId),
+			{
+				stored: yield* readProposal(read.proposalId),
+				current: pricing.market,
+			},
 		);
 
 		const next = yield* savePricing.decide(
@@ -85,7 +92,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				change: { part: "market", market },
 				now,
 			},
-			yield* readPricing,
+			pricing,
 		);
 
 		yield* writePricing(next);
@@ -102,6 +109,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		program.pipe(
 			Effect.catchTags({
 				ProposalGone: (refusal) => conflict(refusal.say),
+				ProposalOutdated: (refusal) => conflict(refusal.say),
 				PricingChanged: (refusal) => conflict(refusal.say),
 				MarketRefreshStoreFailed: () => Effect.succeed(refreshFailed()),
 				PricingStoreFailed: () => Effect.succeed(refreshFailed()),

@@ -169,6 +169,60 @@ describe("the market refresh's owner actions", () => {
 		expect(store.has(`${PROPOSAL_PREFIX}${ID}`)).toBe(false);
 	});
 
+	it("keeps research the owner saved after the search, and changes only the figures the search found (the review of PR #378)", async () => {
+		store.set(
+			PRICING_KEY,
+			JSON.stringify({
+				version: 5,
+				dayValueCents: 90_000,
+				contingencyPercent: 20,
+				market: {
+					...research,
+					researchedOn: "2026-11-20",
+					ranges: [
+						research.ranges[0],
+						{
+							kind: "workflow",
+							size: "small",
+							definition: "A made-up automation.",
+							lowUsd: 700,
+							highUsd: 1_100,
+							sourceIds: [],
+						},
+					],
+					dayRate: { lowUsd: 700, highUsd: 1_100 },
+				},
+				updatedAt: "2026-11-20T00:00:00.000Z",
+			}),
+		);
+
+		const response = await post({
+			action: "use",
+			proposalId: ID,
+			expectedVersion: 5,
+		});
+
+		expect(response.status).toBe(200);
+
+		const saved = JSON.parse(store.get(PRICING_KEY) ?? "{}");
+
+		expect(saved.market.ranges).toEqual([
+			expect.objectContaining({
+				kind: "website",
+				size: "small",
+				lowUsd: 1_200,
+				highUsd: 2_400,
+			}),
+			expect.objectContaining({
+				kind: "workflow",
+				size: "small",
+				lowUsd: 700,
+				highUsd: 1_100,
+			}),
+		]);
+		expect(saved.market.dayRate).toEqual({ lowUsd: 700, highUsd: 1_100 });
+	});
+
 	it("refuses a use from a page whose version is old, and changes nothing", async () => {
 		const response = await post({
 			action: "use",

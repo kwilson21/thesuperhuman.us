@@ -3,7 +3,8 @@
 // proposal is waiting, the accepted research's date, whether the Tavily key is set) and the run's time, and from what the
 // search and the model answered; it reads no clock, store or network. Nothing re-checks the start at write time: one
 // daily run writes the marker, and the owner's ask is cleared only when it was made before the run started
-// (verification/market-refresh.qnt, askNeverLost). Using a proposal goes through `savePricing` (./pricing.ts) with the
+// (verification/market-refresh.qnt, askNeverLost). Using a proposal lays its new figures over the research as it is
+// now (`rebaseProposal`), so a save made after the search is kept; it goes through `savePricing` (./pricing.ts) with the
 // version the owner's page read, and refuses a proposal a newer search replaced (acceptedWasShown).
 import * as Data from "effect/Data";
 import {
@@ -26,6 +27,10 @@ export const RETRY_AFTER_DAYS = 7;
 
 /** Most results a search cell may cite. */
 export const CITED_MAX = 3;
+
+/** Longest source title and link a research record holds (readMarketReference); a longer link is not cited at all. */
+const SOURCE_TITLE_MAX = 300;
+const SOURCE_URL_MAX = 600;
 
 /** The last run: when it started and how it ended ("started" while it runs, or if it never finished). */
 export type LastRun = {
@@ -160,8 +165,14 @@ export type Checked = {
 	readonly cited: readonly SearchResult[];
 };
 
+// A scale letter counts only when it ends the word ("$5k", never the k of "$15 kit" or "$12 kWh"), and a year before
+// "dollars" ("in 2024 dollars") is not an amount.
 const DOLLARS =
-	/(?:\$\s?|\bUSD\s?)(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s?([kK]|[mM](?![a-z]))?|(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s?([kK])?\s?(?:USD|US dollars|dollars)\b/g;
+	/(?:\$\s?|\bUSD\s?)(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?([kKmM](?![A-Za-z]))?|(?<!\bin )\b(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?([kK](?![A-Za-z]))?\s?(?:USD|US dollars|dollars)\b/g;
+
+/** Wording right after an amount, or after the range it starts, that makes it a rate per hour: "90/hr", "90 to 140 per hour". */
+const PER_HOUR =
+	/^\s*(?:(?:to|and|-|\u2013)\s*(?:\$\s?|USD\s?)?\d[\d,]*(?:\.\d+)?[kK]?\s*)?(?:\/\s*(?:hr|hour)\b|(?:per|an|a|each)\s+(?:hr|hour)\b|hourly\b)/i;
 
 /** What "k" and "m" after an amount multiply it by. */
 const SCALES = new Map([
@@ -169,9 +180,12 @@ const SCALES = new Map([
 	["m", 1_000_000],
 ]);
 
-/** Every dollar amount a text states, in whole dollars: "$5,000", "$5k", "$2.5K", "USD 5,000", "5,000 dollars". */
-export function dollarAmounts(text: string): number[] {
-	const amounts: number[] = [];
+/** A dollar amount a text states, in whole dollars, and whether the text gives it as a rate per hour. */
+export type StatedAmount = { readonly usd: number; readonly perHour: boolean };
+
+/** Every dollar amount a text states: "$5,000", "$5k", "$2.5K", "USD 5,000", "5,000 dollars", each marked per hour or not. */
+export function statedAmounts(text: string): StatedAmount[] {
+	const amounts: StatedAmount[] = [];
 
 	for (const match of text.matchAll(DOLLARS)) {
 		const whole = match[1] ?? match[4] ?? "";
@@ -182,11 +196,19 @@ export function dollarAmounts(text: string): number[] {
 			Number(`${whole.replaceAll(",", "")}${part ? `.${part}` : ""}`) *
 			(SCALES.get(scale) ?? 1);
 
-		if (Number.isFinite(value)) amounts.push(Math.round(value));
+		if (Number.isFinite(value))
+			amounts.push({
+				usd: Math.round(value),
+				perHour: PER_HOUR.test(text.slice(match.index + match[0].length)),
+			});
 	}
 
 	return amounts;
 }
+
+/** Every dollar amount a text states, in whole dollars. */
+export const dollarAmounts = (text: string) =>
+	statedAmounts(text).map((amount) => amount.usd);
 
 /** Hours in the day the board's day rate counts. */
 const HOURS_A_DAY = 8;
@@ -194,7 +216,8 @@ const HOURS_A_DAY = 8;
 /**
  * Whether a reading stands: both ends are whole dollars, the low end is not above the high end, and each end appears as a
  * dollar amount in the text of a result the reading cites (the November research's rule that each figure is re-read in
- * its source). An hourly day rate is checked as stated, then made a day of 8 hours. Null when it does not stand.
+ * its source), given per hour there exactly when the reading says so. A day rate stated per hour is checked as stated,
+ * then made a day of 8 hours. Null when it does not stand.
  */
 export function checkReading(
 	cell: RefreshCell,
@@ -205,7 +228,10 @@ export function checkReading(
 		.flatMap((index) => {
 			const result = Number.isInteger(index) ? results[index - 1] : undefined;
 
-			return result?.url.startsWith("https://") ? [result] : [];
+			return result?.url.startsWith("https://") &&
+				result.url.length <= SOURCE_URL_MAX
+				? [result]
+				: [];
 		})
 		.slice(0, CITED_MAX);
 
@@ -221,11 +247,14 @@ export function checkReading(
 	)
 		return null;
 
-	const stated = new Set(
-		cited.flatMap((result) => dollarAmounts(result.content)),
-	);
+	const stated = cited.flatMap((result) => statedAmounts(result.content));
 
-	if (!stated.has(reading.lowUsd) || !stated.has(reading.highUsd)) return null;
+	const states = (usd: number) =>
+		stated.some(
+			(amount) => amount.usd === usd && amount.perHour === reading.perHour,
+		);
+
+	if (!states(reading.lowUsd) || !states(reading.highUsd)) return null;
 
 	const scale = cell.kind === "dayRate" && reading.perHour ? HOURS_A_DAY : 1;
 	const lowUsd = reading.lowUsd * scale;
@@ -298,9 +327,11 @@ export function proposeMarket(
 
 	const cited = (checked: Checked) =>
 		checked.cited.flatMap((result) => {
+			if (result.url.length > SOURCE_URL_MAX) return [];
+
 			const sourceId = addSource({
-				title: result.title.slice(0, 300) || result.url,
-				url: result.url.slice(0, 600),
+				title: (result.title || result.url).slice(0, SOURCE_TITLE_MAX),
+				url: result.url,
 				published: result.published,
 				kind: "web search",
 			});
@@ -405,34 +436,105 @@ export function proposeMarket(
 
 // ---- Using a proposal ---------------------------------------------------------------------------------------------
 
+/**
+ * A stored proposal laid over the research as it is now: only the figures the search found change, with the sources it
+ * cited; every other cell, the day rate when the search found none, and their sources come from the current research.
+ * A research save or clear made after the search is kept, and the page shows "Now" from the same research the save
+ * reads. Null when nothing the search found still makes research (it found only a day rate and no range is left).
+ */
+export function rebaseProposal(
+	proposal: MarketProposal,
+	current: MarketReference | null,
+): MarketProposal | null {
+	const sourceOf = new Map(
+		proposal.market.sources.map((source) => [source.id, source]),
+	);
+
+	const found = new Map<string, Checked>();
+
+	for (const change of proposal.changes)
+		if (change.after)
+			found.set(change.cell, {
+				...change.after,
+				cited: change.sourceIds.flatMap((sourceId) => {
+					const source = sourceOf.get(sourceId);
+
+					return source
+						? [
+								{
+									title: source.title,
+									url: source.url,
+									content: "",
+									published: source.published,
+								},
+							]
+						: [];
+				}),
+			});
+
+	return proposeMarket(proposal.id, proposal.createdAt, current, found);
+}
+
 export class ProposalGone extends Data.TaggedError("ProposalGone") {
 	readonly say =
 		"These figures were replaced by a newer search or discarded. Reload to see what is waiting.";
 }
 
-/** Using a proposal: only the one the owner's page showed, while it is still stored. */
+export class ProposalOutdated extends Data.TaggedError("ProposalOutdated") {
+	readonly say =
+		"Your research changed after the search, and these figures no longer make research on their own. Discard them and ask for a new search.";
+}
+
+type UseGiven = {
+	readonly proposalId: string;
+	readonly stored: MarketProposal | null;
+	readonly rebased: MarketProposal | null;
+};
+
+/**
+ * Using a proposal: only the one the owner's page showed, while it is still stored, laid over the research as it is now
+ * (`rebaseProposal`). The versioned save that follows refuses research changed since the page read it.
+ */
 export const useProposal = alwaysWrites({
 	name: "Use the proposed market figures",
 	given: (
 		request: { readonly proposalId: string },
-		stored: MarketProposal | null,
-	) => ({ ...request, stored }),
+		facts: {
+			readonly stored: MarketProposal | null;
+			readonly current: MarketReference | null;
+		},
+	): UseGiven => ({
+		...request,
+		stored: facts.stored,
+		rebased:
+			facts.stored?.id === request.proposalId
+				? rebaseProposal(facts.stored, facts.current)
+				: null,
+	}),
 	refusals: [
 		unless(
-			term<{ proposalId: string; stored: MarketProposal | null }>(
+			term<UseGiven>(
 				"the proposal the owner's page showed is still stored",
 				(g) => g.stored?.id === g.proposalId,
 			),
 			() => new ProposalGone(),
 		),
+		unless(
+			term<UseGiven>(
+				"what the search found still makes research over the current one",
+				(g) => g.rebased !== null,
+			),
+			() => new ProposalOutdated(),
+		),
 	],
 	writes: (g): MarketReference => {
-		// SAFETY: the refusal above holds only when the stored proposal is the one asked for, so it is not null here.
-		const proposal = g.stored as MarketProposal;
+		// SAFETY: the second refusal above holds only when the rebased proposal exists, so it is not null here.
+		const rebased = g.rebased as MarketProposal;
 
-		return proposal.market;
+		return rebased.market;
 	},
-	writesText: "the proposal's research, for the versioned save",
+	writesText:
+		"the proposal's new figures over the current research, for the versioned save",
 });
 
 // ---- What a search asks ----------------------------------------------------------------------------------------

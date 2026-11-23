@@ -9,6 +9,7 @@ import * as Option from "effect/Option";
 import {
 	clearAsk,
 	deleteProposalsBefore,
+	type MarketRefreshStoreFailed,
 	proposalId,
 	readAsk,
 	readLast,
@@ -17,7 +18,7 @@ import {
 	writeProposal,
 } from "../market-refresh-store";
 import { MarketReader, MarketSearch } from "../market-refresh-services";
-import { readPricing } from "../pricing-store";
+import { type PricingStoreFailed, readPricing } from "../pricing-store";
 import {
 	askServed,
 	type Checked,
@@ -30,11 +31,21 @@ import {
 	startRefresh,
 	workOf,
 } from "../rules/market-refresh";
+import type { ResumeStore } from "../services";
 
 /** How a run ended: nothing due, a proposal saved, no new figure found, or the search failed. */
 export type RefreshOutcome = "idle" | "proposal" | "nothing-new" | "failed";
 
-export const refreshMarket = (start: RefreshStart) =>
+/** A run's outcome, typed as one: a bare literal returned from the generator would widen to a string. */
+const ended = (outcome: RefreshOutcome) => outcome;
+
+export const refreshMarket = (
+	start: RefreshStart,
+): Effect.Effect<
+	RefreshOutcome,
+	MarketRefreshStoreFailed | PricingStoreFailed,
+	ResumeStore | MarketSearch | MarketReader
+> =>
 	Effect.gen(function* () {
 		const askedAt = yield* readAsk;
 		const last = yield* readLast;
@@ -48,7 +59,7 @@ export const refreshMarket = (start: RefreshStart) =>
 			researchedOn: pricing.market?.researchedOn ?? null,
 		});
 
-		if (Option.isNone(begin)) return "idle" satisfies RefreshOutcome;
+		if (Option.isNone(begin)) return ended("idle");
 		yield* writeLast(begin.value);
 
 		const search = yield* MarketSearch;
@@ -78,7 +89,7 @@ export const refreshMarket = (start: RefreshStart) =>
 		if (unread === REFRESH_CELLS.length) {
 			yield* writeLast({ at: start.now, result: "failed" });
 
-			return "failed" satisfies RefreshOutcome;
+			return ended("failed");
 		}
 
 		const proposal = proposeMarket(
@@ -100,13 +111,13 @@ export const refreshMarket = (start: RefreshStart) =>
 
 		if (askServed(yield* readAsk, start.now)) yield* clearAsk;
 
-		return (proposal ? "proposal" : "nothing-new") satisfies RefreshOutcome;
+		return ended(proposal ? "proposal" : "nothing-new");
 	}).pipe(
 		Effect.catchTag("MarketSearchFailed", (failure) =>
 			writeLast({
 				at: start.now,
 				result: "failed",
 				status: failure.status,
-			}).pipe(Effect.as("failed" satisfies RefreshOutcome)),
+			}).pipe(Effect.as(ended("failed"))),
 		),
 	);
