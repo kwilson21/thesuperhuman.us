@@ -41,7 +41,9 @@ const SIGNING_SETTING = /FROM software_signing_settings/;
 const OFFER_LOOKUP =
 	/FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id\s+JOIN owner_requests/;
 
-const SESSION_LOOKUP = /SELECT \* FROM software_agreement_sessions/;
+/** The session read by its token's hash and purpose: `agreementSession`'s, and the converted routes' `readSession`. */
+const SESSION_LOOKUP =
+	/FROM software_agreement_sessions WHERE token_hash=\? AND purpose=\?/;
 
 const AGREEMENTS_READ =
 	/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/;

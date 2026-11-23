@@ -1,83 +1,71 @@
 import type { APIRoute } from "astro";
-import { agreementRequest } from "~/lib/agreement-request";
+import * as Effect from "effect/Effect";
 import {
-	agreementSession,
 	agreementJson,
-	signingEnabled,
+	signingDraftFailed,
+	signingDraftUnavailable,
 } from "~/lib/agreement-access";
-import { getLinkedOffer } from "~/lib/software-offers";
-import { saveAgreementDraft } from "~/lib/agreement-draft";
-import { readDraft } from "~/lib/agreement-draft-fields";
-import { classifyFailure, logUnexpected } from "~/server/failure";
+import { agreementRequest } from "~/lib/agreement-request";
+import { loggedAnswer } from "~/server/answers";
+import { draftBody, saveSigningFormDraft } from "~/server/flows/signing-draft";
+import { AlreadySigned } from "~/server/rules/signing-draft";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 
+const failed = loggedAnswer(
+	signingDraftFailed.route,
+	signingDraftFailed.answer,
+);
+
+/** A project started, an agreement signed, or a guard of the batch that raised: the one 409 the route has always given. */
+const notSaved = () =>
+	Effect.succeed(
+		agreementJson({ ok: false, error: new AlreadySigned().say }, 409),
+	);
+
 export const POST: APIRoute = async ({ request, locals, params }) => {
-	const db = locals.runtime.env.MUSIC_DB;
 	const body = await agreementRequest(request);
 
 	if (body instanceof Response) return body;
 
-	try {
-		const offer =
-			db && params.token ? await getLinkedOffer(db, params.token) : null;
+	const bindings = bindingsOrUnavailable(locals.runtime.env, ["MUSIC_DB"]);
 
-		const session =
-			db && offer
-				? await agreementSession(db, request, "agreement", offer.id)
-				: null;
+	if (!bindings.ok) return signingDraftUnavailable();
 
-		if (!db || !offer || !session || !(await signingEnabled(db)))
-			return agreementJson(
-				{
-					ok: false,
-					error:
-						"Open a fresh email link to keep going. Your saved details will be here.",
-				},
-				401,
-			);
-		// SAFETY: this names the two body fields the route reads; csrf_nonce is compared to the session value and values goes to readDraft, so neither is used unchecked. The cast does not check that the body is an object: a JSON null body reads as an empty one, so it carries no nonce and gets the 403 the review route gives it.
-		const input = (body ?? {}) as { csrf_nonce?: unknown; values?: unknown };
-
-		if (input.csrf_nonce !== session.csrf_nonce)
-			return agreementJson({ ok: false, error: "Reload and try again." }, 403);
-		const parsed = readDraft(input.values);
-
-		if (!parsed.ok)
-			return agreementJson(
-				{
-					ok: false,
-					error: "Check the highlighted details.",
-					errors: parsed.errors,
-				},
-				400,
-			);
-
-		await saveAgreementDraft(db, offer, session, parsed.value);
-
-		return agreementJson({ ok: true });
-	} catch (error) {
-		// A guard of the draft batch raised: since the read, the offer stopped being open for signing, the session ended or
-		// an agreement was signed. 409, as before.
-		if (classifyFailure(error).kind === "stale")
-			return agreementJson(
-				{
-					ok: false,
-					error:
-						"Your details could not be saved. Check the fields and try again.",
-				},
-				409,
-			);
-
-		// Anything else (a read or the batch that failed) is a fault of the site: 500, logged once without what was sent.
-		logUnexpected("Agreement draft", error);
-
-		return agreementJson(
-			{
-				ok: false,
-				error: "Your details could not be saved. Try again in a moment.",
-			},
-			500,
-		);
-	}
+	return runRoute(
+		bindings.services,
+		saveSigningFormDraft({
+			token: params.token,
+			request,
+			body: draftBody(body),
+			now: () => new Date(),
+		}).pipe(
+			Effect.as(agreementJson({ ok: true })),
+			Effect.catchTags({
+				SessionMissing: (refusal) =>
+					Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 401)),
+				CsrfMismatch: (refusal) =>
+					Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 403)),
+				DraftRefused: (refusal) =>
+					Effect.succeed(
+						agreementJson(
+							{ ok: false, error: refusal.say, errors: refusal.errors },
+							400,
+						),
+					),
+				SigningStarted: notSaved,
+				AlreadySigned: notSaved,
+				// A guard of the batch raised: since the read, the offer stopped being open for signing, the session ended or
+				// an agreement was signed.
+				GuardRefused: notSaved,
+				// A read or the batch that failed is a fault of the site: 500, logged once without what was sent.
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		// A defect (a value that reads once but not twice, a bug) is the same fixed 500, logged once.
+		signingDraftFailed,
+	);
 };
