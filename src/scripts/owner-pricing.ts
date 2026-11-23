@@ -4,6 +4,12 @@
 // it changed while the save was on its way), which a reload would lose.
 import * as Predicate from "effect/Predicate";
 import type { RawValue } from "../lib/fields";
+import {
+	claimPage,
+	markLost,
+	pageWait,
+	releasePage,
+} from "./owner-pricing-lock";
 
 type Status = HTMLElement | null;
 
@@ -98,14 +104,10 @@ const SAVED_KEY = "owner-pricing-saved";
 const clearOffered = (form: HTMLFormElement) =>
 	form.querySelector<HTMLElement>("[data-pricing-clear]")?.hidden === false;
 
-/** Whether a save from this page is on its way. */
-let saving = false;
-
-/**
- * Whether a save's answer was lost: it may have reached the store, so this page's version may be old and another save
- * would be refused as if another page had saved (verification/pricing-save.qnt, mutant retry-after-lost).
- */
-let needsReload = false;
+// Whether a request from this page is on its way, and whether an answer was lost (it may have reached the store, so this
+// page's version may be old and another save would be refused as if another page had saved): the page-wide lock in
+// ./owner-pricing-lock.ts, which the market refresh's buttons share (verification/pricing-save.qnt, mutants
+// parallel-saves and retry-after-lost).
 
 const RELOAD_FIRST =
 	"The last save’s answer did not arrive, so it may have been saved. Reload the page before saving again.";
@@ -123,21 +125,21 @@ async function send(
 	form: HTMLFormElement,
 	status: Status,
 ) {
-	if (saving) {
-		sayBusy(status);
+	const wait = pageWait();
 
-		return;
-	}
-
-	if (needsReload) {
+	if (wait === "reload") {
 		if (status) status.textContent = RELOAD_FIRST;
 
 		return;
 	}
 
-	saving = true;
+	if (!claimPage()) {
+		sayBusy(status);
 
-	// Marked, not disabled: a disabled button would drop keyboard focus to the page. `saving` refuses a second press.
+		return;
+	}
+
+	// Marked, not disabled: a disabled button would drop keyboard focus to the page. The lock refuses a second press.
 	const buttons = [
 		...document.querySelectorAll<HTMLButtonElement>(
 			"[data-pricing-form] button",
@@ -160,7 +162,7 @@ async function send(
 	try {
 		await save(body, form, status, sent);
 	} finally {
-		saving = false;
+		releasePage();
 
 		for (const button of buttons) button.removeAttribute("aria-disabled");
 
@@ -202,7 +204,7 @@ async function save(
 
 		// No readable answer (a timeout at the edge, a cut connection): the save may or may not have been written.
 		if (answer === null) {
-			needsReload = true;
+			markLost();
 
 			if (status) status.textContent = RELOAD_FIRST;
 
@@ -363,7 +365,7 @@ async function save(
 		if (refusedResearch && !boxChangedSince) markResearch(true);
 	} catch {
 		// The request or its answer was lost on the way: the save may have reached the store.
-		needsReload = true;
+		markLost();
 
 		if (status) status.textContent = RELOAD_FIRST;
 	}
@@ -427,8 +429,10 @@ export function setupOwnerPricing() {
 			event.preventDefault();
 
 			// Answered before the fields are checked, so a refusal said now is not replaced by the earlier save's answer.
-			if (saving || needsReload) {
-				if (needsReload) {
+			const wait = pageWait();
+
+			if (wait) {
+				if (wait === "reload") {
 					if (status) status.textContent = RELOAD_FIRST;
 				} else sayBusy(status);
 
@@ -540,8 +544,10 @@ export function setupOwnerPricing() {
 		form
 			.querySelector<HTMLButtonElement>("[data-pricing-clear]")
 			?.addEventListener("click", () => {
-				if (saving || needsReload) {
-					if (needsReload) {
+				const wait = pageWait();
+
+				if (wait) {
+					if (wait === "reload") {
 						if (status) status.textContent = RELOAD_FIRST;
 					} else sayBusy(status);
 

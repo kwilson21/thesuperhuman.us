@@ -2,8 +2,9 @@
 // rule whether a search is due, and marks the start; then, cell by cell, searches, reads the results with the model and
 // keeps only the figures the rule's check lets stand; then saves the proposal those make (replacing older ones), the
 // last run, and clears the owner's ask only if it was made before the run started (verification/market-refresh.qnt).
-// A failed search ends the run with nothing saved but the last run's failure, and the ask kept for the next run. A
-// cell the model could not read keeps its figures. Calls only services and the pure rules; builds no text for anyone.
+// A failed search ends the run with nothing saved but the last run's failure, and clears the ask it answered, so it
+// waits a week like any other search (the owner can ask again). A cell the model could not read keeps its figures.
+// Calls only services and the pure rules; builds no text for anyone.
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import {
@@ -35,6 +36,16 @@ import type { ResumeStore } from "../services";
 
 /** How a run ended: nothing due, a proposal saved, no new figure found, or the search failed. */
 export type RefreshOutcome = "idle" | "proposal" | "nothing-new" | "failed";
+
+/**
+ * Clears the owner's ask when this run answered it, by finishing or failing: only an ask made before the run started
+ * (verification/market-refresh.qnt, askNeverLost). A failed search is answered too, so it waits a week like any other
+ * instead of spending a search every day; the owner can ask again.
+ */
+const clearAnswered = (now: string) =>
+	Effect.gen(function* () {
+		if (askServed(yield* readAsk, now)) yield* clearAsk;
+	});
 
 /** A run's outcome, typed as one: a bare literal returned from the generator would widen to a string. */
 const ended = (outcome: RefreshOutcome) => outcome;
@@ -68,7 +79,7 @@ export const refreshMarket = (
 		let unread = 0;
 
 		for (const cell of REFRESH_CELLS) {
-			const work = workOf(cell, pricing.market);
+			const work = workOf(cell);
 			const results = yield* search.search(queryOf(cell, work));
 
 			const reading = yield* reader.read(cell, work, results).pipe(
@@ -88,6 +99,7 @@ export const refreshMarket = (
 		// The model read nothing at all: that is a failure to try again, not a search that found nothing new.
 		if (unread === REFRESH_CELLS.length) {
 			yield* writeLast({ at: start.now, result: "failed" });
+			yield* clearAnswered(start.now);
 
 			return ended("failed");
 		}
@@ -109,7 +121,7 @@ export const refreshMarket = (
 			result: proposal ? "proposal" : "nothing-new",
 		});
 
-		if (askServed(yield* readAsk, start.now)) yield* clearAsk;
+		yield* clearAnswered(start.now);
 
 		return ended(proposal ? "proposal" : "nothing-new");
 	}).pipe(
@@ -118,6 +130,9 @@ export const refreshMarket = (
 				at: start.now,
 				result: "failed",
 				status: failure.status,
-			}).pipe(Effect.as(ended("failed"))),
+			}).pipe(
+				Effect.andThen(clearAnswered(start.now)),
+				Effect.as(ended("failed")),
+			),
 		),
 	);

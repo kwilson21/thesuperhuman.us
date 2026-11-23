@@ -325,6 +325,36 @@ export function proposeMarket(
 		return next;
 	};
 
+	// Room for new sources: every source the current ranges cite is reserved first, so a kept range never loses one, and
+	// a new figure is proposed only when all of its sources fit; otherwise its cell is kept as it is.
+	const reserved = new Set(
+		(current?.ranges ?? []).flatMap((range) =>
+			range.sourceIds.flatMap((sourceId) => {
+				const source = current?.sources.find((each) => each.id === sourceId);
+
+				return source ? [source.url] : [];
+			}),
+		),
+	);
+
+	const taken = new Set<string>();
+	let room = SOURCES_MAX - reserved.size;
+
+	const fits = (checked: Checked) => {
+		const fresh = new Set(
+			checked.cited.flatMap((result) =>
+				reserved.has(result.url) || taken.has(result.url) ? [] : [result.url],
+			),
+		);
+
+		if (fresh.size > room) return false;
+		room -= fresh.size;
+
+		for (const url of fresh) taken.add(url);
+
+		return true;
+	};
+
 	const cited = (checked: Checked) =>
 		checked.cited.flatMap((result) => {
 			if (result.url.length > SOURCE_URL_MAX) return [];
@@ -346,15 +376,17 @@ export function proposeMarket(
 		for (const size of PRICING_SIZES) {
 			const name = cellName({ kind, size });
 			const accepted = rangeOf(current, kind, size);
-			const checked = found.get(name) ?? null;
+			const searched = found.get(name) ?? null;
+			const checked = searched && fits(searched) ? searched : null;
 
 			if (checked) {
 				const sourceIds = cited(checked);
 
+				// The figure was searched for the repository's definition (workOf), so it carries that definition.
 				ranges.push({
 					kind,
 					size,
-					definition: accepted?.definition ?? DEFAULT_DEFINITIONS[kind][size],
+					definition: DEFAULT_DEFINITIONS[kind][size],
 					lowUsd: checked.lowUsd,
 					highUsd: checked.highUsd,
 					sourceIds,
@@ -386,7 +418,8 @@ export function proposeMarket(
 			}
 		}
 
-	const rate = found.get(cellName({ kind: "dayRate" })) ?? null;
+	const searchedRate = found.get(cellName({ kind: "dayRate" })) ?? null;
+	const rate = searchedRate && fits(searchedRate) ? searchedRate : null;
 	const rateSources = rate ? cited(rate) : [];
 
 	changes.push({
@@ -539,12 +572,14 @@ export const useProposal = alwaysWrites({
 
 // ---- What a search asks ----------------------------------------------------------------------------------------
 
-/** What a cell's search and reading are about: the accepted research's definition, or the default. */
-export const workOf = (cell: RefreshCell, current: MarketReference | null) =>
+/**
+ * What a cell's search and reading are about: the repository's own definition of the kind and size, never text from the
+ * stored research, which the owner can edit and which could name a client. Only this reaches Tavily and the model.
+ */
+export const workOf = (cell: RefreshCell) =>
 	cell.kind === "dayRate"
 		? "A senior independent software developer's day rate."
-		: (rangeOf(current, cell.kind, cell.size)?.definition ??
-			DEFAULT_DEFINITIONS[cell.kind][cell.size]);
+		: DEFAULT_DEFINITIONS[cell.kind][cell.size];
 
 /** A cell's search query: fixed text about the kind of work, never anything about a client. */
 export const queryOf = (cell: RefreshCell, work: string) =>

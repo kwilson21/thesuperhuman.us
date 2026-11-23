@@ -1,9 +1,16 @@
 // The market refresh's buttons on /owner/pricing (docs/plans/2026-11-market-refresh.md, section 1): ask for a search,
-// use the proposed figures, or discard them. One request at a time; a request whose answer never arrives asks for a
-// reload before another. Use sends the version the research form holds at the press (src/scripts/owner-pricing.ts keeps
-// it current after a save), so a save from this page is never mistaken for one from another tab.
+// use the proposed figures, or discard them. One request at a time for the whole page, through the lock the pricing
+// forms use (./owner-pricing-lock.ts), since Use saves the same record; a request whose answer never arrives asks for a
+// reload before any other. Use sends the version the research form holds at the press (src/scripts/owner-pricing.ts
+// keeps it current after a save), so a save from this page is never mistaken for one from another tab.
 import * as Predicate from "effect/Predicate";
 import type { RawValue } from "../lib/fields";
+import {
+	claimPage,
+	markLost,
+	pageWait,
+	releasePage,
+} from "./owner-pricing-lock";
 
 /** A field of the route's answer, unread; undefined when the answer is not an object or lacks it. */
 const field = (answer: RawValue, name: string): RawValue =>
@@ -12,6 +19,12 @@ const field = (answer: RawValue, name: string): RawValue =>
 	Object.hasOwn(answer, name)
 		? answer[name]
 		: undefined;
+
+/** How long a request waits for its answer before the page treats it as lost, as the pricing forms do. */
+const ANSWER_TIMEOUT_MS = 30000;
+
+const NO_ANSWER =
+	"The request got no answer, so it may have gone through. Reload the page before trying again.";
 
 export function setupPricingRefresh() {
 	const section = document.querySelector<HTMLElement>("[data-pricing-refresh]");
@@ -30,9 +43,6 @@ export function setupPricingRefresh() {
 		section.querySelector<HTMLElement>("[data-proposal]")?.dataset.proposal ??
 		"";
 
-	let busy = false;
-	let needsReload = false;
-
 	const say = (text: string) => {
 		if (status) status.textContent = text;
 	};
@@ -42,7 +52,7 @@ export function setupPricingRefresh() {
 		body: Record<string, string | number>,
 		done: () => void,
 	) => {
-		if (needsReload) {
+		if (pageWait() === "reload") {
 			say(
 				"The last request got no answer, so it may have gone through. Reload the page before trying again.",
 			);
@@ -50,13 +60,12 @@ export function setupPricingRefresh() {
 			return;
 		}
 
-		if (busy) {
+		if (!claimPage()) {
 			say("A request is on its way. Try again when it answers.");
 
 			return;
 		}
 
-		busy = true;
 		button.setAttribute("aria-disabled", "true");
 		say("Sending…");
 
@@ -65,12 +74,17 @@ export function setupPricingRefresh() {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify(body),
+				signal: AbortSignal.timeout(ANSWER_TIMEOUT_MS),
 			});
 
 			const answer: RawValue = await response.json().catch(() => null);
 			const error = field(answer, "error");
 
-			if (response.ok && field(answer, "ok") === true) done();
+			// No readable answer (a timeout at the edge, a cut connection): the request may or may not have gone through.
+			if (answer === null) {
+				markLost();
+				say(NO_ANSWER);
+			} else if (response.ok && field(answer, "ok") === true) done();
 			else
 				say(
 					Predicate.isString(error) && error
@@ -78,12 +92,10 @@ export function setupPricingRefresh() {
 						: "That did not go through. Try again.",
 				);
 		} catch {
-			needsReload = true;
-			say(
-				"The request got no answer, so it may have gone through. Reload the page before trying again.",
-			);
+			markLost();
+			say(NO_ANSWER);
 		} finally {
-			busy = false;
+			releasePage();
 			button.removeAttribute("aria-disabled");
 		}
 	};

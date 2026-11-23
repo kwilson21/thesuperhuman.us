@@ -37,6 +37,7 @@ import {
 	type SearchResult,
 	askServed,
 	checkReading,
+	DEFAULT_DEFINITIONS,
 	dollarAmounts,
 	proposeMarket,
 	queryOf,
@@ -360,7 +361,7 @@ describe("proposeMarket", () => {
 			{
 				kind: "website",
 				size: "small",
-				definition: "A made-up small site.",
+				definition: DEFAULT_DEFINITIONS.website.small,
 				lowUsd: 1_200,
 				highUsd: 2_400,
 				sourceIds: [1],
@@ -388,6 +389,60 @@ describe("proposeMarket", () => {
 		});
 		expect(proposal?.market.caveats.join(" ")).toContain("webapp medium");
 		expect(readMarketReference(proposal?.market).ok).toBe(true);
+	});
+
+	it("reserves the kept ranges' sources, and proposes a new figure only when all of its sources fit (60 at most)", () => {
+		const many = Array.from({ length: 59 }, (_, index) => ({
+			id: index + 1,
+			title: `Made-up source ${index + 1}`,
+			url: `https://example.org/${index + 1}`,
+			published: "",
+			kind: "other" as const,
+		}));
+
+		const full: MarketReference = {
+			...research,
+			ranges: [
+				{ ...research.ranges[0], sourceIds: [1] },
+				{
+					...research.ranges[1],
+					sourceIds: many.slice(1).map((source) => source.id),
+				},
+			],
+			sources: many,
+		};
+
+		const twoNew: Checked = {
+			lowUsd: 1_200,
+			highUsd: 2_400,
+			cited: [
+				result("$1,200 to $2,400", "https://example.com/x"),
+				result("$1,200 to $2,400", "https://example.com/y"),
+			],
+		};
+
+		// Two new sources do not fit beside the 59 reserved ones: nothing new to propose.
+		expect(
+			proposeMarket("1", NOW, full, new Map([["website small", twoNew]])),
+		).toBeNull();
+
+		const oneNew = proposeMarket(
+			"1",
+			NOW,
+			full,
+			new Map([["website small", { ...twoNew, cited: [twoNew.cited[0]] }]]),
+		);
+
+		// The replaced range's old source was reserved but is no longer cited: 58 kept and the 1 new one.
+		expect(oneNew?.market.sources).toHaveLength(59);
+		expect(
+			oneNew?.market.ranges.find((range) => range.kind === "webapp")?.sourceIds,
+		).toHaveLength(58);
+		expect(
+			oneNew?.market.ranges.find((range) => range.kind === "website")
+				?.sourceIds,
+		).toHaveLength(1);
+		expect(readMarketReference(oneNew?.market).ok).toBe(true);
 	});
 
 	it("names a source with no title by its link, within the length research holds", () => {
@@ -577,13 +632,14 @@ describe("useProposal", () => {
 });
 
 describe("what a search sends", () => {
-	it("asks only about the kind of work, from the research's own definition", () => {
-		expect(
-			queryOf(
-				{ kind: "website", size: "small" },
-				workOf({ kind: "website", size: "small" }, research),
-			),
-		).toContain("A made-up small site.");
+	it("asks only about the kind of work, in the repository's own words, never the stored research's text", () => {
+		const query = queryOf(
+			{ kind: "website", size: "small" },
+			workOf({ kind: "website", size: "small" }),
+		);
+
+		expect(query).toContain(DEFAULT_DEFINITIONS.website.small);
+		expect(query).not.toContain("A made-up small site.");
 		expect(queryOf({ kind: "dayRate" }, "")).toContain("day rate");
 		expect(REFRESH_CELLS).toHaveLength(10);
 	});
@@ -825,6 +881,32 @@ describe("the daily run", () => {
 		expect(store.has(ASK_KEY)).toBe(false);
 	});
 
+	it("sends Tavily and the model only the repository's definitions, never the stored research's own text", async () => {
+		// Research whose definitions the owner wrote, standing in for text that could name a client.
+		const owned: MarketReference = {
+			...research,
+			ranges: research.ranges.map((range) => ({
+				...range,
+				definition: `Owner text for ${range.kind} ${range.size}`,
+			})),
+		};
+
+		const search = vi.fn((_query: string) => Effect.succeed(pages));
+		const works: string[] = [];
+
+		await run({ [PRICING_KEY]: pricingWith(owned) }, search, (_cell, work) => {
+			works.push(work);
+
+			return Effect.succeed(null);
+		});
+
+		const sent = [...search.mock.calls.flat(), ...works].join(" ");
+
+		expect(search).toHaveBeenCalledTimes(10);
+		expect(sent).not.toContain("Owner text");
+		expect(sent).toContain(DEFAULT_DEFINITIONS.webapp.medium);
+	});
+
 	it("keeps an ask made after the run started for the next run (askNeverLost)", async () => {
 		const later = "2026-11-23T07:30:00.000Z";
 
@@ -838,7 +920,7 @@ describe("the daily run", () => {
 		expect(store.get(ASK_KEY)).toBe(later);
 	});
 
-	it("saves nothing and keeps the ask when the search fails, with Tavily's status", async () => {
+	it("saves nothing when the search fails, with Tavily's status, and answers the ask it tried so it waits a week", async () => {
 		const { outcome, store } = await run(
 			{
 				[PRICING_KEY]: pricingWith(research),
@@ -854,20 +936,54 @@ describe("the daily run", () => {
 			result: "failed",
 			status: 401,
 		});
-		expect(store.has(ASK_KEY)).toBe(true);
+		expect(store.has(ASK_KEY)).toBe(false);
 		expect(
 			[...store.keys()].some((key) => key.startsWith(PROPOSAL_PREFIX)),
 		).toBe(false);
+
+		// The next day nothing is asked and a search was tried this week: no search, so no credits spent.
+		expect(
+			Option.isNone(
+				Effect.runSync(
+					startRefresh.decide(
+						{ now: "2026-11-24T07:23:00.000Z", hasKey: true },
+						{
+							askedAt: null,
+							last: JSON.parse(store.get(LAST_KEY) ?? "{}"),
+							proposalWaiting: false,
+							researchedOn: research.researchedOn,
+						},
+					),
+				),
+			),
+		).toBe(true);
+	});
+
+	it("keeps an ask made while a failing run was going (askNeverLost)", async () => {
+		const later = "2026-11-23T07:30:00.000Z";
+
+		const { store } = await run(
+			{ [PRICING_KEY]: pricingWith(research) },
+			() => Effect.fail(new MarketSearchFailed({ status: 0 })),
+			() => Effect.succeed(null),
+			(kv) => kv.set(ASK_KEY, later),
+		);
+
+		expect(store.get(ASK_KEY)).toBe(later);
 	});
 
 	it("counts a run the model could not read at all as failed, and one with nothing new as nothing new", async () => {
 		const failed = await run(
-			{ [PRICING_KEY]: pricingWith(research) },
+			{
+				[PRICING_KEY]: pricingWith(research),
+				[ASK_KEY]: "2026-11-22T12:00:00.000Z",
+			},
 			() => Effect.succeed(pages),
 			() => Effect.fail(new MarketReaderFailed()),
 		);
 
 		expect(failed.outcome).toBe("failed");
+		expect(failed.store.has(ASK_KEY)).toBe(false);
 
 		const quiet = await run(
 			{ [PRICING_KEY]: pricingWith(research) },

@@ -34,6 +34,9 @@ search (a pure rule, `src/server/rules/market-refresh.ts`):
 - otherwise only when no proposal is waiting for the owner, the accepted research is 90 days old or more (or there is
   none), and no run has been tried in the last 7 days (so a failing search spends credits at most once a week).
 
+A run clears the owner's ask once it has tried it, whether the search finished or failed (only an ask made before the
+run started), so a search that keeps failing waits a week like any other instead of running every day.
+
 A run with nothing to do reads two KV keys and stops.
 
 ## 3. What a search does
@@ -42,18 +45,21 @@ For each of the nine cells (website, web app, workflow; small, medium, large) an
 
 1. **Searches** Tavily once (`POST https://api.tavily.com/search`, `search_depth: "advanced"`, `topic: "general"`,
    `time_range: "year"`, `max_results: 6`, `include_published_date: true`, the key as `Authorization: Bearer`). The
-   query names only the kind of work and its size; nothing about any client is ever sent.
+   query names only the kind of work and its size, in the repository's own definitions (`DEFAULT_DEFINITIONS`), never
+   text from the stored research, which the owner can edit; nothing about any client is ever sent. A new figure
+   carries that definition.
 2. **Reads** the results with Workers AI (the offer board's model, JSON mode): the low and high figure, in whole US
    dollars, that the results give for this kind and size, and which results state them; or none.
 3. **Checks** the reading in ordinary code: a figure stands only when both ends appear as dollar amounts in the text of
    a result it cites, given per hour there exactly when the reading says so, and the low end is not above the high
-   end. A "k" or "M" after an amount counts only when it ends the word, so the k of "kit" is not a thousand. A cell that fails keeps its current figures and is
-   marked as kept. This is the automated form of the November research's rule that each figure is re-read in its
-   source.
+   end. A "k" or "M" after an amount counts only when it ends the word, so the k of "kit" is not a thousand. A cell
+   that fails keeps its current figures and is marked as kept. This is the automated form of the November research's
+   rule that each figure is re-read in its source.
 
 The proposal is a whole research record (the same shape `/owner/pricing` imports): the new or kept ranges, the day
 rate, the cited sources (https only, with their dates when Tavily gives one) and a caveat saying it came from an
-automatic search, how it was checked, and which cells were kept. It is stored under its own KV key,
+automatic search, how it was checked, and which cells were kept. A research record holds at most 60 sources: the
+sources the kept ranges cite are reserved first, and a new figure is proposed only when all of its sources fit. It is stored under its own KV key,
 `pricing:proposal:<id>`, written once and never changed; a new proposal replaces older ones.
 
 Cost per search: ten advanced Tavily searches (20 credits; the free plan has 1,000 a month) and ten Workers AI calls
@@ -69,7 +75,7 @@ stateDiagram-v2
     Idle --> Searching: daily run, research 90 days old, nothing waiting, no try this week
     Asked --> Searching: next daily run
     Searching --> Waiting: proposal saved (asked before the run started is cleared)
-    Searching --> Idle: search or reading failed (tried date kept)
+    Searching --> Idle: search or reading failed (tried date kept, ask made before the run cleared)
     Waiting --> Idle: owner uses the figures (versioned save, then the proposal goes)
     Waiting --> Idle: owner discards it
     Waiting --> Asked: owner asks again (the next proposal replaces this one)
