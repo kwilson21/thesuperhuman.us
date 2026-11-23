@@ -18,11 +18,15 @@
 // How a failure is recorded depends on where it happens, as it does in production:
 //   - In the frontmatter (before the first byte of the body), the container rejects and the harness records the step
 //     as `rejected`, as it records a route handler that throws: production answers a bare 500.
-//   - While the template renders (after the status and headers are sent), production's answer has the page's status
-//     and headers and a body that stops partway. The handler reads the body itself, and when the stream fails it
-//     answers the same status and headers with the bytes read so far followed by `streamBroke(name)`, a fixed line
-//     that names the error's class (its `name`, never its message). Where the body stops is where Astro's Node
-//     renderer had delivered it when the error came; Workers stream through another path of the same renderer.
+//   - While the template renders (after the status and headers are set), the response exists and its body stream
+//     fails. The handler reads the body itself, and when the stream fails it answers the same status and headers with
+//     the bytes read so far followed by `streamBroke(name)`, a fixed line that names the error's class (its `name`,
+//     never its message). Workers render through the same Astro renderer (`isNode` is true on workerd with
+//     `nodejs_compat`), so where the body stops is where production's does. What a visitor gets then depends on that
+//     point: when some bytes came first, workerd sends the status, the headers and those bytes, and the body breaks;
+//     when the body fails before its first byte, workerd sends no response at all (no status line, no headers;
+//     checked with workerd 1.20261110.1 at the site's compatibility date, where a client sees an empty reply). The
+//     recording keeps the two apart: the marker alone, or bytes and then the marker.
 //
 // The handler builds a new Response from what it read, with two changes to the headers: `X-Astro-Noop`, which Astro's
 // stand-in middleware adds when a site has none, is removed (the site has its own middleware, so it never sends it);

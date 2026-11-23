@@ -93,11 +93,13 @@ import {
 //                                     outcome"
 //     the page throws: rejected       the offer read fails (in the frontmatter, before the answer exists): "outage: the
 //                                     offer read on a GET: the page throws"
-//     200, the body fails at once     the terms are not JSON: the layout's slot reads the outcome after the status and
-//                                     headers exist, and throws while the renderer still holds the page's bytes, so the
-//                                     answer is the ready page's status and headers with a body that fails before its
-//                                     first byte (production streams; the harness ends the recorded body with its
-//                                     marker): "terms that are not JSON: a 200 whose body fails before its first byte"
+//     the body fails at once          the terms are not JSON: the layout's slot reads the outcome after the status and
+//                                     headers are set, and throws while the renderer still holds the page's bytes, so
+//                                     the body fails before its first byte. The recording keeps the ready page's status
+//                                     and headers with only the harness's marker as the body; production (workerd)
+//                                     sends no response at all in that case, not a 200 and not a bare 500
+//                                     (tests/golden/harness/page.ts): "terms that are not JSON: the body fails before its
+//                                     first byte"
 //   401, the expired page             a method other than GET or POST, after the link read: "a PUT with a good key in
 //                                     the query" (the page alone: in production the middleware answers a PUT with no
 //                                     Origin and no content type 403 before the page runs, src/middleware.ts:124-144),
@@ -339,23 +341,18 @@ const cases: Case[] = [
 			),
 		],
 	),
-	// The slot throws after the status and headers are sent, so production answers 200 and the body fails; it is not
-	// the bare 500 of a throw in the frontmatter (tests/golden/harness/page.ts).
-	scene(
-		"terms that are not JSON: a 200 whose body fails before its first byte",
-		[
-			issue(),
-			openPage(
-				{},
-				before(
-					"the offer's terms are not JSON",
-					sql(
-						"UPDATE software_offers SET terms_json='not json' WHERE id='o-r1'",
-					),
-				),
+	// The slot throws after the status and headers are set, so the body fails before its first byte: workerd sends no
+	// response at all. It is neither a 200 nor the bare 500 of a throw in the frontmatter (tests/golden/harness/page.ts).
+	scene("terms that are not JSON: the body fails before its first byte", [
+		issue(),
+		openPage(
+			{},
+			before(
+				"the offer's terms are not JSON",
+				sql("UPDATE software_offers SET terms_json='not json' WHERE id='o-r1'"),
 			),
-		],
-	),
+		),
+	]),
 	// the key's shape
 	scene("a GET with a key that is too short", [
 		issue(),
