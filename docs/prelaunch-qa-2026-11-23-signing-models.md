@@ -52,11 +52,11 @@ driver's registry, its tests and docs only.
   7 steps after 36 minutes and was stopped; `allowance` (not changed) was stopped by hand after 10 minutes, and
   `pricing`, `publication` and `agreementLink` passed by hand at 7 steps. The notices model's new modules were run by
   hand to 7 steps.
-- Codex's code review raised three points, all fixed in the PR: the docs said 50 steps for the discount model's runs that
-  must pass, which make 80 since `passSteps`; A21 had no property or mutant (now `noSendingAfterCountersign`, mutant
-  `NoObsolete`, found in the first run); A3 had no mutant (now `signedStaysSigned`, mutant `ReviewNoSignedGuard`, about
-  27 runs). In code A3 is backed by the one-live-SOW unique index (0023:13), which refuses the same review batch, so
-  dropping A3 alone would be equivalent there; the model holds the two as one condition and the mutant removes both.
+- Codex's code review raised three points, all fixed in the PR: the docs said 50 steps for the discount model's runs
+  that must pass, which make 80 since `passSteps`; A21 had no property or mutant (now `noSendingAfterCountersign`,
+  mutant `NoObsolete`, found in the first run); A3 had no mutant (now `signedStaysSigned`, mutant `ReviewNoSignedGuard`,
+  about 27 runs). In code A3 is backed by the one-live-SOW unique index (0023:13), which refuses the same review batch,
+  so dropping A3 alone would be equivalent there; the model holds the two as one condition and the mutant removes both.
 - An independent review of the head `776f724f` found nothing blocking. Its points, folded in: the model's sign read
   no longer compares the session that reviewed (today's read compares documents; only A9 checks the session); the docs
   say that A2 refuses nothing A1 does not in the model, so the review and sign mutants drop both, that
