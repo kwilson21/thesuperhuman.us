@@ -30,28 +30,29 @@ compare-and-set guard is not retried, while a UNIQUE constraint that backs a rul
 (offers F7, and CLAUDE.md); a missing or empty id answers what an unknown id answers (offers F6); a fixed 500 reuses the
 route's existing sentence where one fits (`docs/prelaunch-qa-2026-11-14-agreement-access.md`, judgment call (b)).
 
-### Questions for the owner
+### Questions for the owner (decided)
 
-Three, each with a recommendation, then two judgment calls the owner may overrule. Nothing else in this design needs
-an owner decision.
+Three, each asked with a recommendation, then two judgment calls the owner may overrule. Nothing else in this design
+needs an owner decision. The owner chose the recommendation on all three (in conversation, 2026-11-23): Q1 "The real
+reason", Q2 "Approve all three", Q3 "Success with receipt". The fix PRs build those answers.
 
-**Q1. The signing link when the offer stops being signable before its batch.** Today a link request answers 429 "Wait
-at least 30 seconds before requesting another link." when, between its read and its link batch, the request is
-withdrawn or resolved, the offer is superseded, its link is revoked, signing is switched off or the project starts, and
-also when the offer already has a project (golden `offer-link`, 14 cases). The batch's two guards raise the same error
-and the catch answers it as the 30-second window (access.ts:207-251). The conversion reads the offer's state before the
-batch and, as the converted archive link does after a lost guard, reads and decides again (three tries).
-Recommended: each answers what the same request would get a moment later, with today's sentences: 404 "Website signing
-is off." when signing is off, otherwise 404 "This offer is unavailable for signing." (access.ts:135-143); "another
-request issues a link between the lookup and the batch" keeps its 429. The alternative keeps 429 for all 14 and needs
-an exception to the 409 rule, like the sign-in routes' (that one rests on non-interference, which does not apply here:
-the visitor holds the offer's own link).
+**Q1. The signing link when the offer stops being signable before its batch (decided: the recommendation).** Today a
+link request answers 429 "Wait at least 30 seconds before requesting another link." when, between its read and its link
+batch, the request is withdrawn or resolved, the offer is superseded, its link is revoked, signing is switched off or
+the project starts, and also when the offer already has a project (golden `offer-link`, 14 cases). The batch's two
+guards raise the same error and the catch answers it as the 30-second window (access.ts:207-251). The conversion reads
+the offer's state before the batch and, as the converted archive link does after a lost guard, reads and decides again
+(three tries). Recommended: each answers what the same request would get a moment later, with today's sentences: 404
+"Website signing is off." when signing is off, otherwise 404 "This offer is unavailable for signing."
+(access.ts:135-143); "another request issues a link between the lookup and the batch" keeps its 429. The alternative
+keeps 429 for all 14 and needs an exception to the 409 rule, like the sign-in routes' (that one rests on
+non-interference, which does not apply here: the visitor holds the offer's own link).
 
-**Q2. Three sentences for a failure on the site's side.** Three client answers have no sentence that fits a store
-failure: the draft's only failure sentence is "Your details could not be saved. Check the fields and try again."
-(draft.ts:59-66), the sign route's is "The reviewed agreement changed. Reload and review it again." (sign.ts:95-102),
-and the verify pages show "This link has expired." or fail with a bare 500 (archive verify.astro:35, offer
-verify.astro:44). Proposed:
+**Q2. Three sentences for a failure on the site's side (decided: approved as written).** Three client answers have no
+sentence that fits a store failure: the draft's only failure sentence is "Your details could not be saved. Check the
+fields and try again." (draft.ts:59-66), the sign route's is "The reviewed agreement changed. Reload and review it
+again." (sign.ts:95-102), and the verify pages show "This link has expired." or fail with a bare 500 (archive
+verify.astro:35, offer verify.astro:44). Proposed:
 
 - draft, 500: "Your details could not be saved. Try again in a moment."
 - sign, 500: "Your signature could not be saved. Try again in a moment."
@@ -60,14 +61,14 @@ verify.astro:44). Proposed:
 
 Recommended: approve these, or edit them; the fix PRs use the approved text.
 
-**Q3. A failed read after the signatures are saved.** After the signing batch commits, sign.ts:79-81 reads the
-agreements again to send the two notices; that read is outside the notices' own `try` (83-88), so when it fails the
-client is told 409 "The reviewed agreement changed. Reload and review it again." although the signature is saved
-(golden `offer-sign` "outage: the second read of the agreements, after the signatures committed"; the same request
-again answers 200 with the saved receipt). Recommended: the read becomes part of the notices step, whose failures are
-already ignored ("Saved signatures survive notification failures.", sign.ts:87), so the client gets 200 with the
-receipt and the owner's retry-copy sends the notices. The alternative is a 500 whose sentence says the signature was
-saved.
+**Q3. A failed read after the signatures are saved (decided: the recommendation).** After the signing batch commits,
+sign.ts:79-81 reads the agreements again to send the two notices; that read is outside the notices' own `try` (83-88),
+so when it fails the client is told 409 "The reviewed agreement changed. Reload and review it again." although the
+signature is saved (golden `offer-sign` "outage: the second read of the agreements, after the signatures committed"; the
+same request again answers 200 with the saved receipt). Recommended: the read becomes part of the notices step, whose
+failures are already ignored ("Saved signatures survive notification failures.", sign.ts:87), so the client gets 200
+with the receipt and the owner's retry-copy sends the notices. The alternative is a 500 whose sentence says the
+signature was saved.
 
 ### Judgment calls (the owner may overrule)
 
@@ -485,7 +486,7 @@ with a `say` sentence, exactly today's.
 | `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
 | `agreement-abandon.ts` | `abandonSigning` | the offer, the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
 | `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end, the hold, the copy record, each with its event |
-| `agreement-packet.ts` | `packetClaimable`, `packetRecoverable`, `packetCertificates` | the packet row, `now`, the attempt; the documents, signatures and template rows | `StaleAttemptUnconfirmed` | the claim, the outcome, the certificates |
+| `agreement-packet.ts` | `packetClaimable`, `packetRecoverable` | the packet row, `now`, the attempt | `StaleAttemptUnconfirmed` | the claim, the outcome |
 | `agreement-messages.ts` | `messagesToReset`, `copyClaimable`, `noticeClaimable` | the rows, `now`, the agreement's status and archive, the project | none: a row that cannot move is skipped, as today | the reset, the claims |
 | `agreement-templates.ts` | `previewTemplate`, `publishTemplate`, `saveContractor` | the text, the current version, the label's use, the expected version | `TemplateRefused`, `NothingToPublish`, `LabelInvalid`, `LabelUsed`, `NotConfirmed`, `VersionChanged`, `VersionNotFound` | the version, the config |
 | `agreement-retention.ts` | `accessCleanup`, `retentionEligible`, `manifestFresh`, `objectsToDelete` | the rows each read gives, `now` | `ManifestStale`, `ArchiveChanged`, `ObjectChanged`, `UnattachedChanged`, `OrphanChanged` | the rows to delete or close |
@@ -577,7 +578,9 @@ decisions and outside effects.
 - `agreement-record.ts`: end, hold and record-copy; end reads the MSA's use and, after a `GuardRefused`, reads it again
   (agreement.ts:369-373).
 - `agreement-packet.ts`, `preparePacket`: claim (A15; nothing to do when no row changes); the agreement, its MSA, the
-  signatures and labels; `packetCertificates`; the render through `AgreementPacket`, reading through the store and the
+  signatures and labels; the certificates and the render through `AgreementPacket` (today's certificate code runs
+  inside the service, so a `TypeError` there is logged and FAIL'd as today: golden retry-artifact "the record lacks the
+  contractor"), reading through the store and the
   bucket in today's order; the R2 puts, the readback, READY by attempt (A16). A failure after the claim (the reads,
   the render, the puts, the readback, READY) is logged with today's line, name and message, then FAIL by attempt with
   the step reached, and `preparePacket` then succeeds, as `prepareAgreementArtifact` returns normally today
@@ -668,8 +671,12 @@ render, storage or readback failure stays inside `preparePacket`, logged and rec
 countersign still prepares the SOW's packet after the MSA's fails (golden countersign "R2 put fails: the packet is
 marked failed (storage)" marks both) and retry-artifact answers 200 after one. Only what escapes today's function stops
 a step: `StorageUnavailable` before the claim, a failed claim or FAIL write, the renderer's import, and the route's read
-of the MSA id. Countersign's step (the MSA's packet, the SOW's packet, the copies) stops at the first of those, as
-today's single `try` does (agreement.ts:84-106), and ignores them by name, so it answers 200; the sign route's notices
+of the MSA id; and, from the copies and notices, every store or bucket failure, since `deliverAgreementCopies` and
+`deliverAgreementNotifications` catch nothing today (the artifact and signature reads, the claims, the R2 get, the
+outcome writes). Countersign's step (the MSA's packet, the SOW's packet, the copies) stops at the first of those, as
+today's single `try` does (agreement.ts:84-106), and ignores them by name, so it answers 200 (golden countersign
+"outage: the claim of the client copy"); retry-artifact and retry-copy have no such `try`, so there they answer B1's
+500 (golden retry-copy's "outage:" cases, 409 today); the sign route's notices
 are ignored the same way (sign.ts:83-88); retry-copy answers 200 as today; retry-artifact answers B3's 503.
 
 The packet keeps today's log line byte for byte: the golden packet cases record it ("a values record that lacks the
@@ -711,7 +718,9 @@ Every other answer is today's.
 
 Each fix PR comes before the conversion, without the `conversion` label, re-records its changed cases in a commit of
 its own and explains each one. Counts are golden cases, from the fixtures at `98e9404a`, except B5's two verify-page
-cases, which PR 2 adds.
+cases, which PR 2 adds. PR 2 also records verify-page outage cases (the link read, the GET's live check, the POST's
+batch) that answer 401 or a bare 500 today; the verify pages' fix PR changes them under B1, B2 and Q2 and lists each,
+with its count, in its own description.
 
 | # | What happens today | Golden cases | Count |
 |---|---|---|---|
@@ -734,9 +743,11 @@ batch answers 429 only when a guard raised (fix 6). The verify pages render Q2's
 unknown id, after the body and the command are read, as offers F6 decided. On the owner request route that answer
 depends on the action: countersign's 409 "Signing is off or the offer changed." (agreement.ts:69-73), abandon's 409
 `{ok:false}` (120), the other actions' 404 `{ok:false}` (209). On the upload it is the unknown request's answer after
-B4, after the PDF checks and the R2 put. A missing binding answers 503 before any read, as the visitor's attachment
-route does since agreement access fix 4. retry-artifact's missing bucket is a known unavailable dependency (today
-`prepareAgreementArtifact` throws "Storage unavailable.", artifacts.ts:160); countersign's and retry-copy's keep their
+B4, after the PDF checks and the R2 put. A missing binding the route asks `bindingsOrUnavailable` for answers 503
+before any read, as the visitor's attachment route does since agreement access fix 4. retry-artifact's missing bucket
+is a known unavailable dependency, answered 503 where today's throw is, at the packet step before its claim (today
+`prepareAgreementArtifact` throws "Storage unavailable.", artifacts.ts:160, after the recovery write, the renderer's
+import and the MSA's read, which keep their order); countersign's and retry-copy's keep their
 200, since their packet and copies are best effort after the commit.
 
 **B4.** An unknown or service request and a closed request are refusals, not an unavailable dependency. They keep
@@ -760,9 +771,12 @@ B1 PR rewrites both, the second trigger marked optional with its reason.
 15-18; the review and sign routes decide the 401 before the body's shape). The sign route's and countersign's
 best-effort steps after the commit, and countersign's one message. retry-copy with no bucket: 200, nothing sent. A code
 key under 32 characters on the link: 503 where the first keyed hash fails it. The 409s for bad stored data, through
-named refusals: the review's stored terms, details and contractor, the sign route's stored values, end's impossible
-date. The verify pages' 404 for another host, with the expired content. Retention's partial failures: 500 with its
-sentence after objects were deleted, the owner re-runs it.
+named refusals: the review's stored terms, details and contractor where a schema refuses them (`FieldsRefused` today),
+the sign route's stored values, end's impossible date. The review's text that is not JSON and its missing contractor
+snapshot stay the logged 500 "The agreement could not be reviewed." (golden `offer-review` "the offer terms are not JSON
+...", "the agreement details are not JSON", "the contractor snapshot is missing ...", three formats each), so
+`StoredDataRefused` covers only a schema's refusal. The verify pages' 404 for another host, with the expired content.
+Retention's partial failures: 500 with its sentence after objects were deleted, the owner re-runs it.
 
 **Defects inside today's catch-alls.** Today's `catch {}` blocks (sign.ts:83-88, agreement.ts:84-106, attachments.ts:
 116-118, and `prepareAgreementArtifact`'s own, artifacts.ts:327-345) also swallow a programming error. The converted
@@ -844,13 +858,15 @@ New properties, each with a mutant kept in the model that must fail in CI:
 | `executedOnlyWhenSigned` | countersign executes only a `client_signed` agreement of the sent offer, with the request open and signing on | `countersign-no-guards`: the countersign batch without A10 and A11 |
 | `abandonedHasNoDeposit` | an abandoned signing's version has no open or paid first deposit | `abandon-deposit-at-read`: the deposits judged at the read only, so a deposit reserved and written between the read and the batch survives |
 
-`redeem-no-live-guard` can be caught only through the signing switch: every other way an offer stops being signable (a
-send, reissue, revoke, decline or abandon, a request closed, a project started) also marks its links used (the offers
-store's retirement, offers-store.ts:255-259, for a send, reissue, revoke or decline; abandon's own statement,
-agreement.ts:186-190; `retireRequestSigning`, software-agreements.ts:72-75, for a request closed in
-owner-requests.ts:302 and a project started in project.ts:272), so A5 refuses the redeem without A1. The model therefore
-lets signing be switched off between a link's issue and its redeem; if a run shows the mutant cannot break the property,
-it is listed as equivalent with that reason.
+`redeem-no-live-guard` can be caught only through the signing switch or a project started from a website signing:
+every other way an offer stops being signable (a send, reissue, revoke, decline or abandon, a request closed, a project
+started from an outside signature) also marks its links used (the offers store's retirement, offers-store.ts:255-259,
+for a send, reissue, revoke or decline; abandon's own statement, agreement.ts:186-190; `retireRequestSigning`,
+software-agreements.ts:72-75, for a request closed in owner-requests.ts:302, and in project.ts:270-272 only when the
+signature source is `external`), so A5 refuses the redeem without A1. A start after a website signing leaves the links
+unused and the sessions open, so only A1 refuses a redeem after it, and the model's start must not retire links. The
+model lets signing be switched off between a link's issue and its redeem; if a run shows the mutant cannot break the
+property, it is listed as equivalent with that reason.
 
 The seven existing properties must still hold over the split steps. A mutant that turns out equivalent (one of today's
 other guards already stops what it removes) is listed with the equivalents in `scripts/lib/quint-mutants.mjs`, with its
