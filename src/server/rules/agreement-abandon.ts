@@ -1,10 +1,11 @@
 // The owner abandons a signing the client has signed (docs/plans/2026-11-signing-conversion.md, section 2,
 // `abandonSigning`): the client-signed documents are abandoned and the offer is retired, so it can be sent again. Decided
-// from the request's sent offer, every agreement of the offer as read (ordered by kind), the documents the owner named,
-// and every invoice of the offer, with the reason, the owner's email and the time the route read before anything else
+// from the request's offers, read plainly (every version with its status; `sentOfferOf` chooses the sent one), every
+// agreement of the offer as read (ordered by kind), the documents the owner named, and every invoice of the offer, with
+// the reason, the owner's email and the time the route read before anything else
 // (src/pages/api/owner/requests/[id]/agreement.ts, the `abandon` action). Its reads come between its decisions, so the
 // rule is staged, each stage repeating the refusals before it, in the order the route has always answered:
-//   1. the request has a sent offer: NoSentOffer (abandonFront);
+//   1. the request has a sent offer (`sentOfferOf`): NoSentOffer (abandonFront);
 //   2. the client-signed documents are exactly those named: PendingActionDiffers (abandonPending);
 //   3. no first deposit of the offer counts (`abandonBlocked`, src/lib/software-deposit-block.ts): DepositCounts
 //      (abandonSigning).
@@ -24,7 +25,9 @@ import {
 	type NamedDocument,
 	type OfferAgreementRow,
 	pendingAsNamed,
+	type RequestOfferRow,
 	type SentOfferRow,
+	sentOfferOf,
 } from "./agreement-countersign";
 
 /** 409 `{ok:false}`, with no sentence: the request has no sent offer. */
@@ -66,7 +69,7 @@ const depositCounts = (invoices: readonly OfferInvoiceRow[]) =>
 
 /** What the owner sent, and the time the route read first. */
 export type AbandonRequest = {
-	/** The request's id, as the route was asked (the sent offer was read by it). */
+	/** The request's id, as the route was asked (the request's offers were read by it). */
 	readonly requestId: string;
 	readonly documents: readonly NamedDocument[];
 	readonly reason: string;
@@ -77,7 +80,8 @@ export type AbandonRequest = {
 
 /** The facts abandon reads, in the order it reads them. */
 export type AbandonFacts = {
-	readonly offer: SentOfferRow | null;
+	/** Every offer version of the request, as read; the rule chooses the sent one through `sentOfferOf`. */
+	readonly offers: readonly RequestOfferRow[];
 	/** Every agreement of the offer, ordered by kind (none read when there is no sent offer). */
 	readonly agreements: readonly OfferAgreementRow[];
 	/** Every invoice of the offer (none read before the documents are checked). */
@@ -95,11 +99,15 @@ type AbandonGiven = PendingGiven &
 		readonly request: AbandonRequest;
 	};
 
+const frontGiven = (facts: Pick<AbandonFacts, "offers">): FrontGiven => ({
+	offer: sentOfferOf(facts.offers),
+});
+
 const pendingGiven = (
 	request: Pick<AbandonRequest, "documents">,
-	facts: Pick<AbandonFacts, "offer" | "agreements">,
+	facts: Pick<AbandonFacts, "offers" | "agreements">,
 ): PendingGiven => ({
-	offer: facts.offer,
+	...frontGiven(facts),
 	pendingAsNamed:
 		pendingAsNamed(
 			facts.agreements,
@@ -132,11 +140,11 @@ const noDepositCounts = unless(
 	() => new DepositCounts(),
 );
 
-/** Stage 1, before the agreements are read: the request has a sent offer. */
+/** Stage 1, before the agreements are read: the request has a sent offer (`sentOfferOf`). */
 export const abandonFront = alwaysWrites({
 	name: "abandon: the request has a sent offer",
-	given: (_request: null, facts: Pick<AbandonFacts, "offer">): FrontGiven =>
-		facts,
+	given: (_request: null, facts: Pick<AbandonFacts, "offers">) =>
+		frontGiven(facts),
 	refusals: [sentOffer],
 	writes: () => ({}),
 	writesText: "nothing: the offer's agreements are read next",
@@ -147,7 +155,7 @@ export const abandonPending = alwaysWrites({
 	name: "abandon: the documents named are the pending ones",
 	given: (
 		request: Pick<AbandonRequest, "documents">,
-		facts: Pick<AbandonFacts, "offer" | "agreements">,
+		facts: Pick<AbandonFacts, "offers" | "agreements">,
 	) => pendingGiven(request, facts),
 	refusals: [sentOffer, pendingAreNamed],
 	writes: () => ({}),

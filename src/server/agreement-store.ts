@@ -48,7 +48,7 @@ import type {
 import type {
 	OfferAgreementRow as CountersignAgreementRow,
 	CountersignWrite,
-	SentOfferRow,
+	RequestOfferRow,
 } from "./rules/agreement-countersign";
 import type {
 	DownloadAgreement,
@@ -1567,7 +1567,11 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 // abandon, end, hold and record-alternate-copy), for the rules in src/server/rules/agreement-countersign.ts,
 // agreement-abandon.ts and agreement-record.ts. Each statement is the route's own (src/pages/api/owner/requests/[id]/
 // agreement.ts), or `countersignAgreements` and `closeObsoleteAgreementNotifications`' (src/lib/software-agreements.ts),
-// in the same order statement for statement, with four reads changed so the rules decide what their SQL filtered:
+// in the same order statement for statement, with five reads changed so the rules decide what their SQL filtered:
+//   - the request's sent offer becomes `readRequestOffers`, every version of the request with its status, in the offers
+//     store's text (src/server/offers-store.ts, `readOffers`); the rules choose the sent one (`sentOfferOf`). Every
+//     action reads it first, as the route does, and the golden hooks that picked today's `status='sent'` read are
+//     re-pointed in PR 4 (the plan's section 9 lists them);
 //   - the offer's agreements are `readOfferAgreements` above, with the abandoned ones (`offerAgreements` left them out;
 //     the rules keep only the client-signed);
 //   - the agreement an end, a hold or a copy record names also reads `archive_closed_at`, which the rules decide
@@ -1576,6 +1580,8 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 //     every invoice of the offer and every offer that reuses the agreement, which the rules decide on. Their texts no
 //     longer start as today's checks do, so the golden hooks that picked those checks are re-pointed in PR 4 (the plan's
 //     section 9 lists them). Both conditions stay in their batches' guards as today's text.
+// Each changed read names its table first, as today's did, so the operation and table a golden `trigger-hit` marker
+// records for it (scripts/sql-effects.mjs, `statementOf`) stay today's.
 // The signing setting is `readSigningEnabled` above, today's statement. tests/server/agreement-store-owner.test.ts holds
 // every other text, and each batch's statements and values, to what the golden corpora recorded, and each changed text
 // to the hook patterns that picked the old one, less the ones PR 4 re-points.
@@ -1596,9 +1602,10 @@ export const signBatch = (write: SignWrite, sessionNow: string) =>
 // holds included (the ids are drawn at random). The client email snapshot a copy row needs is the rule's
 // (RecipientMissing), so no batch here meets its NOT NULL.
 
-const SentOfferColumns = Schema.Struct({
+const RequestOfferColumns = Schema.Struct({
 	id: text,
 	request_id: text,
+	status: Schema.Literals(OFFER_STATUSES),
 	contractor_snapshot_json: maybeText,
 	recipient_email_snapshot: maybeText,
 	reused_msa_id: maybeText,
@@ -1753,15 +1760,19 @@ const obsoleteNotices = (
 		.bind(agreementId),
 ];
 
-/** Plain read: the request's sent offer, or null. Every action reads it first, as the route does. */
-export const readSentOffer = (requestId: string) =>
-	readAll(SentOfferColumns, (db) =>
+/**
+ * Plain read: every offer version of the request with its status, newest first, in the offers store's text
+ * (src/server/offers-store.ts, `readOffers`). Every action reads it first, as the route reads the sent offer; which
+ * version is sent is the rule's (`sentOfferOf`), and countersign's A10 keeps `status='sent'` as the re-check.
+ */
+export const readRequestOffers = (requestId: string) =>
+	readAll(RequestOfferColumns, (db) =>
 		db
 			.prepare(
-				"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
+				"SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC",
 			)
 			.bind(requestId),
-	).pipe(Effect.map((rows): SentOfferRow | null => rows[0] ?? null));
+	).pipe(Effect.map((rows): readonly RequestOfferRow[] => rows));
 
 /**
  * Plain read: every invoice of the offer, in id order, unfiltered, so the abandon's deposit decision is `abandonBlocked`'s.
@@ -1789,13 +1800,15 @@ export const readAgreement = (agreementId: string, requestId: string) =>
 /**
  * Plain read: every offer that reuses the agreement as its MSA, in id order, with its request's status and its project's
  * offer id (null without one), unfiltered, so whether one is open is the rule's. Today's `msaUse` filtered them in SQL;
- * A13 keeps that condition as the re-check.
+ * A13 keeps that condition as the re-check. `software_offers` is the first table the text names, as in `msaUse`, so a
+ * golden hook's marker reads the same table; the projects are joined as their distinct offer ids, since several project
+ * rows may name one offer and a plain join would repeat it.
  */
 export const readMsaUse = (agreementId: string) =>
 	readAll(ReusingOfferColumns, (db) =>
 		db
 			.prepare(
-				"SELECT o.status,r.status AS request_status,(SELECT p.offer_id FROM software_projects p WHERE p.offer_id=o.id LIMIT 1) AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id WHERE o.reused_msa_id=? ORDER BY o.id",
+				"SELECT o.status,r.status AS request_status,p.offer_id AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id LEFT JOIN (SELECT DISTINCT offer_id FROM software_projects) p ON p.offer_id=o.id WHERE o.reused_msa_id=? ORDER BY o.id",
 			)
 			.bind(agreementId),
 	).pipe(Effect.map((rows): readonly ReusingOfferRow[] => rows));
