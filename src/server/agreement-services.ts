@@ -105,7 +105,7 @@ export class AgreementAllowanceFailed extends Data.TaggedError(
  * One use an allowance counted: whether it is within the limit, the keyed hash it was counted under, and the start of the
  * window its count answered (`RETURNING uses,window_start`). A signing link whose mail is refused gives each use back by
  * its key and window start (`refundAllowances` in src/server/rules/signing-link.ts). A count that came back with no row
- * (which the upsert never does) is refused, and its window start is empty, as `reserveStudioAllowance` answered it; a
+ * (which the upsert never does) is refused, and its window start is empty, as the signing link's count answered it; a
  * refused use answers 429 before any mail, so it is never given back.
  */
 export type AllowanceUse = CountedUse & { readonly allowed: boolean };
@@ -146,9 +146,9 @@ const keyedWith = (secret: string, message: string) =>
  * The allowance counter in D1, keyed with the request's code key (env.AUDIO_CLIENT_CODE_KEY). A use reads the clock as it
  * is counted, then makes the key (the keyed hash of the scope and the subject) and counts it in one batch (the stale
  * windows pruned, the use counted); the allowance rule says whether it is within `limit`. The statements and their values
- * are the ones the studio sign-in routes count with, and the ones `reserveStudioAllowance` (src/lib/audio-client-access.ts)
- * ran. A code key under 32 characters is CodeKeyUnusable before the clock is read, as today's signing link checks the key
- * before its first use is counted.
+ * are the ones the studio sign-in routes count with, and the ones the signing link counted with before its conversion
+ * (`reserveStudioAllowance`, src/lib/audio-client-access.ts). A code key under 32 characters is CodeKeyUnusable before
+ * the clock is read, as the signing link has always checked the key before its first use is counted.
  */
 export const liveAgreementAllowance = (db: D1Database, secret: string) =>
 	Context.make(AgreementAllowance, {

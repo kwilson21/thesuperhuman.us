@@ -1,6 +1,6 @@
 // The pure helpers of the client portal that other areas import: the portal flag, the address normalizer, the two
 // hashes and the lifetimes of a code and a session. No D1, mail or sessions, so an area can use them without loading
-// src/lib/audio-client-access.ts, which keeps the cookies, the session reads and the one allowance count left there. The
+// src/lib/audio-client-access.ts, which keeps the cookies and the session reads. The
 // address normalizer checks with Effect Schema and answers every input as the Zod 4 schema it replaced did
 // (tests/server/validators-differential.test.ts holds it to a frozen copy of it).
 import * as Schema from "effect/Schema";

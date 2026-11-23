@@ -10,9 +10,9 @@
 // race to one looks for positive evidence of the race itself and throws `LostRace` only then (see `reviewAgreements`).
 //
 // The ways two legitimate requests can make a converted route's batch throw, and what each answers:
-//   Agreement link (`POST /api/offer/[token]/link`: `issueAgreementLink`)
-//     the 30-second guard, the offer still open for signing (A1) ....... JSON guard: what they re-check is read after it
-//       raised and decided, the batch run again when none holds, three batches in all; the read answers the real reason
+//   Agreement link (`POST /api/offer/[token]/link`: `requestSigningLink`, src/server/flows/signing-link.ts)
+//     the 30-second guard, the offer still open for signing (A1) ....... JSON guard: what they re-check is read before
+//       each try and decided, and read again after a raise, three batches in all; the read answers the real reason
 //       (404 signing off or unavailable, 429 a newer link), a third raise the 429
 //   Agreement review (`POST /api/offer/[token]/review`: the draft save, then `reviewAgreements`)
 //     guards (session, live signing link, "already signed", project started) ........ JSON guard, 409

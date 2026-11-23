@@ -14,6 +14,7 @@ import {
 	readLinkedOffer,
 	readSigningEnabled,
 	readSigningFacts,
+	readRecentSigningLinks,
 	readSigningLinks,
 	redeemLinkBatch,
 	removeRefusedLink,
@@ -471,6 +472,40 @@ describe("the signing link", () => {
 		expect(await world.ok(readSigningLinks(GRACE, "o9"))).toEqual([]);
 	});
 
+	it("reads the recipient's signing links of the offer issued after the window's start, used or not, and no other link", async () => {
+		const world = openWorld();
+
+		world.seed({
+			software_offers: [
+				rows.softwareOffer("o2", "r1", { version: 2, status: "draft" }),
+			],
+		});
+		world.seed({
+			software_agreement_links: [
+				signingLink("before", { issued_at: EARLIER }),
+				signingLink("at-start", { issued_at: SINCE }),
+				signingLink("after", { issued_at: AT }),
+				signingLink("after-used", { issued_at: AT, used_at: AT }),
+				signingLink("other-offer", { offer_id: "o2", issued_at: AT }),
+				signingLink("other-recipient", {
+					recipient_email: "x@example.test",
+					issued_at: AT,
+				}),
+				signingLink("archive", {
+					purpose: "archive",
+					offer_id: null,
+					link_hash: null,
+					issued_at: AT,
+				}),
+			],
+		});
+
+		expect(await world.ok(readRecentSigningLinks(GRACE, "o1", SINCE))).toEqual([
+			{ id: "after", issued_at: AT, used_at: null },
+			{ id: "after-used", issued_at: AT, used_at: AT },
+		]);
+	});
+
 	it("stores the link and its issue event in one batch", async () => {
 		const world = openWorld();
 
@@ -746,7 +781,7 @@ describe("the signing link", () => {
 		});
 	});
 
-	it("consumes the older links consumeOlderLinks picks with the existing consumeLinks, only while unused", async () => {
+	it("consumes the links it is given with the existing consumeLinks, only while unused", async () => {
 		const world = openWorld();
 
 		world.seed({
@@ -1252,6 +1287,10 @@ async function tour() {
 	);
 	await run("readSigningLinks", readSigningLinks(GRACE, "o1"));
 	await run(
+		"readRecentSigningLinks",
+		readRecentSigningLinks(GRACE, "o1", SINCE),
+	);
+	await run(
 		"storeSigningLink",
 		storeSigningLink({
 			id: "link-new",
@@ -1395,7 +1434,17 @@ const ADDED = [
 	{
 		call: "readSigningLinks",
 		index: 0,
-		why: "the recipient's links, before the link batch and after the mail (today only after a raised guard, as issued_at alone)",
+		why: "the recipient's links after the mail, for consumeOlderLinks",
+	},
+	{
+		call: "readRecentSigningLinks",
+		index: 0,
+		why: "the recipient's links issued after the window's start, before each try of the link batch (A4's facts)",
+	},
+	{
+		call: "readSigningFacts",
+		index: 0,
+		why: "the offer's signing state before each try of the link batch (A1's facts), and for the redeem's GET",
 	},
 	{
 		call: "readDraftFacts",
@@ -1447,8 +1496,9 @@ describe("the store's SQL against the signing corpora", () => {
 
 		expect(texts.has(TODAY.linkedOffer)).toBe(true);
 		expect(texts.has(TODAY.redeemRead)).toBe(true);
-		expect(texts.has(TODAY.consume)).toBe(true);
 		expect(texts.has(TODAY.liveCheck)).toBe(true);
+		// The signing link's own consume (TODAY.consume) left the corpora when the link was converted (its re-recorded
+		// fixtures run `consumeLinks`); the re-pointed hook is checked against its old text below.
 	});
 
 	it("keeps every hook's pick for a changed text, names each re-pointed pattern, and adds reads no pattern picks", async () => {

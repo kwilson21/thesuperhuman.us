@@ -370,7 +370,7 @@ Issuing a code makes the same three round trips with the same statements, whatev
 
 | Statement | Class |
 |---|---|
-| Allowance upsert (`countAllowance`, twice per request; the agreement link route counts through it too, and `reserveStudioAllowance` runs the same statements for the signing area's link issuance) | write of a computed value (a counter; the limit is compared in TypeScript, `takeAllowance`) |
+| Allowance upsert (`countAllowance`, twice per request; the archive and signing link routes count through it too) | write of a computed value (a counter; the limit is compared in TypeScript, `takeAllowance`) |
 | Allowance stale-window delete (`DELETE ... WHERE window_start<=?`, the first statement of that batch; it predates this change and is left as it is) | bulk clean-up by age that decides no outcome (the count and the limit are decided in TypeScript from the upsert's row) |
 | Issue, round trip 1: the address's projects; the address's code rows (`WHERE email=?`) | read |
 | Issue, round trip 2: one delete of the address's expired rows the sweep rule (`sweepCodes`) named from the rows it read, by `(nonce_hash, email)` and only while each is still expired and still holds the code that was read | write of computed values (a delete by key, guarded by the code read) |
@@ -597,7 +597,8 @@ off. The properties' "signed offer" is the agreement while it is client_signed o
   Turning it off is offered only while a signing request is between its read and its batch or a signing link is
   unredeemed; at any other moment it only makes the signing reads refuse, which a run gets by not taking them (the bias
   the audio models give their closing steps).
-- `linkRead`, `linkBatch`: the signing link (`issueAgreementLink`, `src/lib/agreement-access.ts:112-315`). The reads:
+- `linkRead`, `linkBatch`: the signing link (`issueAgreementLink`, `src/lib/agreement-access.ts:112-315`, now
+  `requestSigningLink`, `src/server/flows/signing-link.ts`). The reads:
   signing on, `getLinkedOffer` (the offer link live, the offer sent, the request open) and `at`; the allowances and
   Turnstile are not modelled. The batch: A4 (no link of the recipient and the offer issued in the 30 seconds before
   `at`, three ticks) and A1 (`liveSigningGuard`, 317-327: the offer sent, its offer link the one read and live, the

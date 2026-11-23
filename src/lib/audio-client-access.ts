@@ -1,11 +1,10 @@
-// The studio client's cookies and session reads, the owner's list of failed code emails, the clean-up of the retired codes
-// table, and the allowance count the signing area's link issuance still calls. The sign-in itself (issuing a code,
-// entering it, discarding an undelivered one, signing out, and the routes' allowances) is in src/server: the flows
-// signin-code.ts, signin-session.ts and signin-sign-out.ts, over src/server/studio-signin-store.ts.
+// The studio client's cookies and session reads, the owner's list of failed code emails, and the clean-up of the retired
+// codes table. The sign-in itself (issuing a code, entering it, discarding an undelivered one, signing out, and the
+// routes' allowances, the signing links' included) is in src/server: the flows signin-code.ts, signin-session.ts and
+// signin-sign-out.ts, over src/server/studio-signin-store.ts.
 import {
 	CODE_LIFETIME_MS,
 	hashValue,
-	keyedHash,
 	SESSION_LIFETIME_MS,
 } from "./client-portal";
 
@@ -56,45 +55,6 @@ export async function listStudioSignInFailures(
 		requestId: row.requestId,
 		clientName: row.clientName,
 	}));
-}
-
-const allowanceWindowMs = 5 * 60 * 1000;
-
-/**
- * An atomic sign-in allowance: at most `limit` uses per five minutes for one scope and subject
- * (an email address or IP). Subjects are stored only as keyed hashes, and stale windows are
- * pruned in the same transaction.
- */
-export async function reserveStudioAllowance(
-	db: D1Database,
-	scope: string,
-	subject: string,
-	limit: number,
-	secret: string,
-	now = new Date(),
-) {
-	const key = await keyedHash(secret, `${scope}:${subject}`);
-
-	const [, counted] = await db.batch([
-		db
-			.prepare("DELETE FROM audio_client_allowances WHERE window_start<=?")
-			.bind(new Date(now.getTime() - allowanceWindowMs).toISOString()),
-		db
-			.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
-      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start`)
-			.bind(key, now.toISOString()),
-	]);
-
-	// SAFETY: counted is the upsert ... RETURNING uses,window_start (the batch's second statement), so each of its rows has a numeric uses and a string window_start.
-	const row = counted.results[0] as
-		| { uses: number; window_start: string }
-		| undefined;
-
-	return {
-		key,
-		windowStart: row?.window_start ?? "",
-		allowed: Number(row?.uses ?? Infinity) <= limit,
-	};
 }
 
 export async function clientProjectForSession(
