@@ -5,8 +5,11 @@
 // order, from plain rows the store reads, the bucket's listings and digests the flow reads, and `now`.
 //
 // The preview (the owner asks what may go):
-//   retentionEligible   the first 20 agreements in id order that may be retired: today's `eligible` SQL condition, from every
-//                       agreement and the artifacts, deliveries, notifications, projects, offers and signatures that keep one;
+//   retentionEligible   the ids of the first 20 agreements in id order that may be retired: today's `eligible` SQL condition,
+//                       from the scan (every agreement's columns the condition reads, not its texts, and the artifacts,
+//                       deliveries, notifications, projects, offers and signatures that keep one);
+//   retentionRetiring   the chosen agreements' full rows, read after the scan: each still eligible by its full row, in the
+//                       order chosen; the manifest is built from these rows;
 //   listedObject        an object the agreement's listing named is still stored (ListedObjectGone, "Archive changed.");
 //   objectsToDelete     the agreement's objects: its own listed objects, and each attachment its manifest names that no
 //                       agreement outside the retiring set names, no open offer pins, and no later retiring agreement names;
@@ -28,6 +31,16 @@
 // The access clean-up:
 //   accessCleanup       sessions expired or revoked more than 30 days before `now`, and links expired that long ago that no
 //                       kept session points at (strict comparisons).
+//
+// Today one statement chose the agreements and read their rows. The store now reads them in two steps (the scan, then the
+// chosen ids' full rows), so a chosen agreement can change or vanish between the reads. retentionRetiring keeps only a row
+// that is still eligible by its full row (its own columns as read the second time, the scan's rows for the rest), skips
+// one that is gone, and keeps one that changed and is still eligible as it was read the second time (its `row_hash` is
+// of that row). The manifest then holds fewer agreements than the scan chose, and is not refilled past the first 20:
+// the next preview takes the others. In the apply, the fresh scan runs the same two reads and rules, so a race in either
+// scan that changes which agreements are retired or one's row answers ArchiveChanged (`manifestFresh`), as a change
+// between the preview and the apply does today, and A25 re-checks each agreement at write time. With no race the rows
+// are today's query's, in today's order, so the preview and the apply answer as today.
 //
 // Re-checked at write time by A25, the guards today's batches carry (src/lib/agreement-retention.ts): the project evidence
 // unchanged (`projectEvidenceUnchanged`), the agreement still eligible with the same text (`stillEligibleWithText`), each
@@ -184,8 +197,10 @@ export type RetentionManifest = {
 // The facts, as the store reads them.
 
 /**
- * An agreement as stored: every column of `software_agreements` (`SELECT * ...`), of which the conditions read these. The
- * flow hashes the whole row it read (`hashOfferToken(canonicalJson(row))`) for the manifest's `row_hash`, as today.
+ * An agreement as the scan reads it: the columns the `eligible` condition reads, of the agreement and of the others (the
+ * offer an agreement belongs to, the MSA a SOW names), and its text's digest, which A25's `stillEligibleWithText`
+ * compares. Not its texts (`canonical_text`, up to 256 KiB, `values_json`, `attachment_manifest_json`) or the other
+ * columns: the scan reads every agreement, and only the chosen ones are read in full (`ChosenAgreementRow`).
  */
 export type RetentionAgreementRow = {
 	readonly id: string;
@@ -194,11 +209,19 @@ export type RetentionAgreementRow = {
 	readonly msa_id: string | null;
 	readonly status: string;
 	readonly text_sha256: string;
-	readonly attachment_manifest_json: string;
 	readonly ended_at: string | null;
 	readonly retain_until: string | null;
 	readonly legal_hold: number;
 	readonly terminated_at: string | null;
+};
+
+/**
+ * A chosen agreement as the second read loads it: every column of `software_agreements` (`SELECT * ...`), of which the
+ * rules read these and the flow reads the attachment manifest. The flow hashes the whole row it read
+ * (`hashOfferToken(canonicalJson(row))`) for the manifest's `row_hash`, as today.
+ */
+export type ChosenAgreementRow = RetentionAgreementRow & {
+	readonly attachment_manifest_json: string;
 };
 
 export type RetentionProject = {
@@ -210,8 +233,9 @@ export type RetentionProject = {
 };
 
 /**
- * Every row the `eligible` condition looks at: every agreement; the agreement and status of every artifact, delivery and
- * notification; every project; the id, status and reused MSA of every offer; the agreement of every signature.
+ * Every row the `eligible` condition looks at, as the scan reads them: every agreement (its scanned columns); the agreement
+ * and status of every artifact, delivery and notification; every project; the id, status and reused MSA of every offer;
+ * the agreement of every signature.
  */
 export type RetentionFacts = {
 	readonly agreements: readonly RetentionAgreementRow[];
@@ -592,7 +616,10 @@ export const accessCleanup = alwaysWrites({
 // ---------------------------------------------------------------------------------------------------------------------
 // The preview.
 
-/** The agreements a preview retires: those `eligible` at `now`, the first 20 in id order. */
+/**
+ * Stage 1 of the agreements a preview retires, from the scan: the ids of those `eligible` at `now`, the first 20 in id
+ * order. The flow then reads these agreements' full rows.
+ */
 export const retentionEligible = alwaysWrites({
 	name: "choose the agreements that may be retired",
 	given: (request: { readonly now: Date }, facts: RetentionFacts) => {
@@ -601,12 +628,42 @@ export const retentionEligible = alwaysWrites({
 		return facts.agreements
 			.filter((agreement) => eligibleForRetention({ agreement, facts, now }))
 			.sort(byId)
-			.slice(0, RETENTION_LIMIT);
+			.slice(0, RETENTION_LIMIT)
+			.map((agreement) => agreement.id);
 	},
 	refusals: [],
-	writes: (chosen) => chosen,
+	writes: (chosen): readonly string[] => chosen,
 	writesText:
-		"the agreement rows, up to 20 in id order (none when none is eligible)",
+		"the agreements' ids, up to 20 in id order (none when none is eligible)",
+});
+
+/**
+ * Stage 2, once the chosen agreements' full rows are read: the rows the manifest is built from, in the order chosen. A
+ * chosen agreement whose row is gone is skipped, and so is one whose full row is no longer eligible at `now` (decided on
+ * its own columns as read the second time, and on the scan's rows for the others); one that changed and is still
+ * eligible is kept as read. With no change between the reads these are today's query's rows, in its order.
+ */
+export const retentionRetiring = alwaysWrites({
+	name: "keep the chosen agreements that are still eligible as read in full",
+	given: (
+		request: { readonly now: Date; readonly chosen: readonly string[] },
+		facts: RetentionFacts & { readonly rows: readonly ChosenAgreementRow[] },
+	) => {
+		const now = request.now.toISOString();
+
+		return request.chosen.flatMap((id) => {
+			const row = facts.rows.find((candidate) => candidate.id === id);
+
+			return row !== undefined &&
+				eligibleForRetention({ agreement: row, facts, now })
+				? [row]
+				: [];
+		});
+	},
+	refusals: [],
+	writes: (rows): readonly ChosenAgreementRow[] => rows,
+	writesText:
+		"the chosen agreements' full rows that are still eligible, in the order chosen (none when none is)",
 });
 
 type ListedGiven = { readonly key: string; readonly digest: string | null };
