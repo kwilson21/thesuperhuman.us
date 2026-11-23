@@ -1,16 +1,26 @@
-// The store of the agreement routes (the archive link, the signed-copy download and the attachment download). Every
-// statement is a plain read of stored columns, a write guarded by a key, or a compare-and-set whose condition the rule
-// has already judged from a read (the cooldown row, the link batch's 30-second guard, `used_at IS NULL`). None decides an
-// outcome: whether a session counts, an agreement is executed, a link is recent, or an attachment is pinned is decided in
-// src/server/rules from the columns read here. Rows are read through Effect Schema readers. A failed statement is an
-// `AgreementStoreFailed`, which carries its cause so the route can log it through logUnexpected and answer its fixed 500;
-// the one guard that can fail a save is the link batch's (and the cooldown's), which is `ChangedSinceRead`.
+// The store of the agreement routes: the archive link, the downloads and the sessions, and the signing area
+// (docs/plans/2026-11-signing-conversion.md, section 4), one group per section below, each opening with what it reads
+// and writes. Every statement is a plain read of stored columns, a write guarded by a key, or a compare-and-set whose
+// condition a rule in src/server/rules has already judged from a read; none decides an outcome. Rows are read through
+// Effect Schema readers. A call fails in one of three ways:
+//   - `AgreementStoreFailed`: a statement or batch failed, or a row was not its table's shape. It carries the cause,
+//     which the route logs once through logUnexpected before its fixed 500.
+//   - `GuardRefused`: a raised JSON guard or a raise-only trigger of the signing migration (`refusedBatch`), or a
+//     constraint a group names as another request's write. Never retried: the route answers it as today, mostly a 409.
+//   - `ChangedSinceRead`: a lost compare-and-set backing a fact a rule reads (the archive link's and the cooldown's
+//     guards, and each UNIQUE failure the plan's section 2 reads and decides again). `decideAndSave` reads and decides
+//     again, three tries in all.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { agreementEvent } from "../lib/agreement-events";
-import { ChangedSinceRead, raisedByJsonGuard } from "./guarded-save";
+import {
+	ChangedSinceRead,
+	chainMatches,
+	GuardRefused,
+	raisedByJsonGuard,
+} from "./guarded-save";
 import type {
 	DownloadAgreement,
 	StoredSignedCopy,
@@ -44,6 +54,25 @@ const asked = <A>(run: (db: D1Database) => Promise<A>) =>
 			catch: (cause) => new AgreementStoreFailed({ failure: cause }),
 		});
 	});
+
+/**
+ * The raise-only triggers of migrations/music/0023_software_signing.sql: templates, the contractor's details, signatures,
+ * signed agreement texts, clients and notices are immutable, and a closed archive's end, retention, hold and
+ * termination cannot change. They write nothing; a batch one raises in is refused like a guard's.
+ */
+const TRIGGER_RAISED =
+	/Immutable (template|config|signature|signed agreement|identity|notice)|Archive cleanup is reserved/;
+
+/**
+ * What a rejected batch of this area is: a raised JSON guard or a raise-only trigger is `GuardRefused` (another request
+ * changed what was read, or the archive closed), looked for down the cause chain; anything else is
+ * `AgreementStoreFailed` with its cause. A batch that re-decides on a UNIQUE failure (plan section 2) checks that first.
+ */
+export const refusedBatch = (cause: unknown) =>
+	cause instanceof Error &&
+	(raisedByJsonGuard(cause) || chainMatches(cause, TRIGGER_RAISED))
+		? new GuardRefused()
+		: new AgreementStoreFailed({ failure: cause });
 
 const text = Schema.String;
 const maybeText = Schema.NullOr(Schema.String);
