@@ -6,7 +6,7 @@ Branch: `claude/project-image-dimensions`
 Pull request: #375
 Target: production `https://thesuperhuman.us`
 Decisions and merge authorization: Kazon Wilson. Implementation was done with Claude Code; independent review passes are recorded under Reviews. Codex reviews on the pull request. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: not known until merge. It is the revision of `main` immediately before this pull request merges; when this record was written `main` was `98e9404a`. To undo only this change, revert the merge commit. Migration 0028 is additive and can stay applied after a revert: code from before this change does not name its columns.
+Rollback revision: `628b52f9`, the revision of `main` immediately before this pull request merged as `9c0bcd9f` (its first parent). To undo only this change, revert the merge commit `9c0bcd9f`. Migration 0028 is additive and can stay applied after a revert: code from before this change does not name its columns.
 
 ## Scope
 
@@ -123,8 +123,8 @@ Limits:
 - PASS, 7.1 Required type, test and build checks: tests, lint, format and build pass locally; `pnpm run check` fails in the local checkout for a reason outside the change and passes in CI (see Evidence and limits).
 - PASS, 7.2 Exact diff review: 21 files changed besides this record and the 77 fixtures, all named under Scope. See Reviews.
 - PASS, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: migration 0028 is applied (see Before merge). No binding, secret, routing, cache or header changed.
-- UNVERIFIED, 7.4 Rollback version preserved: see Rollback revision above; fixed at merge.
-- UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: not deployed.
+- PASS, 7.4 Rollback version preserved: see Rollback revision above.
+- UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: merged to `main` on 2026-11-23 UTC as `9c0bcd9f`. Observed afterwards: the Cloudflare production build for that commit succeeded (00:43 UTC), and `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` answered 200. The client project page and the owner pages that read the new columns were not checked live: they are signed-in pages, and no sign-in was made for this record. None of the other items was rechecked.
 - PASS, 7.6 Receipt and QA evidence, with the four states reported separately: see Delivery status.
 
 ### 8. Private owner center
@@ -134,12 +134,16 @@ Limits:
 
 ## Remaining work and follow-ups
 
-- Upload one real project image after deployment and confirm its stored size on the client page (owner).
+- Open one software project page on the live site, and upload one real project image and confirm it shows as expected (owner).
 - Images uploaded before this change have no size. A backfill would be a production data write and was not decided.
 
 ## Delivery status
 
-Implemented: yes. Verified locally: partly (tests, lint, format and build pass; `pnpm run check` fails in this checkout for a reason outside the change). Verified in CI: yes on `4f17ec61` for Validate, Golden neutrality and the Screenshots capture; the commit that records this differs from `4f17ec61` only in this record. Migration 0028: applied to production. Deployed: no. Verified live: no.
+Implemented: yes. Verified locally: partly (tests, lint, format and build pass; `pnpm run check` fails in this checkout for a reason outside the change). Verified in CI: yes on the final head `e4d17123` for Validate, Golden neutrality, the Screenshots capture and the Cloudflare preview build. Migration 0028: applied to production before the merge. Deployed: yes (merged 2026-11-23 UTC as `9c0bcd9f`; production build succeeded). Verified live: no (hosts answer 200; the pages that show update images were not checked).
+
+- The final head `e4d17123` differs from `4f17ec61`, the head Codex reviewed, by one commit that changed only this record and by a merge of `main` at `628b52f9`. Neither was read by Codex or by an independent review.
+- Before merge, on `e4d17123` (observed on GitHub): every listed check had succeeded, no workflow was queued or running for the branch, no review thread was open, and the production ledger listed no pending migration.
+- The owner authorized merging in conversation ("Yes, merge #375"). After the merge the owner said the pull request had not been explained clearly; it was then explained in plain terms and the owner chose to keep the change ("Keep it").
 
 This record does not by itself authorize deployment.
 
