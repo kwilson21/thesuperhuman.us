@@ -169,12 +169,19 @@ export type DraftSaveFacts = SigningSessionFacts & {
 export type DraftSaveRequest = DraftBody & {
 	/** The draft's `updated_at`, read as the batch is built (after A2's own time). */
 	readonly at: Date;
+	/**
+	 * Which route saves the draft. The draft route hands `saveAgreementDraft` the values its own read answered, so they are
+	 * read a second time as they are stored; the review hands it the body's values, so they are read once
+	 * (`src/pages/api/offer/[token]/draft.ts` and `review.ts`).
+	 */
+	readonly route: "draft" | "review";
 };
 
 type SaveGiven = FrontGiven & {
 	readonly started: boolean;
 	readonly signed: boolean;
 	readonly at: string;
+	readonly route: DraftSaveRequest["route"];
 };
 
 /** The draft batch: A1, A2 and A3 with these binds, then the upsert. */
@@ -186,16 +193,18 @@ export type DraftWrite = {
 	readonly linkHash: string | null;
 	/** A2's session. */
 	readonly sessionHash: string;
-	/** The draft read again and stored as JSON, as today. */
+	/** The draft as stored today: read again for the draft route, as read for the review. */
 	readonly values_json: string;
 	readonly updated_at: string;
 };
 
 /**
  * Stage 2: the draft is saved. The front checks again, then no project of the offer (the part of A1 that only the guard
- * checked before) and no agreement of the offer client-signed or executed (A3). The values are read a second time as
- * they are stored, as `saveAgreementDraft` reads them: a value whose NFC form outgrows its field's limit reads once but
- * not twice, and that second read throws `FieldsRefused`, a defect (today the route's logged 500).
+ * checked before) and no agreement of the offer client-signed or executed (A3). For the draft route the values are read a
+ * second time as they are stored, as `saveAgreementDraft` reads the value the route already read: a value whose NFC form
+ * outgrows its field's limit reads once but not twice, and that second read throws `FieldsRefused`, a defect (today the
+ * route's logged 500). The review passes the body's values, which `saveAgreementDraft` reads once, so its draft is
+ * stored as the front's read answered it.
  */
 export const saveSigningDraft = alwaysWrites({
 	name: "save the signing form's draft",
@@ -212,6 +221,7 @@ export const saveSigningDraft = alwaysWrites({
 					AGREEMENT_SIGNED.some((status) => status === agreement.status),
 			),
 			at: request.at.toISOString(),
+			route: request.route,
 		};
 	},
 	refusals: [
@@ -242,7 +252,9 @@ export const saveSigningDraft = alwaysWrites({
 			recipient: session.recipient_email,
 			linkHash: session.link_hash,
 			sessionHash: session.token_hash,
-			values_json: JSON.stringify(parseDraft(draft)),
+			values_json: JSON.stringify(
+				given.route === "draft" ? parseDraft(draft) : draft,
+			),
 			updated_at: given.at,
 		};
 	},

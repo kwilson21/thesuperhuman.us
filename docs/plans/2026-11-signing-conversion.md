@@ -994,10 +994,11 @@ today's function beside the rule on the same database. What it found, for the st
   today calls it, at the same point. Where a rule now refuses before today's code drew its ids (countersign's
   `RecipientMissing` and its SOW-less pending MSA), no later step of a golden case depends on them.
 - **Today's throws stay defects.** The review's terms that are not JSON and a missing contractor snapshot throw the same
-  errors from the rule, so the route logs today's line; a draft value whose NFC form outgrows its limit stays the fixed
-  500. `readOwnerAgreementsCommand` throws where Zod threw (`Number()` of a symbol or of an object with a bad
-  `toString`): the owner route calls it in plain code before `runRoute`, as the offers route calls its reader, so the
-  owner still gets a bare 500.
+  errors from the rule, so the route logs today's line; on the draft route a draft value whose NFC form outgrows its limit
+  stays the fixed 500 (the review reads the values once, as today, and stores them as read: `route` in
+  `saveSigningDraft`'s request). `readOwnerAgreementsCommand` throws where Zod threw (`Number()` of a symbol or of an
+  object with a bad `toString`): the owner route calls it in plain code before `runRoute`, as the offers route calls its
+  reader, so the owner still gets a bare 500.
 - **Not reachable, decided by name:** the sign's pending set with no SOW (today a TypeError, 409) is `DocumentsChanged`;
   a contractor notice email that is not text (today 409, 500 or 200 by its type; the review always writes text) is
   `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.

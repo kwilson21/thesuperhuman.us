@@ -175,6 +175,7 @@ const saveRequest = (
 	values: VALUES,
 	...body,
 	at: new Date(NOW),
+	route: "draft",
 });
 
 describe("saving the draft", () => {
@@ -259,6 +260,48 @@ describe("saving the draft", () => {
 			expect(Cause.hasDies(exit.cause)).toBe(true);
 			expect(Cause.squash(exit.cause)).toBeInstanceOf(FieldsRefused);
 		}
+	});
+
+	it("stores the review's values as read once, as the review route's single read does today", () => {
+		// The review hands saveAgreementDraft the body's values, which parseDraft reads once: a value whose NFC form
+		// outgrows its limit is stored as read, and the review goes on (the country is read by no later check when the
+		// state is a US state).
+		const values = {
+			legal_name: "Sample LLC",
+			entity_type: "LLC",
+			state: "Wyoming",
+			country: "\u0958".repeat(100),
+			business_address: "100 Example Street",
+			signer_name: "Example Signer",
+			signer_title: "Owner",
+			portfolio_choice: "private",
+		};
+
+		const today = parseDraft(values);
+
+		const exit = Effect.runSyncExit(
+			saveSigningDraft.decide(
+				{ ...saveRequest({ values }), route: "review" },
+				{ ...held, agreements: [], project: null },
+			),
+		);
+
+		expect(Exit.isSuccess(exit)).toBe(true);
+
+		if (Exit.isSuccess(exit))
+			expect(exit.value.values_json).toBe(JSON.stringify(today));
+
+		expect(
+			Exit.isFailure(
+				Effect.runSyncExit(
+					saveSigningDraft.decide(saveRequest({ values }), {
+						...held,
+						agreements: [],
+						project: null,
+					}),
+				),
+			),
+		).toBe(true);
 	});
 });
 
