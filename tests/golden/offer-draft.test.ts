@@ -89,8 +89,13 @@ const outage = (name: string, on: RegExp, nth = 1) =>
 		over: { failures: [{ on, nth, message: `${name} fails` }] },
 	});
 
+/**
+ * The session's live check: the offer the session names, read through its link (`readSigningOffer`, which replaced the
+ * live check `agreementSession` ran, `SELECT 1 FROM software_offers o JOIN software_offer_links l ...`; the old pattern
+ * would now pick A1 inside the draft batch).
+ */
 const LIVE_LOOKUP =
-	/SELECT 1 FROM software_offers o JOIN software_offer_links l/;
+	/SELECT o\.status AS offer_status,l\.revoked_at AS link_revoked_at/;
 
 const DRAFT_INSERT = /INSERT INTO software_agreement_drafts/;
 
@@ -632,7 +637,7 @@ const cases: Case[] = [
 	),
 	...outage(
 		"the session lookup fails",
-		/SELECT \* FROM software_agreement_sessions WHERE token_hash/,
+		/FROM software_agreement_sessions WHERE token_hash=\? AND purpose=\?/,
 	),
 	...outage("the live check of the session fails", LIVE_LOOKUP),
 	...outage(
