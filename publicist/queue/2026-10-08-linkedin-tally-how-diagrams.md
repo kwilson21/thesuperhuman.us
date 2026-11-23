@@ -7,7 +7,8 @@ kind: new
 link: https://thesuperhuman.us/building/tally#tally-how-diagrams
 media: src/assets/projects/tally/how-diagrams-annotated.webp
 alt: Two diagrams from Tally's How Tally works page on demo data: Transactions as boxes and arrows, and Excluding as one bar, each with its worked example.
-status: draft
+status: skipped
+skip_reason: retired in the 2026-11-07 queue refresh (owner, in conversation, 2026-11-07: "I'd find a way to convert the ones that have potential for high engagement and convert them to a higher engagement format")
 ---
 How Tally works explains each rule with a worked example from the demo's own numbers. The goal: anyone trying the demo should see how those numbers fit together.
 

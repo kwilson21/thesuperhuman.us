@@ -7,7 +7,8 @@ kind: new
 link: https://thesuperhuman.us/building/kaillera-next#kaillera-next-landing-page
 media: src/assets/projects/kaillera-next/landing-page-annotated.webp
 alt: Kaillera Next's front page in its waking state, with numbered pointers to the open-rooms board, the lag visualizer and the join controls.
-status: draft
+status: skipped
+skip_reason: retired in the 2026-11-07 queue refresh (owner, in conversation, 2026-11-07: "I'd find a way to convert the ones that have potential for high engagement and convert them to a higher engagement format")
 ---
 Kaillera Next's room server runs on a free tier that naps when idle and takes about a minute to wake. It also served the front page, so the first visitor after a nap stared at a loading tab.
 

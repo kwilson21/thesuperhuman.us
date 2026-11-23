@@ -7,7 +7,8 @@ kind: new
 link: https://thesuperhuman.us/building/kaillera-next#kaillera-next-recovery-syncs
 media: src/assets/projects/kaillera-next/recovery-syncs-diagram.webp
 alt: Diagram of how Kaillera Next brings a drifted player back: the host queues a resync, sends it once its state is final and the connection is open, and retries skipped sends.
-status: draft
+status: skipped
+skip_reason: retired in the 2026-11-07 queue refresh (owner, in conversation, 2026-11-07: "I'd find a way to convert the ones that have potential for high engagement and convert them to a higher engagement format")
 ---
 Getting a stuck player back in sync.
 
