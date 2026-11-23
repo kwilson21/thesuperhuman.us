@@ -2,14 +2,14 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: [#383](https://github.com/kwilson21/thesuperhuman.us/pull/383). Merge facts are recorded after the merge,
-in the next pull request.
+Pull request: [#383](https://github.com/kwilson21/thesuperhuman.us/pull/383), merged at 06:10:07 UTC as `31e32124`
+(head `a1b96883`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The order of `docs/plans/2026-11-effect-conversion.md` ("Go", 2026-11-15) and the step 3
 design (`docs/plans/2026-11-signing-conversion.md`, #376), whose section 8 makes this PR 3: the two Quint models
 extended before any fix or conversion code. The model work was done with Claude Code.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. Models, the Quint
-driver's registry, its tests and docs only.
+Rollback revision: `585619c1`, the revision of `main` before the merge; or `git revert -m 1 31e32124`. Models, the
+Quint driver's registry, its tests and docs only.
 
 ## Scope
 
@@ -62,7 +62,14 @@ driver's registry, its tests and docs only.
   say that A2 refuses nothing A1 does not in the model, so the review and sign mutants drop both, that
   `discountAcceptedOnlyCheck` is killed only because the model lets the client use a link only the failed email carried,
   and that the draft batch's own A3 is folded into the review's read and does not protect `signedStaysSigned`.
-- Reviews and CI: UNVERIFIED until they report; recorded with the merge facts.
+- Codex's security review found nothing. A second independent pass, on the fix commits, found nothing blocking; its two
+  small notes (a stale comment calling `discountAcceptedOnlyCheck` equivalent, two lines' indent) were fixed in
+  `a1b96883`.
+- CI on the head `a1b96883` before merge: all 20 check runs succeeded, the Quint shards and the Workers preview build
+  among them.
+- After merge, on `31e32124`: the Workers build succeeded (06:11:21 UTC) and `validate` succeeded (06:14:03 UTC). Live
+  check at 06:14:25 UTC: `https://thesuperhuman.us/` answered 200, and `/agreements/verify?key=x` answered 401 with the
+  expired page, as before.
 
 ## 1 to 6. Content, search, accessibility, performance, forms, privacy
 
@@ -70,7 +77,8 @@ driver's registry, its tests and docs only.
 
 ## 7. Release and final QA
 
-- **UNVERIFIED · Checks, reviews, production revision and live check.** Recorded after the merge.
+- **PASS · Checks, reviews, rollback.** See above.
+- **PASS · Production revision and live check.** Deployed `31e32124`; the site answered 200.
 - **N/A · Bindings, migrations.** None.
 
 ## 8. Private owner center
