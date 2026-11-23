@@ -633,7 +633,28 @@ const HOOK_PATTERNS = CORPORA.flatMap((corpus) => {
 });
 
 const TODAY_SOURCE = readFileSync("src/lib/software-agreements.ts", "utf8");
-const ACCESS_SOURCE = readFileSync("src/lib/agreement-access.ts", "utf8");
+
+/**
+ * Every SQL text the signing link's corpus recorded, alone or in a batch: the offer's signing state the signature reads
+ * is the read the link made after its batch's guard raised before its conversion (`signingRefusal`, deleted with
+ * `issueAgreementLink`), and the read the converted link makes before each try.
+ */
+const LINK_RECORDED_SQL = new Set(
+	// SAFETY: the fixture files are written only by the golden harness (tests/golden/harness/fixtures.ts), as a JSON array of recorded cases with these fields.
+	(
+		JSON.parse(
+			gunzipSync(
+				readFileSync(
+					new URL("../golden/fixtures/offer-link.json.gz", import.meta.url),
+				),
+			).toString("utf8"),
+		) as RecordedCase[]
+	).flatMap((recorded) =>
+		recorded.effects.flatMap((effect) =>
+			effect.kind === "d1" && effect.sql !== undefined ? [effect.sql] : [],
+		),
+	),
+);
 
 describe("the status lists", () => {
 	it("come from the agreement document machine and give today's texts", () => {
@@ -1275,7 +1296,7 @@ describe("the signature's reads", () => {
 		).toBeNull();
 	});
 
-	it("reads the offer's signing state with today's signingRefusal SQL, and the reused MSA only when the offer names one", async () => {
+	it("reads the offer's signing state with the signing link's SQL, and the reused MSA only when the offer names one", async () => {
 		const world = signingWorld();
 
 		expect(await world.ok(readStillSignable(OFFER, SESSION))).toEqual({
@@ -1291,7 +1312,7 @@ describe("the signature's reads", () => {
 			reusedMsa: null,
 		});
 		expect(world.executed).toHaveLength(1);
-		expect(ACCESS_SOURCE).toContain(`"${world.executed[0]}"`);
+		expect(LINK_RECORDED_SQL.has(world.executed[0] ?? "")).toBe(true);
 
 		world.sql.exec(
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES('r1','o1','{}','standard','t','t','t','o','t','t')",
@@ -1887,7 +1908,7 @@ describe("the store's SQL against the golden corpora (offer-review, offer-sign)"
 			expect(RECORDED_SQL.has(added.sql), added.why).toBe(false);
 		}
 
-		expect(ACCESS_SOURCE).toContain(`"${ADDED[0].sql}"`);
+		expect(LINK_RECORDED_SQL.has(ADDED[0].sql)).toBe(true);
 	});
 
 	it("writes each batch's statements in an order the corpora recorded", async () => {

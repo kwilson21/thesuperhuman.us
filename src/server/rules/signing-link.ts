@@ -1,5 +1,5 @@
 // The signing link: a visitor on an offer's page asks for the link that opens its agreement, mailed to the offer's
-// recipient (POST /api/offer/[token]/link; today `issueAgreementLink` in src/lib/agreement-access.ts). The route's order
+// recipient (POST /api/offer/[token]/link; the flow src/server/flows/signing-link.ts). The route's order
 // is kept, and each stage decides on what was read so far (docs/plans/2026-11-signing-conversion.md, sections 2 and 3):
 //   1. the signing setting (`signingOn`): SigningOff;
 //   2. the sent offer the token names (`linkedOffer`, src/server/rules/signing-offer.ts): OfferUnavailable; then, with
@@ -142,7 +142,10 @@ export type SigningLinkRequest = {
 export type SigningLinkFacts = {
 	/** The offer's signing state, read by its id with the token's hash (openForSigning's facts), or null when it is gone. */
 	readonly signing: SigningStateRow | null;
-	/** The recipient's signing links of the offer. */
+	/**
+	 * The recipient's signing links of the offer: at least every one issued after the window's start (`since`), which are
+	 * all the rule counts (the flow reads only those).
+	 */
 	readonly links: readonly StoredSigningLink[];
 };
 

@@ -16,10 +16,11 @@ import * as access from "../golden/areas/agreement-access";
 // The decisions the signing link and the review took from a guard or a unique index of their batch, after behaviour fix
 // B7 of docs/plans/2026-11-signing-conversion.md and the owner's answer to its Q1 (2026-11-23, "The real reason"):
 //
-// - When a guard of the signing link's batch raises, the link reads what its two guards re-check and decides: signing off
-//   is 404 "Website signing is off.", an offer no longer open for signing 404 "This offer is unavailable for signing.", a
-//   link issued in the last 30 seconds the 429; when none holds any more, the batch runs again, three batches in all, and
-//   a third raise is the 429, as before. A batch that commits reads nothing more.
+// - The signing link reads what its batch's two guards re-check just before each try of the batch, and decides
+//   (src/server/flows/signing-link.ts): signing off is 404 "Website signing is off.", an offer no longer open for signing
+//   404 "This offer is unavailable for signing.", a link issued in the last 30 seconds the 429. When a guard raises (the
+//   state changed after the read), it reads and decides again, three batches in all, and a third raise is the 429, as
+//   before. A refusal the first read finds runs no batch.
 // - The review reads and decides again when its batch loses the one pending MSA per client and template, or the client
 //   row it chose (a foreign key failure with the evidence read after it), three tries in all; a third such failure is
 //   the 409 "The agreement could not be reviewed.", as before.
@@ -38,7 +39,7 @@ const NOT_REVIEWED = "The agreement could not be reviewed.";
 
 const LINK_INSERT = /INSERT INTO software_agreement_links/;
 
-/** The read of the offer's signable state after a guard of the link batch raised. */
+/** The read of the offer's signable state, before each try of the link batch. */
 const SIGNING_FACTS = /SELECT o\.status,o\.recipient_email_snapshot/;
 
 const CLIENTS_INSERT = /INSERT OR IGNORE INTO software_agreement_clients/;
@@ -143,12 +144,12 @@ const linkCase = (
 });
 
 describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", () => {
-	it("reads nothing more when the batch commits", async () => {
+	it("reads the signing state once, before the batch, when the batch commits", async () => {
 		const record = await run(LINK, linkCase());
 
 		expect(seen(record).status).toBe(200);
 		expect(batches(record, LINK_INSERT)).toEqual(["committed"]);
-		expect(reads(record, SIGNING_FACTS)).toBe(0);
+		expect(reads(record, SIGNING_FACTS)).toBe(1);
 	});
 
 	it.each([
@@ -179,7 +180,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			UNAVAILABLE,
 		],
 	])(
-		"%s between the lookup and the batch: the guard raises, the read after it decides, 404 with the real reason",
+		"%s between the read and the batch: the guard raises, the read after it decides, 404 with the real reason",
 		async (_name, sql, sentence) => {
 			const record = await run(
 				LINK,
@@ -192,7 +193,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 				logs: [],
 			});
 			expect(batches(record, LINK_INSERT)).toEqual(["rolled-back"]);
-			expect(reads(record, SIGNING_FACTS)).toBe(1);
+			expect(reads(record, SIGNING_FACTS)).toBe(2);
 			expect(dumped(record, "software_agreement_links")).toEqual([]);
 		},
 	);
@@ -221,7 +222,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 		expect(answer.body).not.toContain(WAIT);
 	});
 
-	it("refuses an offer whose project already exists: the guard raises, the read decides, 404", async () => {
+	it("refuses an offer whose project already exists: the read before the batch decides, 404, and no batch runs", async () => {
 		const record = await run(
 			LINK,
 			linkCase({}, { extra: access.startedProject() }),
@@ -232,12 +233,12 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			body: json(UNAVAILABLE),
 			logs: [],
 		});
-		expect(batches(record, LINK_INSERT)).toEqual(["rolled-back"]);
+		expect(batches(record, LINK_INSERT)).toEqual([]);
 		expect(reads(record, SIGNING_FACTS)).toBe(1);
 		expect(dumped(record, "software_agreement_links")).toEqual([]);
 	});
 
-	it("keeps the 429 for a link issued 20 seconds ago, decided by the read after the guard raised", async () => {
+	it("keeps the 429 for a link issued 20 seconds ago, decided by the read before the batch", async () => {
 		const record = await run(
 			LINK,
 			linkCase(
@@ -267,11 +268,11 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			body: json(WAIT),
 			logs: [],
 		});
-		expect(batches(record, LINK_INSERT)).toEqual(["rolled-back"]);
+		expect(batches(record, LINK_INSERT)).toEqual([]);
 		expect(reads(record, SIGNING_FACTS)).toBe(1);
 	});
 
-	it("keeps the 429 when another request issues a link between the lookup and the batch", async () => {
+	it("keeps the 429 when another request issues a link between the read and the batch", async () => {
 		const record = await run(
 			LINK,
 			linkCase({ interleave: [race(LINK_INSERT, RACE_LINK)] }),
@@ -283,7 +284,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			logs: [],
 		});
 		expect(batches(record, LINK_INSERT)).toEqual(["rolled-back"]);
-		expect(reads(record, SIGNING_FACTS)).toBe(1);
+		expect(reads(record, SIGNING_FACTS)).toBe(2);
 		expect(column(dumped(record, "software_agreement_links"), "id")).toEqual([
 			"link-race",
 		]);
@@ -295,7 +296,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			linkCase({
 				interleave: [race(LINK_INSERT, RACE_LINK)],
 				failures: [
-					{ on: SIGNING_FACTS, nth: 1, message: "D1_ERROR: the read fails" },
+					{ on: SIGNING_FACTS, nth: 2, message: "D1_ERROR: the read fails" },
 				],
 			}),
 		);
@@ -318,6 +319,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 					race(
 						SIGNING_FACTS,
 						"DELETE FROM software_agreement_links WHERE id='link-race'",
+						2,
 					),
 				],
 			}),
@@ -335,7 +337,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 		expect(column(links, "issued_at")).toEqual([access.NOW]);
 	});
 
-	it("answers the 429 after a guard raised on each of three batches, with no read after the third", async () => {
+	it("answers the 429 after a guard raised on each of three batches, with a read before each and none after the third", async () => {
 		const gone = "DELETE FROM software_agreement_links WHERE id='link-race'";
 
 		const record = await run(
@@ -343,9 +345,9 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			linkCase({
 				interleave: [
 					race(LINK_INSERT, RACE_LINK, 1),
-					race(SIGNING_FACTS, gone, 1),
-					race(LINK_INSERT, RACE_LINK, 2),
 					race(SIGNING_FACTS, gone, 2),
+					race(LINK_INSERT, RACE_LINK, 2),
+					race(SIGNING_FACTS, gone, 3),
 					race(LINK_INSERT, RACE_LINK, 3),
 				],
 			}),
@@ -361,7 +363,7 @@ describe("POST /api/offer/[token]/link: a guard of the link batch raises (Q1)", 
 			"rolled-back",
 			"rolled-back",
 		]);
-		expect(reads(record, SIGNING_FACTS)).toBe(2);
+		expect(reads(record, SIGNING_FACTS)).toBe(3);
 	});
 });
 

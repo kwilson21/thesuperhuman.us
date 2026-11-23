@@ -877,9 +877,9 @@ export const readLinkedOffer = (tokenHash: string) =>
 /**
  * Plain read: the offer's signing state (`openForSigning`'s facts): the offer by its id with its brief, the offer link
  * only when it has this token hash, the signing setting and a project of the offer; null when the offer is gone. What A1
- * re-checks, as rows. Today's read after the link batch's guard raised (`signingRefusal`, src/lib/agreement-access.ts),
- * text for text; the converted flows read it before the batch as well, and for the redeem's GET in place of A1 run as a
- * read.
+ * re-checks, as rows. The read the signing link made after its batch's guard raised before the conversion
+ * (`signingRefusal`, src/lib/agreement-access.ts), text for text; the converted flows read it before each batch, and for
+ * the redeem's GET in place of A1 run as a read.
  */
 export const readSigningFacts = (input: {
 	readonly offerId: string | null;
@@ -894,8 +894,9 @@ export const readSigningFacts = (input: {
 	).pipe(Effect.map((rows): SigningStateRow | null => rows[0] ?? null));
 
 /**
- * Plain read: the recipient's signing links of the offer, used or not (A4 counts every one; `consumeOlderLinks` picks the
- * unused older ones). The archive link's read of its links, text for text, bound to the signing purpose and the offer.
+ * Plain read: the recipient's signing links of the offer, used or not, from which `consumeOlderLinks` picks the unused
+ * older ones after the mail. The archive link's read of its links, text for text, bound to the signing purpose and the
+ * offer.
  */
 export const readSigningLinks = (recipient: string, offerId: string) =>
 	readAll(SigningLinkColumns, (db) =>
@@ -904,6 +905,23 @@ export const readSigningLinks = (recipient: string, offerId: string) =>
 				"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ?",
 			)
 			.bind("agreement", recipient, offerId),
+	).pipe(Effect.map((rows): readonly StoredSigningLink[] => rows));
+
+/**
+ * Plain read: the recipient's signing links of the offer issued after `since`, used or not: the only ones A4 counts and
+ * `issueSigningLink` decides from (the start of its 30-second window). Before each try of the link batch.
+ */
+export const readRecentSigningLinks = (
+	recipient: string,
+	offerId: string,
+	since: string,
+) =>
+	readAll(SigningLinkColumns, (db) =>
+		db
+			.prepare(
+				"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?",
+			)
+			.bind("agreement", recipient, offerId, since),
 	).pipe(Effect.map((rows): readonly StoredSigningLink[] => rows));
 
 /** The signing link the flow drew for one try of the link batch, with the rule's times. */

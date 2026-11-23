@@ -45,7 +45,9 @@ import { allowanceRow } from "./areas/studio-access";
 // ways is recorded both ways, named "(json)" and "(form)".
 //
 // Branches (the handler, agreementRequest and nativeAgreementRoute in src/lib/agreement-request.ts, issueAgreementLink,
-// liveSigningGuard, completeAgreementLink in src/lib/agreement-access.ts, getLinkedOffer in src/lib/software-offers.ts):
+// liveSigningGuard, completeAgreementLink in src/lib/agreement-access.ts, getLinkedOffer in src/lib/software-offers.ts),
+// as recorded before the conversion. The route now runs `requestSigningLink` (src/server/flows/signing-link.ts), and its
+// re-recorded cases differ only in their D1 statements (`pnpm run golden:neutral`):
 //
 //   agreementRequest / musicRequest     403 Forbidden, 415 JSON required, 400 Missing request / Invalid JSON, 413 over 4096 bytes,
 //                                       400 Invalid fields (form with a bad documents field), the cf-turnstile-response mapping
@@ -572,7 +574,7 @@ const cases: Case[] = [
 	),
 	...outage(
 		"the used_at update after a sent email fails",
-		/UPDATE software_agreement_links SET used_at=\? WHERE purpose/,
+		/UPDATE software_agreement_links SET used_at=\? WHERE id IN/,
 	),
 	...outage(
 		"the clean-up batch after a refused email fails",

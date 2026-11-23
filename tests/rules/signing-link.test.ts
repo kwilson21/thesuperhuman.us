@@ -21,10 +21,13 @@ import { DatabaseSync } from "../helpers/sqlite-d1";
 
 // The signing link's rules as stories, stage by stage in the route's order (docs/plans/2026-11-signing-conversion.md,
 // section 2): the setting, the recipient, the link and its receipt, what a refused mail takes back, the mail's words. Then,
-// on sqlite with the real schema (db/music.sql): the cooldown held to the link batch's A4, copied here from
-// `storeSigningLink` (src/lib/agreement-access.ts, not exported); the reused `consumeOlderLinks` held to today's
-// consume (A6), copied from `issueAgreementLink`; and the uses a refused mail gives back, through today's two refund
-// statements. A1, the batch's other guard, is held to `openForSigning` in tests/rules/signing-offer.test.ts.
+// on sqlite with the real schema (db/music.sql): the cooldown held to the link batch's A4, on the links the flow reads
+// (every one, and only those after the window's start); the reused `consumeOlderLinks` held to the consume (A6) the route
+// ran before its conversion (`issueAgreementLink`, src/lib/agreement-access.ts, now deleted); and the uses a refused mail
+// gives back, through the two refund statements. Each statement copied here is held to the store's own text
+// (src/server/agreement-store.ts, `storeSigningLink`, `readSigningLinks`, `readRecentSigningLinks`, `removeRefusedLink`
+// and `consumeLinks`, which do not export it). A1, the batch's other guard, is held to `openForSigning` in
+// tests/rules/signing-offer.test.ts.
 
 type Said =
 	| { refused: string; say: string }
@@ -350,16 +353,32 @@ function store(row: Omit<LinkRow, "id"> & { id?: string }) {
 		);
 }
 
-/** The recipient's signing links of the offer, read as the store will read them. */
+/** The store's statements copied below, by the source they are held to. */
+const STORE = readFileSync("src/server/agreement-store.ts", "utf8");
+
+/** The store's read of the recipient's signing links of the offer (`readSigningLinks`), copied. */
+const LINKS =
+	"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ?";
+
+/** The store's read of those issued after the window's start (`readRecentSigningLinks`), copied. */
+const RECENT_LINKS =
+	"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?";
+
+/** The recipient's signing links of the offer, read as the store reads them after the mail. */
 const readLinks = (email: string, offerId: string) =>
 	// SAFETY: the statement selects exactly the three columns of StoredSigningLink, which the schema stores as text.
 	database
-		.prepare(
-			"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ?",
-		)
+		.prepare(LINKS)
 		.all("agreement", email, offerId) as StoredSigningLink[];
 
-/** A4 as the link batch runs it today (src/lib/agreement-access.ts, `storeSigningLink`), copied. */
+/** Those issued after `since`, read as the store reads them before each try of the link batch. */
+const readRecentLinks = (email: string, offerId: string, since: string) =>
+	// SAFETY: the statement selects exactly the three columns of StoredSigningLink, which the schema stores as text.
+	database
+		.prepare(RECENT_LINKS)
+		.all("agreement", email, offerId, since) as StoredSigningLink[];
+
+/** A4 as the link batch runs it (src/server/agreement-store.ts, `storeSigningLink`), copied. */
 const A4 =
 	"SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END";
 
@@ -412,10 +431,20 @@ describe("A4 and the cooldown", () => {
 									}),
 								);
 
+							const onRecent =
+								"refused" in
+								said(
+									issueSigningLink.decide(request(), {
+										signing: open,
+										links: readRecentLinks(RECIPIENT, "o1", SINCE),
+									}),
+								);
+
 							expect(
 								{ label, refuses: a4Refuses(RECIPIENT, "o1", SINCE) },
 								label,
 							).toEqual({ label, refuses: rule });
+							expect(onRecent, label).toBe(rule);
 							compared += 1;
 
 							if (rule) cooling += 1;
@@ -427,9 +456,34 @@ describe("A4 and the cooldown", () => {
 	});
 });
 
-/** A6 as `issueAgreementLink` consumes the older links today, copied. */
+/** A6 as `issueAgreementLink` consumed the older links before the conversion, copied (that code is deleted). */
 const TODAY_CONSUME =
 	"UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL AND id<>? AND issued_at<=?";
+
+/** The store's consume (`consumeLinks`), copied. */
+const CONSUME =
+	"UPDATE software_agreement_links SET used_at=? WHERE id IN (SELECT value FROM json_each(?)) AND used_at IS NULL";
+
+/** The store's two refund statements (`removeRefusedLink`), copied. */
+const REFUND_LAST =
+	"DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1";
+
+const REFUND_ONE =
+	"UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1";
+
+describe("the statements copied here", () => {
+	it("are the store's own texts", () => {
+		for (const sql of [
+			LINKS,
+			RECENT_LINKS,
+			A4,
+			CONSUME,
+			REFUND_LAST,
+			REFUND_ONE,
+		])
+			expect(STORE, sql).toContain(sql);
+	});
+});
 
 describe("A6 and consumeOlderLinks", () => {
 	const usedAfter = (consume: () => void) => {
@@ -530,11 +584,7 @@ describe("A6 and consumeOlderLinks", () => {
 
 		// The store's consume (src/server/agreement-store.ts, `consumeLinks`), over the ids the rule chose.
 		const converted = usedAfter(() =>
-			database
-				.prepare(
-					"UPDATE software_agreement_links SET used_at=? WHERE id IN (SELECT value FROM json_each(?)) AND used_at IS NULL",
-				)
-				.run(at, JSON.stringify(chosen.ids)),
+			database.prepare(CONSUME).run(at, JSON.stringify(chosen.ids)),
 		);
 
 		expect(today).toEqual(["a-older", "b-same-instant"]);
@@ -556,19 +606,11 @@ describe("the uses a refused mail gives back", () => {
 		return { key, window_start: row.window_start };
 	};
 
-	/** Today's two refund statements for each use (src/lib/agreement-access.ts), copied. */
+	/** The two refund statements for each use (src/server/agreement-store.ts, `removeRefusedLink`), copied. */
 	const giveBack = (uses: readonly CountedUse[]) => {
 		for (const use of uses) {
-			database
-				.prepare(
-					"DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1",
-				)
-				.run(use.key, use.window_start);
-			database
-				.prepare(
-					"UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1",
-				)
-				.run(use.key, use.window_start);
+			database.prepare(REFUND_LAST).run(use.key, use.window_start);
+			database.prepare(REFUND_ONE).run(use.key, use.window_start);
 		}
 	};
 

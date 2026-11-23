@@ -31,9 +31,9 @@ import {
 import {
 	agreementSession,
 	completeAgreementLink,
-	issueAgreementLink,
 	type RedeemFailures,
 } from "~/lib/agreement-access";
+import { POST as signingLinkRoute } from "~/pages/api/offer/[token]/link";
 import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import {
 	prepareAgreementArtifact,
@@ -358,6 +358,30 @@ const archiveLink = (email: string, turnstileToken = "test") =>
 			Effect.provideContext(archiveServices()),
 		),
 	);
+
+/**
+ * The signing link (POST /api/offer/[token]/link, the flow src/server/flows/signing-link.ts), asked as the offer page asks
+ * it: a JSON body from the site itself, with the headers (the client address, the cookie) of `from`. Answers the route's
+ * Response.
+ */
+const signingLink = (from: Request, turnstileToken = "test") => {
+	const headers = new Headers(from.headers);
+
+	headers.set("content-type", "application/json");
+	headers.set("origin", new URL(from.url).origin);
+
+	return signingLinkRoute(
+		partial<APIContext>({
+			params: { token },
+			request: new Request(from.url, {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ turnstileToken }),
+			}),
+			locals: { runtime: partial<TestRuntime>({ env }) },
+		}),
+	);
+};
 
 /** The visitor's download of a signed copy, with the cookie they hold; answers its bytes or the refusal. */
 const visitorDownload = (id: string, cookie?: string) =>
@@ -1107,17 +1131,7 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 		headers: { "cf-connecting-ip": "192.0.2.2" },
 	});
 
-	expect(
-		(
-			await issueAgreementLink(
-				env,
-				req,
-				{ turnstileToken: "test" },
-				token,
-				raisedByJsonGuard,
-			)
-		).status,
-	).toBe(200);
+	expect((await signingLink(req)).status).toBe(200);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 	expect(payload.to).toEqual(["client@example.com"]);
 	expect(payload.subject).toBe("Open your agreement");
@@ -1163,27 +1177,11 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	expect(
 		(await completeAgreementLink(env, req, key, token, redeemFailures)).status,
 	).toBe(401);
-	expect(
-		(
-			await issueAgreementLink(
-				env,
-				req,
-				{ turnstileToken: "test" },
-				token,
-				raisedByJsonGuard,
-			)
-		).status,
-	).toBe(429);
+	expect((await signingLink(req)).status).toBe(429);
 });
 
 it("rejects expired links without creating a session", async () => {
-	await issueAgreementLink(
-		env,
-		request(),
-		{ turnstileToken: "test" },
-		token,
-		raisedByJsonGuard,
-	);
+	await signingLink(request());
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -2294,13 +2292,7 @@ it.each(["resolved", "withdrawn"])(
 );
 
 it("consumes a link atomically under parallel verification", async () => {
-	await issueAgreementLink(
-		env,
-		request(),
-		{ turnstileToken: "test" },
-		token,
-		raisedByJsonGuard,
-	);
+	await signingLink(request());
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -2622,13 +2614,7 @@ it("invalid Turnstile requests count only the address allowance, not the recipie
 	);
 
 	for (let i = 0; i < 3; i++) {
-		const response = await issueAgreementLink(
-			env,
-			request(),
-			{ turnstileToken: "invalid" },
-			token,
-			raisedByJsonGuard,
-		);
+		const response = await signingLink(request(), "invalid");
 
 		expect(response.status).toBe(403);
 	}
@@ -2641,13 +2627,7 @@ it("invalid Turnstile requests count only the address allowance, not the recipie
 		async () => new Response('{"success":true}', { status: 200 }),
 	);
 
-	const response = await issueAgreementLink(
-		env,
-		request(),
-		{ turnstileToken: "valid" },
-		token,
-		raisedByJsonGuard,
-	);
+	const response = await signingLink(request(), "valid");
 
 	expect(response.status).toBe(200);
 	expect(
@@ -3533,13 +3513,7 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 	sql
 		.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'")
 		.run();
-	await issueAgreementLink(
-		env,
-		request(),
-		{ turnstileToken: "test" },
-		token,
-		raisedByJsonGuard,
-	);
+	await signingLink(request());
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -4041,13 +4015,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 	);
 
 	for (let i = 0; i < 4; i++) {
-		const response = await issueAgreementLink(
-			env,
-			request(),
-			{ turnstileToken: "test" },
-			token,
-			raisedByJsonGuard,
-		);
+		const response = await signingLink(request());
 
 		expect(response.status).toBe(502);
 		expect(
@@ -4079,13 +4047,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 		vi.fn(async () => Response.json({ success: true })),
 	);
 
-	const response = await issueAgreementLink(
-		env,
-		request(),
-		{ turnstileToken: "test" },
-		token,
-		raisedByJsonGuard,
-	);
+	const response = await signingLink(request());
 
 	expect(response.status).toBe(200);
 	expect(
@@ -5055,17 +5017,7 @@ it.each(["agreement", "archive"])(
 		expect(canonicalAgreementRequest(env, foreign)).toBe(false);
 
 		if (purpose === "agreement")
-			expect(
-				(
-					await issueAgreementLink(
-						env,
-						foreign,
-						{ turnstileToken: "valid" },
-						token,
-						raisedByJsonGuard,
-					)
-				).status,
-			).toBe(404);
+			expect((await signingLink(foreign, "valid")).status).toBe(404);
 		expect(
 			(
 				await completeAgreementLink(
@@ -5210,17 +5162,7 @@ it.each([503, "timeout"])(
 				return Response.json({ message: "Unavailable" }, { status: 503 });
 			}),
 		);
-		expect(
-			(
-				await issueAgreementLink(
-					env,
-					request(),
-					{ turnstileToken: "test" },
-					token,
-					raisedByJsonGuard,
-				)
-			).status,
-		).toBe(200);
+		expect((await signingLink(request())).status).toBe(200);
 		expect(
 			sql
 				.prepare(
