@@ -5,11 +5,14 @@
 // 5,170 runs), whose counterexample the step did not change (8.9 s there, 7.3 s locally, one run at a time). The
 // signing extension of the discount model (2026-11-23) turned discountAcceptedOnlyCheck from a run that must pass into a
 // mutant found in about 9,700 of its runs, so its hint moves to violationSeconds with about its old time; the hints for
-// the slower new mutants are local timings with four runs at a time. They never change a check's inputs.
+// the slower new mutants are local timings with four runs at a time. The discount model's runs that must pass (discount
+// and the equivalent discountSecondBatchNoSendingGuard) take 80 steps since the signing extension: their hints are the
+// earlier CI times scaled by the local ratio at 80 steps to 50 (167 s against about 93 s, three runs at a time). They
+// never change a check's inputs.
 const passSeconds = {
 	audio: 96.4,
 	software: 68.2,
-	discount: 106.1,
+	discount: 190.5,
 	signin: 81,
 	signinSpent: 75,
 	signinAcceptNoUsed: 41,
@@ -21,7 +24,7 @@ const passSeconds = {
 	audioNoDecision: 95.5,
 	softwareNoDupDetection: 73.5,
 	softwareNoReadUnmatched: 72.7,
-	discountSecondBatchNoSendingGuard: 107.6,
+	discountSecondBatchNoSendingGuard: 193.2,
 };
 
 // A mutant stops at its first violation, which most find within a few seconds (3 unless named here).

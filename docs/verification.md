@@ -696,10 +696,13 @@ extension adds to the model): `neverExecuted` (an agreement executed) about run 
 of the started project still open, which only A1 refuses from then on) about run 200; `neverSignedAfterAbandon` (a
 signing the owner abandoned, then a version signed again) about run 2,950; `neverFullyPaidAfterRevision` about run 490
 (the first run before). `neverStandardPaidAfterSentRevision` now needs at least 33 steps (two sends, a website signing
-and its countersign, the start, and four installments invoiced and paid) and is not reached at the CI setting in 10,000
-runs, nor at 60 or 70 steps in 20,000; at 80 steps it is reached in about 710 runs. So the CI pass run no longer shows
-that state, while the mutants that need a project are still found there. Raising `steps` to 80 would make each run that
-must pass about half as long again (68 runs a second at 80 steps, against 96 to 132 at 50).
+and its countersign, the start, and four installments invoiced and paid) and is not reached at 50 steps in 10,000
+runs, nor at 60 or 70 steps in 20,000; at 80 steps it is reached in about 710 runs (11.7 s at 61 runs a second, seed
+0x1). So the model's runs that must pass now take 80 steps (`passSteps` in `scripts/lib/quint-mutants.mjs`, which
+`scripts/verify-quint.mjs` uses for the pass run and the equivalent mutant), while its mutant checks keep 50, where every
+mutant is found within its budget. At 80 steps, three runs at a time on the 4-core container, the pass run kept every
+property in its 10,000 runs in 167 s (60 runs a second), and so did `discountSecondBatchNoSendingGuard` (167 s), against
+90 to 96 s for the pass run at 50.
 
 **Checked against the code.** Where the design summarises, the code was followed:
 
