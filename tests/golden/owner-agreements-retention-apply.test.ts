@@ -70,7 +70,8 @@ import {
 //     "Project changed..." sqlite error                     a race inside the closing batch (hold, project evidence)
 //     "Object changed." after the file closed               an attachment whose recorded digest is not its bytes
 //     "Unattached PDF changed." / R2 delete refused         metadata digest differs; R2 delete fails (metadata put back)
-//     TypeError text                                        manifest missing, null, a string, a number, agreements missing
+//     "Review is stale or belongs to different storage."    also a manifest left out, null, text, a number, an array, an
+//                                                           empty object (f78896099 made these the stale answer)
 //     partial failure                                       closing batch fails (nothing changed), receipts batch fails (file
 //                                                           closed and objects deleted, rows kept), the clients delete fails,
 //                                                           the second agreement fails after the first completed, R2 delete fails

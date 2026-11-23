@@ -122,3 +122,56 @@ export function depositBlock(
 
 	return "clear";
 }
+
+// The abandon decision of the signing area (docs/plans/2026-11-signing-conversion.md, section 7, "LemmaScript"): whether
+// a first deposit stops the owner from abandoning a signing the client has signed. It is the guard A12 as the owner
+// request route writes it today (`depositUse` in src/pages/api/owner/requests/[id]/agreement.ts), which looks at
+// `refunded_at` only for a paid invoice: a first-milestone deposit of the offer that may still be charged blocks whether
+// or not a refund is recorded, and a paid one blocks until its refund is recorded. It differs from `countsAsFirstDeposit`
+// above, which leaves out every refunded invoice, for an unpaid invoice with a refund recorded; the conversion keeps A12's
+// meaning, and aligning the two would be a behaviour change of its own. src/server/rules/agreement-abandon.ts calls it;
+// tests/lib/software-deposit-block.test.ts holds it to A12's SQL on sqlite for every status, kind, milestone and refund.
+
+/** One invoice of the offer, as the abandon decision reads it. */
+export type OfferInvoice = {
+	/** The milestone it bills, from 0. */
+	milestoneIndex: number;
+	/** deposit, balance or milestone. */
+	kind: string;
+	/** creating, open, paid, payment_failed, void or uncollectible. */
+	status: string;
+	/** Whether a refund of it is recorded. */
+	refunded: boolean;
+};
+
+/** Whether one of the first `n` invoices is the first milestone's deposit and may still be charged, or is paid and not refunded. */
+export function abandonDepositIn(invoices: OfferInvoice[], n: number): boolean {
+	//@ verify
+	//@ type n nat
+	//@ requires n <= invoices.length
+	//@ ensures \result <==> exists(i: nat, i < n && invoices[i].milestoneIndex === 0 && invoices[i].kind === "deposit" && (mayStillBeCharged(invoices[i].status) || (invoices[i].status === "paid" && !invoices[i].refunded)))
+	//@ decreases n
+	if (n === 0) return false;
+	// SAFETY: n is at most invoices.length and at least 1 here, so index n - 1 is in the array.
+	const invoice = invoices[n - 1] as OfferInvoice;
+
+	return (
+		(invoice.milestoneIndex === 0 &&
+			invoice.kind === "deposit" &&
+			(mayStillBeCharged(invoice.status) ||
+				(invoice.status === "paid" && !invoice.refunded))) ||
+		abandonDepositIn(invoices, n - 1)
+	);
+}
+
+/**
+ * Whether a first deposit stops the abandon, given every invoice of the offer. Checked by Dafny for every input, with the
+ * search above (whose own contract says what it finds, over every invoice): it blocks exactly when some invoice is the
+ * first milestone's deposit (milestone 0, kind `deposit`) and either may still be charged (creating, open,
+ * payment_failed or uncollectible), refunded or not, or is paid and not refunded.
+ */
+export function abandonBlocked(invoices: OfferInvoice[]): boolean {
+	//@ verify
+	//@ ensures \result <==> abandonDepositIn(invoices, invoices.length)
+	return abandonDepositIn(invoices, invoices.length);
+}

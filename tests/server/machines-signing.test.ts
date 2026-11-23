@@ -24,6 +24,8 @@ import {
 } from "../../src/server/machines/agreement-packet";
 import { next } from "../../src/server/machines/next";
 import { retireSigning } from "../../src/server/offers-store";
+import { boundQuery } from "../helpers/d1";
+import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
 // The signing area's machines (docs/plans/2026-11-signing-conversion.md, section 1). The store builds its
 // `status IN (...)` lists from the MOVES; these tests hold the lists to the machines, the states to the columns' CHECK
@@ -39,6 +41,7 @@ const checkOf = (table: string) => {
 	const create = migration
 		.split("\n")
 		.find((line) => line.startsWith(`CREATE TABLE ${table} (`));
+
 	const list = create?.match(
 		/status TEXT[^,]*?CHECK\(status IN \(([^)]*)\)\)/,
 	)?.[1];
@@ -69,6 +72,7 @@ describe("an agreement document", () => {
 			expect(next(agreementDocument, status, "HOLD")).toBe(status);
 			expect(next(agreementDocument, status, "RECORD_COPY")).toBe(status);
 		}
+
 		expect(next(agreementDocument, "executed", "END")).toBe("executed");
 		expect(next(agreementDocument, "abandoned", "END")).toBe("abandoned");
 	});
@@ -82,6 +86,7 @@ describe("an agreement document", () => {
 		expect(next(agreementDocument, "client_signed", "ABANDON")).toBe(
 			"abandoned",
 		);
+
 		for (const event of AGREEMENT_EVENTS) {
 			expect(agreementAllows("executed", event)).toBe(
 				["END", "HOLD", "RECORD_COPY"].includes(event),
@@ -107,18 +112,14 @@ describe("an agreement document", () => {
 	});
 
 	it("is retired by the offers store from the statuses RETIRE allows", () => {
-		const statements: string[] = [];
-		const db = {
-			prepare: (sql: string) => {
-				statements.push(sql);
-				return { bind: () => ({}) };
+		const statements = retireSigning(
+			sqliteD1(new DatabaseSync(":memory:")),
+			"request",
+			{
+				at: "2026-11-23T00:00:00.000Z",
+				retainUntil: "2033-11-23T00:00:00.000Z",
 			},
-		} as unknown as D1Database;
-
-		retireSigning(db, "request", {
-			at: "2026-11-23T00:00:00.000Z",
-			retainUntil: "2033-11-23T00:00:00.000Z",
-		});
+		).flatMap((statement) => boundQuery(statement) ?? []);
 
 		const abandon = statements.find((sql) =>
 			sql.startsWith("UPDATE software_agreements SET status='abandoned'"),

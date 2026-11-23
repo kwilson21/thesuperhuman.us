@@ -486,7 +486,7 @@ with a `say` sentence, exactly today's.
 | `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `StoredDataRefused` (the stored values: golden "values with no client object", "values with no contractor object", "values whose client misses a field", "... has an extra field", "... names a portfolio but denies it"), `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
 | `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
 | `agreement-abandon.ts` | `abandonSigning` | the offer, the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
-| `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end, the hold, the copy record, each with its event |
+| `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end (with no event, as today), the hold and the copy record, each with its event |
 | `agreement-packet.ts` | `packetClaimable`, `packetRecoverable` | the packet row, `now`, the attempt | `StaleAttemptUnconfirmed` | the claim, the outcome |
 | `agreement-messages.ts` | `messagesToReset`, `copyClaimable`, `noticeClaimable` | the rows, `now`, the agreement's status and archive, the project | none: a row that cannot move is skipped, as today | the reset, the claims |
 | `agreement-templates.ts` | `previewTemplate`, `publishTemplate`, `saveContractor` | the text, the current version, the label's use, the expected version | `TemplateRefused`, `NothingToPublish`, `LabelInvalid`, `LabelUsed`, `NotConfirmed`, `VersionChanged`, `VersionNotFound` | the version, the config |
@@ -972,6 +972,37 @@ A small test-comment PR, not part of this stack, corrects the golden header comm
 fixtures hold the 500 that `f78896099` brought: `tests/golden/owner-agreements-access.test.ts:37, 44`,
 `owner-agreements-config.test.ts:31`, `owner-agreements-preview.test.ts:34`, `owner-agreements-publish.test.ts:38`,
 `owner-agreements-template-version.test.ts:27` and `owner-agreements-retention-preview.test.ts:43`.
+
+## 9. What the rules PR found
+
+The first PR of the stack (readers, machines, rules) holds each rule to today's code on sqlite and, where it could, runs
+today's function beside the rule on the same database. What it found, for the store, flows and routes that follow:
+
+- **Rules are staged.** Where today's code reads, draws an id or calls an outside service between two decisions, the
+  rule is split at that point, each stage repeating the refusals before it, as the offers' send is
+  (`src/server/rules/offer-send.ts`). So the link has `signingOn`, `linkRecipient`, `issueSigningLink` and
+  `refundAllowances`; the review seven stages (`reviewStored` to `reviewDocuments`); the sign four
+  (`documentsToSign`, `savedReceipt`, `signDocuments`, `stillSignable`); countersign, abandon, end, the upload, the
+  templates and retention likewise. Each rule file's opening comment lists its stages in order.
+- **Refusals the table above did not name:** `DetailsRefused` (the review: `validateAgreementDetails`' four sentences,
+  409 with that sentence), `MailRefused` (the link's 502), `ListedObjectGone` (retention's preview: "Archive changed."
+  when a listed object is gone by the time it is read).
+  Refusals that share an answer keep one class per rule file; a route maps each tag to its own answer (`SigningStarted`
+  says the link's 404 sentence; the draft, review and sign answer it with their own 409).
+- **Random draws.** The golden corpora seed the random values per case, so a flow draws its ids in today's order and the
+  store binds the ids it is given; a statement builder that draws its own id (`agreementEvent`) is called only where
+  today calls it, at the same point. Where a rule now refuses before today's code drew its ids (countersign's
+  `RecipientMissing` and its SOW-less pending MSA), no later step of a golden case depends on them.
+- **Today's throws stay defects.** The review's terms that are not JSON and a missing contractor snapshot throw the same
+  errors from the rule, so the route logs today's line; a draft value whose NFC form outgrows its limit stays the fixed
+  500. `readOwnerAgreementsCommand` throws where Zod threw (`Number()` of a symbol or of an object with a bad
+  `toString`): the owner route calls it in plain code before `runRoute`, as the offers route calls its reader, so the
+  owner still gets a bare 500.
+- **Not reachable, decided by name:** the sign's pending set with no SOW (today a TypeError, 409) is `DocumentsChanged`;
+  a contractor notice email that is not text (today 409, 500 or 200 by its type; the review always writes text) is
+  `StoredDataRefused`; `LabelInvalid` (the reader refuses a bad label first). No golden case reaches any of them.
+- **New reads.** Before claiming a packet, a copy or a notice, and before the contractor's save, the flows read the row
+  they decide on; PR 2 checks each new read against the golden hook patterns, which count statements by `nth`.
 
 ## Open questions from reading the code
 

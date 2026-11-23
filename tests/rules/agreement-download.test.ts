@@ -1,14 +1,22 @@
+import { readFileSync } from "node:fs";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
+import { hashBytes } from "../../src/lib/agreement-artifacts";
+import { agreementDownload } from "../../src/lib/agreement-download";
 import {
 	decideDownload,
 	intactSignedCopy,
+	ownerCopy,
 	readySignedCopy,
 	verifiedVisitor,
 	type DownloadAgreement,
 	type DownloadFacts,
+	type OwnerCopyFacts,
+	type StoredSignedCopy,
 	type StudioProject,
 } from "../../src/server/rules/agreement-download";
+import { double, partial } from "../helpers/doubles";
+import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
 // The download rules as stories: who may download which signed copy, and which copy is intact.
 
@@ -304,5 +312,311 @@ describe("the signed copy", () => {
 				refused: "CopyIntegrity",
 				say: "Signed copy failed its integrity check. Contact Kazon.",
 			});
+	});
+});
+
+// ---- the owner's download ----
+
+const owner = (facts: OwnerCopyFacts) => run(ownerCopy.decide(null, facts));
+
+const executed = { status: "executed", archive_closed_at: null };
+
+const readyCopy: StoredSignedCopy = {
+	status: "ready",
+	pdf_key: "agreements/a1/c.pdf",
+	pdf_sha256: "d",
+};
+
+describe("the owner's download", () => {
+	it("reads the copy row of an executed agreement whose archive is open", () => {
+		expect(owner({ agreement: executed })).toEqual({
+			kept: { next: "read-copy" },
+		});
+	});
+
+	it("reads the bytes of a ready copy's object, then hands them over when they have its digest", () => {
+		expect(owner({ agreement: executed, copy: readyCopy })).toEqual({
+			kept: {
+				next: "read-bytes",
+				pdf_key: "agreements/a1/c.pdf",
+				pdf_sha256: "d",
+			},
+		});
+		expect(
+			owner({ agreement: executed, copy: readyCopy, bytesSha256: "d" }),
+		).toEqual({ kept: { next: "hand-over" } });
+	});
+
+	it("is not found for an agreement that is missing, not executed, or closed", () => {
+		const notFound = { refused: "AgreementNotFound", say: "Not found" };
+
+		expect(owner({ agreement: null })).toEqual(notFound);
+
+		for (const status of ["review", "client_signed", "abandoned"])
+			expect(owner({ agreement: { status, archive_closed_at: null } })).toEqual(
+				notFound,
+			);
+
+		expect(
+			owner({
+				agreement: {
+					status: "executed",
+					archive_closed_at: "2026-11-01T00:00:00.000Z",
+				},
+			}),
+		).toEqual(notFound);
+	});
+
+	it("is not ready for a copy that is missing, not ready, or names no object", () => {
+		const notReady = {
+			refused: "CopyNotReady",
+			say: "Signed by both parties. Copy preparation needs attention.",
+		};
+
+		for (const copy of [
+			null,
+			{ ...readyCopy, status: "pending" },
+			{ ...readyCopy, status: "rendering" },
+			{ ...readyCopy, status: "failed" },
+			{ ...readyCopy, pdf_key: null },
+			{ ...readyCopy, pdf_key: "" },
+		])
+			expect(owner({ agreement: executed, copy })).toEqual(notReady);
+	});
+
+	it("fails its integrity check for bytes without the copy's digest, or a copy with none", () => {
+		const integrity = {
+			refused: "CopyIntegrity",
+			say: "Signed copy failed its integrity check. Contact Kazon.",
+		};
+
+		expect(
+			owner({ agreement: executed, copy: readyCopy, bytesSha256: "other" }),
+		).toEqual(integrity);
+
+		for (const pdf_sha256 of [null, ""])
+			expect(
+				owner({
+					agreement: executed,
+					copy: { ...readyCopy, pdf_sha256 },
+					bytesSha256: "",
+				}),
+			).toEqual(integrity);
+	});
+
+	it("answers in today's order: not found, then not ready, then the integrity check", () => {
+		expect(
+			owner({
+				agreement: null,
+				copy: { ...readyCopy, status: "failed" },
+				bytesSha256: "other",
+			}),
+		).toMatchObject({ refused: "AgreementNotFound" });
+		expect(
+			owner({
+				agreement: executed,
+				copy: { ...readyCopy, pdf_key: null },
+				bytesSha256: "other",
+			}),
+		).toMatchObject({ refused: "CopyNotReady" });
+	});
+});
+
+// Today's owner download (`agreementDownload`, src/lib/agreement-download.ts, run itself) on sqlite and a bucket, held
+// to `ownerCopy` driven in the same order over the store's reads: the agreement with its client (the visitor's read,
+// src/server/agreement-store.ts, whatever its status), then the copy row (whatever its status), then the object's bytes.
+
+const migration = readFileSync(
+	new URL("../../migrations/music/0023_software_signing.sql", import.meta.url),
+	"utf8",
+);
+
+const artifactsTable = migration
+	.split("\n")
+	.find((line) =>
+		line.startsWith("CREATE TABLE software_agreement_artifacts ("),
+	);
+
+const database = new DatabaseSync(":memory:");
+const db = sqliteD1(database);
+
+database.exec(
+	`CREATE TABLE software_agreement_clients (id TEXT PRIMARY KEY, recipient_email TEXT NOT NULL);
+	CREATE TABLE software_agreements (id TEXT PRIMARY KEY, offer_id TEXT, request_id TEXT NOT NULL, client_id TEXT NOT NULL, status TEXT NOT NULL, archive_closed_at TEXT);
+	${artifactsTable}`,
+);
+
+const ID = "a1";
+const BYTES = new TextEncoder().encode("%PDF-1.7 signed").buffer;
+const objects = new Map<string, ArrayBuffer>();
+
+const bucket = double<R2Bucket>({
+	get: async (key: string) => {
+		const bytes = objects.get(key);
+
+		return bytes
+			? partial<R2ObjectBody>({ arrayBuffer: async () => bytes.slice(0) })
+			: null;
+	},
+});
+
+const AGREEMENT_READ =
+	"SELECT a.id,a.offer_id,a.request_id,a.status,a.archive_closed_at,c.recipient_email FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=?";
+
+const COPY_READ =
+	"SELECT status,pdf_key,pdf_sha256 FROM software_agreement_artifacts WHERE agreement_id=?";
+
+/** The facts the owner's download has read so far, filled in as the rule asks for them. */
+type OwnerReads = {
+	agreement: OwnerCopyFacts["agreement"];
+	copy?: StoredSignedCopy | null;
+	bytesSha256?: string;
+};
+
+/** The rule driven as the flow will drive it: each fact read only when the rule asks for it. */
+async function ownerDecision(): Promise<string> {
+	const facts: OwnerReads = {
+		agreement: await db
+			.prepare(AGREEMENT_READ)
+			.bind(ID)
+			.first<DownloadAgreement>(),
+	};
+
+	for (;;) {
+		const step = run(ownerCopy.decide(null, facts));
+
+		if ("refused" in step) return step.refused;
+
+		if (step.kept.next === "hand-over") return "hand-over";
+
+		if (step.kept.next === "read-copy") {
+			facts.copy = await db
+				.prepare(COPY_READ)
+				.bind(ID)
+				.first<StoredSignedCopy>();
+			continue;
+		}
+
+		const object = await bucket.get(step.kept.pdf_key);
+
+		if (!object) return "missing";
+
+		facts.bytesSha256 = await hashBytes(await object.arrayBuffer());
+	}
+}
+
+/** What today's response means, in the rule's words. */
+async function todaysAnswer(response: Response) {
+	const text = response.status === 200 ? "" : await response.text();
+
+	if (response.status === 404 && text === "Not found")
+		return "AgreementNotFound";
+
+	if (
+		response.status === 409 &&
+		text === "Signed by both parties. Copy preparation needs attention."
+	)
+		return "CopyNotReady";
+
+	if (
+		response.status === 503 &&
+		text === "Signed copy failed its integrity check. Contact Kazon."
+	)
+		return "CopyIntegrity";
+
+	if (
+		response.status === 500 &&
+		text === "Signed copy unavailable. Contact Kazon."
+	)
+		return "missing";
+
+	return response.status === 200 ? "hand-over" : `${response.status} ${text}`;
+}
+
+describe("today's owner download and ownerCopy", () => {
+	it("agree on every agreement, copy row and object", async () => {
+		const digest = await hashBytes(BYTES);
+		const env = partial<Env>({ MUSIC_DB: db, AUDIO: bucket });
+		const answers = new Map<string, number>();
+
+		const agreements = [
+			null,
+			{ status: "executed", archive_closed_at: null, client: false },
+			...["review", "client_signed", "executed", "abandoned"].flatMap(
+				(status) =>
+					[null, "2026-11-01T00:00:00.000Z"].map((archive_closed_at) => ({
+						status,
+						archive_closed_at,
+						client: true,
+					})),
+			),
+		];
+
+		const copies: (StoredSignedCopy | null)[] = [
+			null,
+			...["pending", "rendering", "ready", "failed"].flatMap((status) =>
+				[null, "", "agreements/a1/c.pdf"].flatMap((pdf_key) =>
+					[null, "", digest, "f".repeat(64)].map((pdf_sha256) => ({
+						status,
+						pdf_key,
+						pdf_sha256,
+					})),
+				),
+			),
+		];
+
+		for (const agreement of agreements)
+			for (const copy of copies)
+				for (const stored of [true, false]) {
+					database.exec(
+						"DELETE FROM software_agreement_artifacts; DELETE FROM software_agreements; DELETE FROM software_agreement_clients",
+					);
+					objects.clear();
+
+					if (agreement) {
+						if (agreement.client)
+							database
+								.prepare("INSERT INTO software_agreement_clients VALUES (?,?)")
+								.run("c1", "grace@example.test");
+						database
+							.prepare("INSERT INTO software_agreements VALUES (?,?,?,?,?,?)")
+							.run(
+								ID,
+								"o1",
+								"r1",
+								"c1",
+								agreement.status,
+								agreement.archive_closed_at,
+							);
+					}
+
+					if (agreement && copy)
+						database
+							.prepare(
+								"INSERT INTO software_agreement_artifacts(agreement_id,status,pdf_key,pdf_sha256) VALUES (?,?,?,?)",
+							)
+							.run(ID, copy.status, copy.pdf_key, copy.pdf_sha256);
+
+					if (stored && copy?.pdf_key) objects.set(copy.pdf_key, BYTES);
+
+					const today = await todaysAnswer(
+						await agreementDownload(env, ID, { unexpected: () => {} }),
+					);
+
+					const decided = await ownerDecision();
+
+					expect(decided, JSON.stringify({ agreement, copy, stored })).toBe(
+						today,
+					);
+					answers.set(today, (answers.get(today) ?? 0) + 1);
+				}
+
+		expect([...answers.keys()].sort()).toEqual([
+			"AgreementNotFound",
+			"CopyIntegrity",
+			"CopyNotReady",
+			"hand-over",
+			"missing",
+		]);
 	});
 });
