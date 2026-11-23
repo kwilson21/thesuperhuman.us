@@ -93,14 +93,20 @@ not by hand while the visitor has skipped the outline, because the screens are t
 
 - The heading is the lane's question as above.
 - The hint is the lane's own by-hand hint (below) in place of "From your answers…" and "Add your own, or go on."
-- The answer field is open on the screen with an example placeholder and an "Add" button; it is not behind the lane's
-  "Add" link. Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds
+- The answer field is open on the screen with an example placeholder; it is not behind the lane's "Add" link. "Add" is
+  the site's outlined button on the same row, to the field's right (below it at full width when the row is too narrow),
+  and the field's label is read by screen readers but not shown, since the heading and hint say what to type. Enter or "Add" adds the note, clears the field and keeps focus in it for the next one. An empty field adds
   nothing and Next is never blocked.
+- Words left in the open field when the visitor leaves the screen (Next, Back or a review Edit link) are added as a
+  note, as Add would add them. If the list is full the visitor stays on the screen and sees the usual reason, so the
+  words are never dropped. A switch to by hand while the visitor is typing keeps the words and the focus. Enter that
+  confirms a word in an input method adds nothing.
 - There is no "Skip these, no AI outline" link. Undo shows only when there is something to undo.
 - The status line is empty in a lane with no card the AI made. In a lane that has one (the AI stopped part-way), it
   keeps the one sentence that says the outline stopped, so the visitor knows why nothing new arrives.
-- A card the visitor wrote shows no "Your note" label in a lane where every card is the visitor's own; Edit and Remove
-  stay.
+- A card the visitor wrote shows no "Your note" label in a lane where every card is the visitor's own. Such a note is a
+  compact row: its text on the left, Edit and Remove on the right (under the text on a narrow screen), a hairline
+  between rows and no box around each note.
 
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|

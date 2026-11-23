@@ -135,6 +135,12 @@ export type BriefBoardHandle = {
 	addBack(): void;
 	/** The brief was sent: the saved boards are forgotten. */
 	sent(): void;
+	/**
+	 * Called before the visitor leaves a lane screen (the page's board only, which has the field). By hand, words left in the
+	 * open field are added as a note, as Add would add them; false when they could not be (the list is full), in which case
+	 * the screen stays and says why.
+	 */
+	leaveField?(): boolean;
 };
 
 export type BriefBoardCore = BriefBoardHandle & {

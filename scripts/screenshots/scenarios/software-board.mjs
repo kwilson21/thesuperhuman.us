@@ -368,6 +368,37 @@ export default {
 				if (!(await screen.locator("[data-lane-input]").isVisible()))
 					throw new Error("The answer field is not open");
 
+				// The label stays the field's name for screen readers, drawn as a one pixel clip.
+				const label = await screen
+					.locator("[data-lane-editor-label]")
+					.boundingBox();
+
+				if (!label || label.width > 1 || label.height > 1)
+					throw new Error("The by-hand field shows a label above it");
+
+				// Add is the outlined button on the field's row, to its right (or below at full width on a narrow row).
+				const add = screen.locator("[data-lane-save]");
+				const field = await screen.locator("[data-lane-input]").boundingBox();
+				const button = await add.boundingBox();
+
+				if (
+					!(await add.evaluate((node) =>
+						node.classList.contains("site-button-outline"),
+					))
+				)
+					throw new Error("Add is not the outlined button");
+
+				if (!field || !button || button.height < 44)
+					throw new Error("Add is missing or under 44px");
+
+				const beside =
+					Math.abs(
+						button.y + button.height / 2 - (field.y + field.height / 2),
+					) < field.height;
+
+				if (!beside && button.y < field.y + field.height)
+					throw new Error("Add is neither beside the field nor below it");
+
 				if (
 					await screen
 						.getByRole("button", { name: "Skip these, no AI outline" })
@@ -419,6 +450,41 @@ export default {
 					if ((await screen.locator(".board-card").count()) !== 2)
 						throw new Error("The two notes are not listed");
 
+					// A note is a row: no box, Edit and Remove to the right of its text.
+					const row = screen.locator(".board-card").first();
+
+					if (
+						(await row.evaluate(
+							(node) => getComputedStyle(node).borderTopWidth,
+						)) !== "0px"
+					)
+						throw new Error("A note is boxed");
+
+					const words = await row.locator("[data-card-text]").boundingBox();
+
+					const edit = await row
+						.getByRole("button", { name: /^Edit/ })
+						.boundingBox();
+
+					const remove = await row
+						.getByRole("button", { name: /^Remove/ })
+						.boundingBox();
+
+					if (
+						!words ||
+						!edit ||
+						!remove ||
+						edit.height < 44 ||
+						remove.height < 44
+					)
+						throw new Error("A note's actions are missing or under 44px");
+
+					if (
+						page.viewportSize().width >= 768 &&
+						edit.x < words.x + words.width - 1
+					)
+						throw new Error("Edit is not to the right of the note's text");
+
 					if ((await screen.innerText()).includes("Your note"))
 						throw new Error("A lane of the visitor's own notes says Your note");
 
@@ -433,6 +499,41 @@ export default {
 				"The questions screen by hand: hint, open field with an example, Add",
 				async (page) => {
 					await byHand(page, "questions");
+					await page.mouse.move(0, 0);
+				},
+			);
+
+			// Words left in the by-hand field are added when the visitor leaves by Next, and show on the review.
+			await shot(
+				"byhand-leave-field",
+				"The review after leaving the audience screen with a note still typed",
+				async (page) => {
+					const screen = await byHand(page, "audience");
+					const input = screen.locator("[data-lane-input]");
+
+					await input.fill("Bookers at small venues");
+					await next(page);
+
+					if ((await input.inputValue()) !== "")
+						throw new Error("The typed note stayed in the field");
+
+					await back(page);
+
+					if (
+						!(await screen.locator(".board-card").first().innerText()).includes(
+							"Bookers at small venues",
+						)
+					)
+						throw new Error("The typed note was not added on Next");
+
+					await toReview(page);
+
+					if (
+						!(await page.locator("[data-review]").innerText()).includes(
+							"Bookers at small venues",
+						)
+					)
+						throw new Error("The typed note is not on the review");
 					await page.mouse.move(0, 0);
 				},
 			);

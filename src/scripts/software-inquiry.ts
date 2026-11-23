@@ -659,6 +659,8 @@ export function setupSoftwareInquiry(
 	}
 
 	function showStep(index: number, focus = true) {
+		// Words left in a by-hand field are added before the screen is left; a full list keeps the visitor here.
+		if (index !== step && briefBoard?.leaveField?.() === false) return;
 		suggestions.clear();
 		step = index;
 		const section = plan()[index];

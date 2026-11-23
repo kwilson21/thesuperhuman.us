@@ -376,6 +376,20 @@ export function laneScreen(input: {
 	};
 }
 
+/**
+ * The note a by-hand field holds when the visitor leaves the lane screen (Next, Back or a review Edit link): its words as
+ * Add would take them, or null when there is nothing to add. With the AI on the field is behind the lane's "Add" and
+ * leaving it adds nothing.
+ */
+export function noteOnLeaving(input: {
+	readonly byHand: boolean;
+	readonly text: string;
+}): string | null {
+	if (!input.byHand) return null;
+
+	return oneLine(input.text) || null;
+}
+
 // ---- Text ---------------------------------------------------------------------------------------------------------
 
 /** Control characters, line and paragraph separators, and lone surrogates (which the brief's own fields refuse too). */

@@ -211,10 +211,6 @@ describe("a request the page never sends", () => {
 		["a ref of another form", { ...body, cards: [{ ...cards[0], ref: "x1" }] }],
 		["an unknown state", { ...body, cards: [{ ...cards[0], state: "maybe" }] }],
 		[
-			"a purpose card, which the outline no longer has",
-			{ ...body, cards: [{ ...cards[0], lane: "purpose" }] },
-		],
-		[
 			"31 cards",
 			{
 				...body,
@@ -244,6 +240,48 @@ describe("a request the page never sends", () => {
 		expect(response.status).toBe(400);
 		expect(run).not.toHaveBeenCalled();
 		expect(counts()).toEqual({});
+	});
+
+	it("drops a purpose card sent as context by a page left open across the change, and goes on", async () => {
+		run.mockResolvedValueOnce({ response: { cards: [] } });
+
+		const response = await POST(
+			context({
+				...body,
+				cards: [
+					cards[0],
+					{
+						ref: "c3",
+						lane: "purpose",
+						text: "Old purpose wording",
+						state: "yours",
+					},
+				],
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(JSON.stringify(run.mock.calls[0])).not.toContain(
+			"Old purpose wording",
+		);
+	});
+
+	it("still bounds the cards it drops: 31 purpose cards are refused", async () => {
+		const response = await POST(
+			context({
+				...body,
+				cards: Array.from({ length: 31 }, (_, i) => ({
+					ref: `c${i}`,
+					lane: "purpose",
+					text: "P",
+					state: "open",
+				})),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(run).not.toHaveBeenCalled();
 	});
 
 	it("reads 7,000 characters in a script of three bytes a character, over 16 KB as JSON", async () => {

@@ -83,5 +83,23 @@
   .software-intake .board-card.is-new{animation:board-card-in 180ms var(--ease-site)}
   @keyframes board-card-in{from{opacity:0;transform:translateY(4px)}}
 }
+/* By hand: the field and Add share a row; Add is the site's outlined button and drops below at full width when the row is too narrow. */
+.software-intake .board-editor-inline{display:flex;flex-wrap:wrap;align-items:flex-end;gap:.5rem}
+.software-intake .board-editor-inline .intake-field{flex:1 1 12rem;margin-top:0;min-width:0}
+.software-intake .board-editor-inline .board-editor-actions{flex:0 0 auto}
+.software-intake .board-editor-inline .board-editor-actions button{text-decoration:none;text-align:center;font-size:1rem;min-width:5rem}
+@media (max-width:21rem){.software-intake .board-editor-inline .board-editor-actions{flex:1 1 100%}.software-intake .board-editor-inline .board-editor-actions button{width:100%}}
+/* A lane of the visitor's own notes: compact rows with the text left and its actions right, a hairline between rows, no box.
+   A newly added note shows the accent on its left edge for a moment. */
+.software-intake .board-cards-rows{gap:0}
+.software-intake .board-cards-rows .board-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 1rem;border:0;border-radius:0;background:none;padding:0}
+.software-intake .board-cards-rows .board-card+.board-card{border-top:1px solid var(--rule)}
+.software-intake .board-cards-rows .board-card-text{flex:1 1 12rem;margin:0;padding-block:.4rem}
+.software-intake .board-cards-rows :is(.board-card-answer,.board-card-reason,.board-card-quote){flex:1 1 100%;order:2;margin-top:0}
+.software-intake .board-cards-rows .board-card-actions{flex:0 0 auto;margin-left:auto}
+.software-intake .board-cards-rows .board-editor{flex:1 1 100%;order:3;padding-bottom:.5rem}
+.software-intake .board-cards-rows .board-card.is-new{box-shadow:-2px 0 0 var(--accent);border-color:var(--rule)}
+@media (prefers-reduced-motion:no-preference){.software-intake .board-cards-rows .board-card{transition:box-shadow 600ms var(--ease-site)}}
+@media (hover:hover) and (pointer:fine){.software-intake .board-editor-inline .board-editor-actions button.site-button:not(:disabled):hover{color:var(--paper)}}
 @media (hover:hover) and (pointer:fine){.software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:not(:disabled):hover,.software-intake .board-add:not(:disabled):hover{color:var(--accent)}}
 @media print{.software-intake .board-links{display:none!important}}

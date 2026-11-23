@@ -15,6 +15,7 @@ import {
 	answerCard,
 	keepCard,
 	laneScreen,
+	noteOnLeaving,
 	removeNote,
 	setAside,
 	standsOn,
@@ -279,13 +280,28 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			parts.skip.hidden = !screen.skipLink;
 
 			// By hand the field stays open for the next note; with the AI on it opens from the lane's "Add".
+			// A field that holds words is never cleared by the change, and stays open for them.
 			if (modeChanged) {
-				parts.input.value = "";
-				parts.editor.hidden = !screen.fieldOpen;
-				parts.add.hidden = screen.fieldOpen;
+				const holds = parts.input.value.trim() !== "";
+				const onAdd = document.activeElement === parts.add;
+
+				if (!holds) parts.input.value = "";
+				parts.editor.hidden = !(screen.fieldOpen || holds);
+				parts.add.hidden = screen.fieldOpen || holds;
+
+				// The lane's Add link had focus and is gone: focus goes to the open field.
+				if (onAdd && parts.add.hidden) parts.input.focus();
 			}
 
 			parts.cancel.hidden = screen.fieldOpen;
+
+			// By hand the field and its Add button share a row, and the field's label is read but not shown: the heading and
+			// hint already say what to type. A lane of the visitor's own notes lists them as compact rows.
+			parts.editor.classList.toggle("board-editor-inline", screen.fieldOpen);
+			parts.editorLabel.classList.toggle("sr-only", screen.fieldOpen);
+			parts.save.classList.toggle("site-button", screen.fieldOpen);
+			parts.save.classList.toggle("site-button-outline", screen.fieldOpen);
+			parts.list.classList.toggle("board-cards-rows", !screen.ownLabel);
 
 			// Says why a note cannot be added, once the visitor has tried.
 			const full = core.fullNote(lane);
@@ -666,6 +682,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		parts.cancel.addEventListener("click", () => close(false));
 		parts.input.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
+				// Enter that confirms a word in an input method adds nothing.
+				if (event.isComposing) return;
 				event.preventDefault();
 				close(true);
 			} else if (event.key === "Escape") {
@@ -677,5 +695,31 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 	render();
 
-	return core;
+	return {
+		...core,
+		leaveField() {
+			const lane = shown();
+
+			if (!lane) return true;
+			const parts = lanes[lane];
+
+			const text = noteOnLeaving({
+				byHand: core.byHand(),
+				text: parts.input.value,
+			});
+
+			if (text === null) return true;
+
+			if (!core.tryAddNote(lane, text)) {
+				announce(core.fullNote(lane));
+				parts.input.focus();
+
+				return false;
+			}
+
+			parts.input.value = "";
+
+			return true;
+		},
+	};
 }

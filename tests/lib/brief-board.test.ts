@@ -14,6 +14,7 @@ import {
 	hasAiCard,
 	laneLabels,
 	laneScreen,
+	noteOnLeaving,
 	outlineText,
 	REPLY_MAX,
 	addNote,
@@ -2867,5 +2868,19 @@ describe("by hand", () => {
 		);
 
 		expect(hasAiCard(aside, "audience")).toBe(false);
+	});
+});
+
+describe("noteOnLeaving", () => {
+	it("gives the words in a by-hand field as the note to add", () => {
+		expect(
+			noteOnLeaving({ byHand: true, text: "  Venues   that book us " }),
+		).toBe("Venues that book us");
+	});
+
+	it("adds nothing for a blank field or with the AI on", () => {
+		expect(noteOnLeaving({ byHand: true, text: "   " })).toBeNull();
+		expect(noteOnLeaving({ byHand: true, text: "" })).toBeNull();
+		expect(noteOnLeaving({ byHand: false, text: "Venues" })).toBeNull();
 	});
 });
