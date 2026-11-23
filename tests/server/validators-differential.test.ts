@@ -1,5 +1,6 @@
 import { inspect } from "node:util";
 import { ZodError } from "astro/zod";
+import * as Cause from "effect/Cause";
 import * as Predicate from "effect/Predicate";
 import { describe, expect, it, vi } from "vitest";
 import { validateIntake } from "../../src/lib/audio-intake";
@@ -78,6 +79,18 @@ import {
 	legacyNormalizeClientEmail,
 	legacySessionRequestSchema,
 } from "../fixtures/legacy-validators/studio-signin";
+import {
+	readOwnerAgreementsCommand,
+	readSigningLinkInput,
+	readSigningReviewInput,
+	readSigningSignInput,
+} from "../../src/server/agreement-input";
+import {
+	legacySigningLinkSchema,
+	legacySigningReviewSchema,
+	legacySigningSignSchema,
+} from "../fixtures/legacy-validators/agreement-signing";
+import { legacyOwnerAgreementsSchema } from "../fixtures/legacy-validators/owner-agreements";
 import {
 	attempt,
 	differential,
@@ -2969,5 +2982,665 @@ describe("the client address against the frozen Zod 4 normalizer", () => {
 			expect(attempt(() => normalizeClientEmail(input))).toBeNull();
 			expect(attempt(() => legacyNormalizeClientEmail(input))).toBeNull();
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The signing area (src/server/agreement-input.ts): the bodies of POST /api/offer/[token]/link, /review and /sign, and the
+// owner's command on POST /api/owner/agreements. These replaced Zod 3 schemas (`astro/zod`), so the frozen copies are
+// Zod 3. Each answer is compared exactly: refused, or accepted with the value as `inspect` writes it (the key order, a key
+// set to `undefined`, -0, and values JSON cannot hold), plus whether each passed-through field is the very value the body
+// held. A thrown error is compared by its message: Zod threw where `Number()` threw inside `coerce.number()`, and the
+// Effect reader throws Schema's Error, whose cause (an Effect Cause) holds that same TypeError as its defect, so the
+// reader's throw is compared as that defect.
+
+/** What a signing reader answered: the value with a note of what it passed through untouched, or a refusal. */
+type SigningAnswer =
+	| { ok: true; value: RawValue; same: string }
+	| { ok: false };
+
+/** An answer in one line, exactly (see `commandSaid`). */
+const signingSaid = (answer: SigningAnswer) =>
+	answer.ok
+		? `ok ${answer.same} ${inspect(answer.value, {
+				depth: Number.POSITIVE_INFINITY,
+				maxArrayLength: Number.POSITIVE_INFINITY,
+				maxStringLength: Number.POSITIVE_INFINITY,
+				breakLength: Number.POSITIVE_INFINITY,
+			})}`
+		: "refused";
+
+/** A reader's answer, with whether each named field of the value is the body's own, by identity. */
+const signingAnswer =
+	(passed: readonly string[]) =>
+	(
+		input: RawValue,
+		read: { ok: true; value: RawValue } | { ok: false },
+	): SigningAnswer =>
+		read.ok
+			? {
+					ok: true,
+					value: read.value,
+					same: passed
+						.map((name) =>
+							Predicate.isObject(input) && Predicate.isObject(read.value)
+								? `${name}:${Object.is(input[name], read.value[name])}`
+								: `${name}:-`,
+						)
+						.join(","),
+				}
+			: { ok: false };
+
+/** Runs an Effect reader, giving the defect of a thrown error's Cause in its place (what threw inside the Schema). */
+function asCause<A>(run: () => A): A {
+	try {
+		return run();
+	} catch (error) {
+		throw error instanceof Error && Cause.isCause(error.cause)
+			? Cause.squash(error.cause)
+			: error;
+	}
+}
+
+/**
+ * The base's fields on holders Zod 3 did not call objects (a date, a map, a set, a function, a promise or anything with a
+ * `then` and a `catch`, an array), and on ones it did (no prototype; a `then` with no `catch`). No JSON or form body is
+ * any of these.
+ */
+function oddHolders(base: Body): RawValue[] {
+	return [
+		Object.assign(new Date(0), base),
+		Object.assign(new Map(), base),
+		Object.assign(new Set(), base),
+		Object.assign(() => 1, base),
+		Object.assign(Promise.resolve(1), base),
+		Object.assign([], base),
+		Object.assign(Object.create(null), base),
+		{ ...base, then: () => 1 },
+		{ ...base, then: () => 1, catch: () => 1 },
+	];
+}
+
+const signingId = "123e4567-e89b-42d3-a456-426614174000";
+
+const signingIds: RawValue[] = [
+	signingId,
+	signingId.toUpperCase(),
+	"22222222-2222-2222-2222-222222222222",
+	"00000000-0000-0000-0000-000000000000",
+	"123e4567e89b42d3a456426614174000",
+	"123e4567-e89b-42d3-a456-42661417400",
+	"123e4567-e89b-42d3-a456-4266141740000",
+	` ${signingId}`,
+	`${signingId}\n`,
+	"ZZZZZZZZ-2222-4222-8222-222222222222",
+	"",
+	...notStrings,
+];
+
+const signingHashes: RawValue[] = [
+	"a".repeat(64),
+	"0123456789abcdef".repeat(4),
+	"A".repeat(64),
+	"a".repeat(63),
+	"a".repeat(65),
+	`${"a".repeat(64)}\n`,
+	` ${"a".repeat(64)}`,
+	"g".repeat(64),
+	"",
+	...notStrings,
+];
+
+/** Truth values as a JSON body or a form (after `agreementRequest` reads "true" and "on" as true) can give them. */
+const truths: RawValue[] = [
+	true,
+	false,
+	"true",
+	"on",
+	"false",
+	1,
+	0,
+	null,
+	undefined,
+	[],
+	[true],
+	{},
+];
+
+describe("the signing link body against the frozen Zod 3 schema", () => {
+	const bases: Body[] = [
+		{ turnstileToken: "token-1" },
+		{ turnstileToken: "t", "cf-turnstile-response": "t" },
+	];
+
+	const pools = {
+		turnstileToken: [...texts(2048), ...notStrings],
+	} satisfies Pools;
+
+	it("accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		const answer = signingAnswer([]);
+
+		const found = differential(
+			(input: RawValue) =>
+				answer(input, zodRead(legacySigningLinkSchema.safeParse(input))),
+			(input: RawValue) => answer(input, readSigningLinkInput(input)),
+			signingSaid,
+		);
+
+		let accepted = 0;
+
+		const run = (body: RawValue) => {
+			found.run(body);
+
+			if (legacySigningLinkSchema.safeParse(body).success) accepted += 1;
+		};
+
+		for (const body of bodies(bases, pools, 20261201, 3000)) run(body);
+
+		for (const base of bases) for (const body of oddHolders(base)) run(body);
+
+		expect(found.count).toBeGreaterThan(3000);
+		expect(accepted).toBeGreaterThan(1000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`signing link body differential: ${found.count} inputs (${accepted} accepted), ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+});
+
+describe("the signing review body against the frozen Zod 3 schema", () => {
+	const details = { legal_name: "Ada Lovelace", entity_type: "individual" };
+
+	const bases: Body[] = [
+		{ csrf_nonce: "nonce-1", values: details },
+		{ csrf_nonce: "n" },
+	];
+
+	const pools = {
+		csrf_nonce: [...texts(64), ...notStrings],
+		values: [details, {}, [], "x", "", null, ...notStrings],
+	} satisfies Pools;
+
+	const answer = signingAnswer(["values"]);
+
+	it("accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		const found = differential(
+			(input: RawValue) =>
+				answer(input, zodRead(legacySigningReviewSchema.safeParse(input))),
+			(input: RawValue) => answer(input, readSigningReviewInput(input)),
+			signingSaid,
+		);
+
+		let accepted = 0;
+
+		const run = (body: RawValue) => {
+			found.run(body);
+
+			if (legacySigningReviewSchema.safeParse(body).success) accepted += 1;
+		};
+
+		for (const body of bodies(bases, pools, 20261202, 3000)) run(body);
+
+		for (const base of bases) for (const body of oddHolders(base)) run(body);
+
+		expect(found.count).toBeGreaterThan(3000);
+		expect(accepted).toBeGreaterThan(1000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`signing review body differential: ${found.count} inputs (${accepted} accepted), ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+
+	it("keeps the values the body held, the very value, and the key when it is set to undefined, as Zod did", () => {
+		const set = { csrf_nonce: "n", values: undefined };
+		const read = readSigningReviewInput(set);
+
+		expect(read.ok && Object.keys(read.value)).toEqual([
+			"csrf_nonce",
+			"values",
+		]);
+		expect(signingSaid(answer(set, read))).toBe(
+			signingSaid(
+				answer(set, zodRead(legacySigningReviewSchema.safeParse(set))),
+			),
+		);
+
+		const lacking = readSigningReviewInput({ csrf_nonce: "n" });
+
+		expect(lacking.ok && Object.keys(lacking.value)).toEqual(["csrf_nonce"]);
+
+		const held = { csrf_nonce: "n", values: details };
+		const kept = readSigningReviewInput(held);
+
+		expect(kept.ok && kept.value.values).toBe(details);
+	});
+});
+
+describe("the signing body against the frozen Zod 3 schema", () => {
+	const document = { id: signingId, hash: "a".repeat(64) };
+
+	const second = {
+		id: "22222222-2222-4222-8222-222222222222",
+		hash: "b".repeat(64),
+	};
+
+	const bases: Body[] = [
+		{ csrf_nonce: "nonce-1", documents: [document], consent: true },
+		{ csrf_nonce: "n", documents: [document, second], consent: true },
+	];
+
+	const pools = {
+		csrf_nonce: [...texts(64), ...notStrings],
+		documents: [
+			[],
+			[document],
+			[document, second],
+			[document, second, document],
+			[{ ...document, extra: 1 }],
+			[{ hash: document.hash, id: document.id }],
+			[{ id: document.id }],
+			[{ hash: document.hash }],
+			[document, { ...second, id: "x" }],
+			...signingIds.map((id) => [{ ...document, id }]),
+			...signingHashes.map((hash) => [{ ...document, hash }]),
+			...oddHolders(document).map((held) => [held]),
+			[null],
+			[5],
+			["x"],
+			[[]],
+			[undefined],
+			new Array(1),
+			// A list with a hole after its first entry, which only code (never JSON) makes.
+			[document, ,],
+			{ 0: document, length: 1 },
+			"x",
+			...notStrings,
+		],
+		consent: truths,
+	} satisfies Pools;
+
+	it("accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		const answer = signingAnswer([]);
+
+		const found = differential(
+			(input: RawValue) =>
+				answer(input, zodRead(legacySigningSignSchema.safeParse(input))),
+			(input: RawValue) => answer(input, readSigningSignInput(input)),
+			signingSaid,
+		);
+
+		let accepted = 0;
+
+		const run = (body: RawValue) => {
+			found.run(body);
+
+			if (legacySigningSignSchema.safeParse(body).success) accepted += 1;
+		};
+
+		for (const body of bodies(bases, pools, 20261203, 5000)) run(body);
+
+		for (const base of bases) for (const body of oddHolders(base)) run(body);
+
+		expect(found.count).toBeGreaterThan(5000);
+		expect(accepted).toBeGreaterThan(500);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`signing body differential: ${found.count} inputs (${accepted} accepted), ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+});
+
+describe("the owner's agreements command against the frozen Zod 3 union", () => {
+	const contractor = {
+		legal_name: "The Superhuman Group LLC",
+		entity_jurisdiction: "Wyoming",
+		signer_name: "Kazon Wilson",
+		signer_title: "Manager",
+		notice_email: "notices@example.com",
+		business_address: "1 Registered Agent Way",
+		registered_agent_confirmed: true,
+	};
+
+	const manifest = { version: 1, binding: "b", objects: [] };
+
+	const bases: Body[] = [
+		{ action: "access-cleanup", confirmed: true },
+		{ action: "retention-preview" },
+		{ action: "retention-apply", confirmed: true, manifest },
+		{ action: "retention-apply", confirmed: true },
+		{
+			action: "preview",
+			kind: "msa",
+			text: "Between {{client.legal_name}} and the contractor.",
+			expectedCurrentVersion: 0,
+			versionLabel: "m1",
+			sourceRevision: "abc123",
+		},
+		{ action: "preview", kind: "sow", text: "", expectedCurrentVersion: "3" },
+		{
+			action: "publish",
+			kind: "msa",
+			text: "MSA",
+			expectedCurrentVersion: 1,
+			versionLabel: "m2",
+			sourceRevision: " rev ",
+			confirmed: true,
+		},
+		{
+			action: "publish",
+			kind: "sow",
+			text: "SOW",
+			expectedCurrentVersion: "0",
+			versionLabel: " v1.0-a ",
+		},
+		{ action: "template-version", kind: "msa", version: 2 },
+		{ action: "template-version", kind: "sow", version: "1" },
+		{ action: "setting", enabled: true, confirmed: true },
+		{ action: "setting", enabled: false, confirmed: true },
+		{ action: "config", values: contractor, expectedCurrentVersion: 0 },
+		{ action: "config", values: contractor, expectedCurrentVersion: "2" },
+	];
+
+	/** What `Number()` makes of each: whole, negative, fractional, huge, text, empty, a list, a date, and what it cannot convert. */
+	const versions: RawValue[] = [
+		0,
+		1,
+		2,
+		-1,
+		-0,
+		0.5,
+		1.5,
+		1e21,
+		2 ** 53,
+		2 ** 60,
+		Number.MAX_SAFE_INTEGER,
+		Number.MAX_VALUE,
+		Number.MIN_VALUE,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+		"0",
+		"1",
+		"3",
+		" 3 ",
+		"\n4\t",
+		"-0",
+		"-1",
+		"1.5",
+		"1e3",
+		"0x10",
+		"0b11",
+		"0o7",
+		"1_000",
+		"Infinity",
+		"",
+		" ",
+		"abc",
+		"1a",
+		"١",
+		null,
+		true,
+		false,
+		[0],
+		[5],
+		["7"],
+		[" 8 "],
+		[1, 2],
+		[[3]],
+		[null],
+		[undefined],
+		new Date(5),
+		-10n,
+		{ valueOf: 1 },
+		{ toString: 1 },
+		[{ toString: 1 }],
+		...notStrings,
+	];
+
+	const pools = {
+		action: [
+			"access-cleanup",
+			"retention-preview",
+			"retention-apply",
+			"preview",
+			"publish",
+			"template-version",
+			"setting",
+			"config",
+			"Preview",
+			" preview",
+			"preview ",
+			"delete-everything",
+			"",
+			"__proto__",
+			"toString",
+			"constructor",
+			...notStrings,
+		],
+		confirmed: truths,
+		manifest: [manifest, {}, [1, 2], "x", "", null, ...notStrings],
+		kind: ["msa", "sow", "MSA", " msa", "msa ", "", "toString", ...notStrings],
+		text: [
+			...texts(120),
+			"a".repeat(102399),
+			"a".repeat(102400),
+			"a".repeat(102401),
+			"😀".repeat(51200),
+			`${"😀".repeat(51200)}a`,
+			` ${"a".repeat(102399)} `,
+			`${"a".repeat(102399)}\ud800`,
+			...notStrings,
+		],
+		expectedCurrentVersion: versions,
+		versionLabel: [
+			...texts(40),
+			"m1",
+			"v1.0-a",
+			" m1 ",
+			"\tm1\n",
+			"m 1",
+			"m_1",
+			"m/1",
+			"é",
+			"a".repeat(40),
+			"a".repeat(41),
+			` ${"a".repeat(40)} `,
+			...notStrings,
+		],
+		sourceRevision: [...texts(120), ...notStrings],
+		version: versions,
+		enabled: truths,
+		values: [
+			contractor,
+			{ ...contractor, extra: 1 },
+			{ ...contractor, registered_agent_confirmed: false },
+			{ ...contractor, registered_agent_confirmed: "on" },
+			{ ...contractor, notice_email: "Notices@Example.com " },
+			{ ...contractor, notice_email: "x" },
+			{ ...contractor, legal_name: "  The Superhuman Group LLC  " },
+			{ ...contractor, signer_name: "Kazon Wilson\u0000" },
+			{ ...contractor, signer_title: "" },
+			{ ...contractor, business_address: "é" },
+			{ ...contractor, entity_jurisdiction: "a".repeat(201) },
+			{ legal_name: "Only a name" },
+			...oddHolders(contractor),
+			{},
+			[],
+			"x",
+			"",
+			null,
+			...notStrings,
+		],
+	} satisfies Pools;
+
+	const answer = signingAnswer(["manifest"]);
+
+	const subject = (input: RawValue) =>
+		answer(
+			input,
+			asCause(() => readOwnerAgreementsCommand(input)),
+		);
+
+	const oracle = (input: RawValue) =>
+		answer(input, zodRead(legacyOwnerAgreementsSchema.safeParse(input)));
+
+	it("accepts and refuses every generated body as the Zod union did, with the same value, and throws where it threw", () => {
+		const found = differential(oracle, subject, signingSaid);
+
+		let accepted = 0;
+		let threw = 0;
+
+		const run = (body: RawValue) => {
+			found.run(body);
+
+			const legacy = attempt(() => legacyOwnerAgreementsSchema.safeParse(body));
+
+			if ("threw" in legacy) threw += 1;
+			else if (legacy.success) accepted += 1;
+		};
+
+		for (const body of bodies(bases, pools, 20261204, 8000)) run(body);
+
+		for (const base of bases) for (const body of oddHolders(base)) run(body);
+
+		expect(found.count).toBeGreaterThan(16000);
+		// Both answers are exercised in bulk, not only refusals, and the throws are reached.
+		expect(accepted).toBeGreaterThan(5000);
+		expect(threw).toBeGreaterThan(20);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`owner agreements command differential: ${found.count} inputs (${accepted} accepted, ${threw} threw), ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("converts a version with Number(), as Zod 3's coerce.number() did", () => {
+		const read = (value: RawValue) => {
+			const body = { action: "template-version", kind: "msa", version: value };
+			const effect = readOwnerAgreementsCommand(body);
+
+			expect(signingSaid(answer(body, effect))).toBe(
+				signingSaid(
+					answer(body, zodRead(legacyOwnerAgreementsSchema.safeParse(body))),
+				),
+			);
+
+			return effect.ok && "version" in effect.value
+				? effect.value.version
+				: "refused";
+		};
+
+		expect([true, "1", " 1 ", [1], ["1"], "0x1", "1e0", 1n].map(read)).toEqual([
+			1, 1, 1, 1, 1, 1, 1, 1,
+		]);
+		expect(
+			["", null, false, [], [0], 0, -0, "-0", "abc", undefined].map(read),
+		).toEqual(Array.from({ length: 10 }, () => "refused"));
+
+		const expected = (value: RawValue) => {
+			const body = {
+				action: "preview",
+				kind: "msa",
+				text: "x",
+				expectedCurrentVersion: value,
+			};
+
+			const effect = readOwnerAgreementsCommand(body);
+
+			return effect.ok && "expectedCurrentVersion" in effect.value
+				? effect.value.expectedCurrentVersion
+				: "refused";
+		};
+
+		expect(["", null, false, [], [0], " 0 ", [null]].map(expected)).toEqual([
+			0, 0, 0, 0, 0, 0, 0,
+		]);
+		expect(Object.is(expected("-0"), -0)).toBe(true);
+		expect(Object.is(expected(-0), -0)).toBe(true);
+		expect([-1, 0.5, "abc", undefined, Number.NaN].map(expected)).toEqual(
+			Array.from({ length: 5 }, () => "refused"),
+		);
+	});
+
+	it("throws where Zod's Number() threw, with Zod's TypeError as the defect of the cause", () => {
+		for (const value of [{ toString: 1 }, [{ toString: 1 }], Symbol("s")]) {
+			const body = {
+				action: "config",
+				values: contractor,
+				expectedCurrentVersion: value,
+			};
+
+			const zod = attempt(() => legacyOwnerAgreementsSchema.safeParse(body));
+
+			let cause: unknown;
+
+			try {
+				readOwnerAgreementsCommand(body);
+			} catch (error) {
+				cause =
+					error instanceof Error && Cause.isCause(error.cause)
+						? Cause.squash(error.cause)
+						: undefined;
+			}
+
+			expect(cause).toBeInstanceOf(TypeError);
+			expect("threw" in zod && zod.threw).toBe(
+				cause instanceof TypeError && cause.message,
+			);
+		}
+	});
+
+	it("keeps a field the body set to undefined and leaves out one it lacks, as Zod did", () => {
+		const keys = (read: { ok: true; value: RawValue } | { ok: false }) =>
+			read.ok && Predicate.isObject(read.value) ? Object.keys(read.value) : [];
+
+		const bodiesWith: Body[] = [
+			{ action: "retention-apply", confirmed: true, manifest: undefined },
+			{ action: "retention-apply", confirmed: true },
+			{
+				action: "preview",
+				kind: "msa",
+				text: "x",
+				expectedCurrentVersion: 0,
+				versionLabel: undefined,
+			},
+			{
+				action: "publish",
+				kind: "sow",
+				text: "x",
+				expectedCurrentVersion: 0,
+				versionLabel: "m1",
+				confirmed: undefined,
+				sourceRevision: undefined,
+			},
+		];
+
+		expect(
+			bodiesWith.map((body) => keys(readOwnerAgreementsCommand(body))),
+		).toEqual([
+			["action", "confirmed", "manifest"],
+			["action", "confirmed"],
+			["action", "kind", "text", "expectedCurrentVersion", "versionLabel"],
+			[
+				"action",
+				"kind",
+				"text",
+				"expectedCurrentVersion",
+				"versionLabel",
+				"sourceRevision",
+				"confirmed",
+			],
+		]);
+
+		for (const body of bodiesWith)
+			expect(keys(readOwnerAgreementsCommand(body))).toEqual(
+				keys(zodRead(legacyOwnerAgreementsSchema.safeParse(body))),
+			);
+
+		const held = { action: "retention-apply", confirmed: true, manifest };
+		const read = readOwnerAgreementsCommand(held);
+
+		expect(read.ok && "manifest" in read.value && read.value.manifest).toBe(
+			manifest,
+		);
 	});
 });
