@@ -44,6 +44,7 @@ them. Credit technical choices an AI made to it ("Claude Code chose...").
 > <entry text>
 
 Image: `images/<file>` (<what it shows>)
+Media: <none | still | clip | explainer> (an explainer's outline is in `videos/<entry-id>/`; see `docs/publicist/video-standard.md`, "When a video is made")
 
 ## Visual aids
 Images in `images/` that explain the work before the questions: screenshots from the

@@ -91,8 +91,10 @@ not been watched):
   presented as the product.
 - **Sound:** music beds the owner produces and mixes. Few developer channels can do
   that, and it avoids licensing problems with other people's music.
-- **Captions always burned in**, written from the script, so the videos work muted
-  in a feed.
+- **Works muted.** On-screen text is a short headline per scene plus the labels the
+  picture needs, following the [video standard](../video-standard.md); no caption
+  sentences burned in. Uploaded captions (`.srt`) still carry any voiceover for
+  accessibility.
 - **Voice:** the owner's voiceover or captions and music only; an owner decision.
   No synthetic voice presented as the owner.
 
@@ -133,12 +135,13 @@ not been watched):
   costs the owner a few minutes per video. Revisit the audit only if volume grows.
   Sources: [videos.insert](https://developers.google.com/youtube/v3/docs/videos/insert),
   [quota and compliance audits](https://developers.google.com/youtube/v3/guides/quota_and_compliance_audits).
-- **Pipeline (proposal):** videos built from code with Remotion (videos written as
-  React components), using the Playwright recordings the design already produces,
-  finished with ffmpeg. The shared style (templates, the opening line, typography)
-  lives in this repository, so a style change is one reviewed diff. Each video's
-  own content (script, captions, footage) stays in the private repository until
-  the video is public.
+- **Pipeline:** each video is an HTML page animated by the kit in
+  `scripts/publicist/video/` and rendered frame by frame with Playwright and ffmpeg,
+  alongside the Playwright recordings from `scripts/publicist/record.mjs`. The
+  [video standard](../video-standard.md) sets the understandability bar and
+  `render.mjs` checks it before rendering. The shared kit and style live in this
+  repository, so a change is one reviewed diff. Each video's own content (outline,
+  page, footage) stays in the private repository until the video is public.
 - **Cadence:** at most one video a week, plus releases when they happen. The feed
   post announcing a video counts toward the daily feed limit.
 
