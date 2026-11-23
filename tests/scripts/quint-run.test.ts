@@ -180,7 +180,7 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(7);
+		expect(properties.length).toBeGreaterThanOrEqual(12);
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
@@ -198,12 +198,11 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		);
 	});
 
-	it("checks the code, with F10's and F9's fixes, keeping every property, with two equivalent mutants", () => {
+	it("checks the code, with F10's and F9's fixes, keeping every property, with one equivalent mutant", () => {
 		expect(models[1].current).toEqual(["discount"]);
 		expect(models[1].exhaustive).toEqual(["discount"]);
 		expect(models[1].equivalents).toEqual([
 			"discountSecondBatchNoSendingGuard",
-			"discountAcceptedOnlyCheck",
 		]);
 		expect(Object.keys(discountMutants)).not.toContain(
 			"discountSecondBatchNoSendingGuard",
@@ -212,6 +211,35 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		expect(discountMutants.discountTodaySecondBatch).toEqual({
 			property: "declinedHasNoOffer",
 		});
+		// The live-link check before F9's fix: equivalent until the signing extension, whose abandon closes a link with
+		// no sending window.
+		expect(discountMutants.discountAcceptedOnlyCheck).toEqual({
+			property: "sendLinkLive",
+		});
+	});
+
+	it("checks the signing extension: each new property has its own mutant, and the sign batch's guards are needed at write time", () => {
+		expect(discountMutants.discountReviewNoGuards).toEqual({
+			property: "reviewOfSentOffer",
+		});
+		expect(discountMutants.discountRedeemNoLiveGuard).toEqual({
+			property: "noSessionForDeadOffer",
+		});
+		expect(discountMutants.discountAbandonNoStatusGuard).toEqual({
+			property: "executedStays",
+		});
+		expect(discountMutants.discountCountersignNoGuards).toEqual({
+			property: "executedOnlyWhenSigned",
+		});
+		expect(discountMutants.discountAbandonDepositAtRead).toEqual({
+			property: "abandonedHasNoDeposit",
+		});
+
+		for (const mutant of [
+			"discountNoSignGuards",
+			"discountSignGuardsAtRead",
+		] as const)
+			expect(discountMutants[mutant]).toEqual({ property: "supersededInert" });
 	});
 
 	it("every mutant property is one of allProperties", () => {
