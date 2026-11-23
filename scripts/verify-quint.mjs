@@ -46,8 +46,9 @@ function quint(args) {
 const samplesFor = (model, kind) =>
 	kind === "pass" ? (model.passSamples ?? model.samples) : model.samples;
 
-/** How many steps each random run of a model takes. */
-const stepsFor = (model) => model.steps ?? STEPS;
+/** How many steps each random run of a model takes: a model may take more for the runs that must pass (`passSteps`), so they reach its deepest witness, than its mutants need. */
+const stepsFor = (model, kind) =>
+	(kind === "pass" ? (model.passSteps ?? model.steps) : model.steps) ?? STEPS;
 
 const simulate = (model, main, invariant, kind) =>
 	quint([
@@ -62,7 +63,7 @@ const simulate = (model, main, invariant, kind) =>
 		"--invariant",
 		invariant,
 		"--max-steps",
-		stepsFor(model),
+		stepsFor(model, kind),
 		"--max-samples",
 		samplesFor(model, kind),
 		"--seed",

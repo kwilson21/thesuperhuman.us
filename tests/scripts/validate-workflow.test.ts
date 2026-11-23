@@ -122,6 +122,6 @@ describe("parallel Validate retains every release gate", () => {
 		expect(driver).toContain("const checks = selectChecks(allChecks, shard)");
 		expect(driver).toContain('const SEED = "0x1"');
 		expect(driver).toContain("samplesFor(model, kind)");
-		expect(driver).toContain("stepsFor(model)");
+		expect(driver).toContain("stepsFor(model, kind)");
 	});
 });

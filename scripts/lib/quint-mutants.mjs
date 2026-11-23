@@ -38,8 +38,9 @@ export const exhaustive = ["audioExhaustive", "softwareExhaustive"];
 
 // verification/discount-offers.qnt: an offer with a discount revised, sent, superseded, signed and invoiced
 // (docs/plans/2026-11-discount-flow.md, "The model"), with the offer link, the 20-second sending window, the emails and a
-// clock, so that send and decline are the route's steps (docs/plans/2026-11-offers-conversion.md, section 7). Module name
-// -> the property its change must break.
+// clock, so that send and decline are the route's steps (docs/plans/2026-11-offers-conversion.md, section 7), and the
+// signing link, its session, the signing setting, review, sign, countersign and abandon as reads and batches
+// (docs/plans/2026-11-signing-conversion.md, section 7). Module name -> the property its change must break.
 export const discountMutants = {
 	discountEditSent: { property: "sentTermsFrozen" },
 	discountLatestTerms: { property: "invoicedMatchesSigned" },
@@ -54,6 +55,18 @@ export const discountMutants = {
 	discountTodaySecondBatch: { property: "declinedHasNoOffer" },
 	discountNoLiveCheck: { property: "sendLinkLive" },
 	discountFirstBatchKeepsLink: { property: "declinedHasNoOffer" },
+	// The live-link check before F9's fix, an equivalent mutant until the signing extension: an abandon revokes the link
+	// with no sending window, so the model now closes a link during a failed send. It is killed only because the model
+	// lets the client use a link that only the failed email carried (docs/verification.md).
+	discountAcceptedOnlyCheck: { property: "sendLinkLive" },
+	discountReviewNoGuards: { property: "reviewOfSentOffer" },
+	discountSignGuardsAtRead: { property: "supersededInert" },
+	discountRedeemNoLiveGuard: { property: "noSessionForDeadOffer" },
+	discountAbandonNoStatusGuard: { property: "executedStays" },
+	discountCountersignNoGuards: { property: "executedOnlyWhenSigned" },
+	discountAbandonDepositAtRead: { property: "abandonedHasNoDeposit" },
+	// The review batch without A3 (and so without the one-live-SOW index, which the model's condition stands for too).
+	discountReviewNoSignedGuard: { property: "signedStaysSigned" },
 };
 
 // verification/signin-codes.qnt: studio sign-in codes bound to the browser that asked, with requests whose responses can
@@ -245,8 +258,9 @@ export const audioProjectFilesMutants = {
 };
 
 // verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
-// queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
-// property its change must break.
+// queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6); and a signed copy
+// or a signing notice of the agreements area, reset by A20 (docs/plans/2026-11-signing-conversion.md, section 7). Module
+// name -> the property its change must break.
 export const audioProjectNoticesMutants = {
 	projectNoticesClaimNoStatus: { property: "oneEmailInTotal" },
 	projectNoticesClaimNoOpen: { property: "claimOnlyWhileOpen" },
@@ -256,6 +270,9 @@ export const audioProjectNoticesMutants = {
 	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
 	projectNoticesQueueNoCas: { property: "oneEmailInTotal" },
 	projectNoticesQueueStatusOnly: { property: "oneEmailInTotal" },
+	projectNoticesCopyClaimNoState: { property: "copyOnlyWhenExecuted" },
+	projectNoticesNoticeClaimNoState: { property: "noticeOnlyBeforeCountersign" },
+	projectNoticesNoObsolete: { property: "noSendingAfterCountersign" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
@@ -276,7 +293,7 @@ export const briefCopyMutants = {
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, how many random runs each check makes, and how many steps each run
-// takes (20 unless the model says). The discount model's steps are slower to evaluate, so it makes fewer runs; every
+// takes (20 unless the model says; `passSteps` and `passSamples` set them apart for the runs that must pass). The discount model's steps are slower to evaluate, so it makes fewer runs; every
 // mutant of it is found well inside that number.
 export const models = [
 	{
@@ -293,21 +310,20 @@ export const models = [
 		current: ["discount"],
 		mutants: discountMutants,
 		// The decline's second batch without its sending guard (G5): since F10's fix it refuses nothing more, because a live
-		// link always has a sent offer, which the fix refuses. The live-link check as it was before F9's fix (counted only for
-		// an accepted email): a failed email ends within one tick and every step that closes a link waits two, so the model
-		// never reaches a link closed during a failed email (docs/verification.md, "The discount-offers model").
-		equivalents: [
-			"discountSecondBatchNoSendingGuard",
-			"discountAcceptedOnlyCheck",
-		],
+		// link always has a sent offer, which the fix refuses (docs/verification.md, "The discount-offers model").
+		equivalents: ["discountSecondBatchNoSendingGuard"],
 		exhaustive: ["discount"],
-		// A send and a decline are three steps each and the sending window takes two clock ticks, so the deepest mutant
-		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
-		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)
-		// about 25. At 50 steps, seed 0x1, the mutant is found in about 1,300 runs and the witness's state is reached in
-		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check
-		// allows 20,000 and each run that must pass makes 10,000.
+		// A send and a decline are three steps each and the sending window takes two clock ticks, so the deepest mutant of
+		// the offers extension (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its
+		// deposit invoiced) needs at least 17 steps. At 50 steps, seed 0x1, it is found in about 1,600 runs since the signing
+		// extension (about 1,300 before), the signing mutants in at most about 950 (discountAbandonDepositAtRead) and the
+		// rarest, discountAcceptedOnlyCheck, in about 9,700, so each mutant check allows 20,000 and each run that must pass
+		// makes 10,000. The pass run's deepest witness (neverStandardPaidAfterSentRevision) needed about 25 steps and was
+		// reached at 50 in about 320 runs; a website start now needs a signing and a countersign (at least 33 steps), and
+		// it is reached only at 80 steps (about 710 runs; not in 20,000 at 60 or 70), so the runs that must pass take 80
+		// steps and the mutant checks, every one found within their budget at 50, keep 50.
 		steps: "50",
+		passSteps: "80",
 		samples: "20000",
 		passSamples: "10000",
 	},
@@ -433,7 +449,13 @@ export const models = [
 	},
 	{
 		file: "verification/audio-project-notices.qnt",
-		current: ["projectNotices", "projectNoticesUpdate"],
+		// The invitation, an update notice, a signed copy and a signing notice: each kind's claim, outcome and reset differ.
+		current: [
+			"projectNotices",
+			"projectNoticesUpdate",
+			"projectNoticesCopy",
+			"projectNoticesSigning",
+		],
 		mutants: audioProjectNoticesMutants,
 		equivalents: [],
 		exhaustive: [],
