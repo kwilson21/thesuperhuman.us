@@ -149,10 +149,7 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 	website: {
 		audience: {
 			examples: [
-				ex(
-					"Fans who want show dates",
-					"band, music, fan, show, gig, tour, concert",
-				),
+				ex("Fans who want show dates", "band, music, fan, gig, tour, concert"),
 				ex("Venues that book us", "band, venue, gig, booking"),
 				ex("New customers"),
 				ex("Returning customers"),
@@ -163,11 +160,11 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 		},
 		parts: {
 			examples: [
-				ex("Shows", "show, gig, tour, concert"),
+				ex("Shows", "gig, tour, concert"),
 				ex("Music", "music, band, song, album"),
-				ex("Shop", "shop, sell, merch, store, product"),
+				ex("Shop", "shop, sell, merch, product"),
 				ex("Mailing list", "mailing, newsletter, subscriber"),
-				ex("Booking", "book, booking, appointment, reserve, reservation"),
+				ex("Booking", "booking, appointment, reserve, reservation"),
 				ex("Photos", "photo, gallery, portfolio"),
 				ex("Menu", "menu, restaurant, cafe, bakery, food"),
 				ex("Home"),
@@ -181,8 +178,8 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 		},
 		questions: {
 			examples: [
-				ex("Do we sell tickets on the site?", "ticket, show, gig, concert"),
-				ex("Who will add new show dates?", "show, gig, tour"),
+				ex("Do we sell tickets on the site?", "ticket, gig, concert"),
+				ex("Who will add new show dates?", "gig, tour"),
 				ex("Who will write the text?"),
 				ex("Do we have photos to use?"),
 				ex("Do we need a mailing list sign-up?"),
@@ -204,8 +201,8 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 		},
 		parts: {
 			examples: [
-				ex("Book an appointment", "book, booking, appointment, schedule"),
-				ex("Search past orders", "order, purchase"),
+				ex("Book an appointment", "booking, appointment, schedule"),
+				ex("Search past orders", "purchase"),
 				ex("Sign in"),
 				ex("Add a new record"),
 				ex("Search and filter"),
@@ -236,7 +233,7 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 		},
 		parts: {
 			examples: [
-				ex("Copy new orders into the spreadsheet", "order, spreadsheet"),
+				ex("Copy new orders into the spreadsheet", "spreadsheet"),
 				ex("Check the inbox for new requests"),
 				ex("Enter the details into the system"),
 				ex("Send a confirmation email"),
@@ -256,11 +253,22 @@ export const byHandExamples: Record<SoftwarePath, Record<Lane, ExampleList>> = {
 	},
 };
 
-const keywordIn = (answers: string, word: string) =>
-	new RegExp(
-		`(?<![\\p{L}\\p{N}])${word}(?:s|es)?(?![\\p{L}\\p{N}])`,
-		"iu",
-	).test(answers);
+/** Lower case with accents folded, so "café" and "cafe" are the same word. */
+const folded = (text: string) =>
+	text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+const keywordIn = (answers: string, word: string) => {
+	const key = folded(word);
+
+	// A plain plural (-s, -es), and -ies for a word ending in y.
+	const forms = key.endsWith("y")
+		? `${key.slice(0, -1)}(?:y|ies|ys)`
+		: `${key}(?:s|es)?`;
+
+	return new RegExp(`(?<![\\p{L}\\p{N}])${forms}(?![\\p{L}\\p{N}])`, "u").test(
+		folded(answers),
+	);
+};
 
 /**
  * The example a by-hand field shows: the first example not yet in the lane, those that fit the visitor's written answers

@@ -279,7 +279,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				board: current,
 				byHand,
 				undoLabel,
-				answers: currentAnswers(),
+				answers,
 			});
 
 			parts.title.textContent = screen.heading;

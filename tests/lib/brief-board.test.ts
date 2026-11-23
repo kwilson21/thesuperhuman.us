@@ -2895,13 +2895,40 @@ describe("nextExample", () => {
 
 	it("matches whole words only, ignoring case, and tolerates a plural", () => {
 		expect(nextExample("website", "parts", "TOURS and Gigs", [])).toBe("Shows");
-		expect(nextExample("website", "parts", "a stourbridge show", [])).toBe(
-			"Shows",
-		);
+		expect(nextExample("website", "parts", "a stourbridge", [])).toBe("Home");
 		expect(nextExample("website", "parts", "unmusical shopping", [])).toBe(
 			"Home",
 		);
 		expect(nextExample("website", "parts", "We have a boo", [])).toBe("Home");
+	});
+
+	it("tolerates -ies for a keyword ending in y and folds accents", () => {
+		expect(nextExample("website", "parts", "Our galleries", [])).toBe("Photos");
+		expect(nextExample("website", "parts", "two bakeries", [])).toBe("Menu");
+		expect(nextExample("website", "parts", "Une CAFÉ", [])).toBe("Menu");
+		expect(nextExample("website", "parts", "the cafe", [])).toBe("Menu");
+	});
+
+	it("is not led by everyday verbs: show, order, store and book match nothing", () => {
+		const verbs =
+			"I want to show my work and store customer info in order to book clients";
+
+		expect(nextExample("website", "audience", verbs, [])).toBe("New customers");
+		expect(nextExample("website", "parts", verbs, [])).toBe("Home");
+		expect(nextExample("website", "questions", verbs, [])).toBe(
+			"Who will write the text?",
+		);
+		expect(nextExample("webapp", "audience", verbs, [])).toBe("Customers");
+		expect(nextExample("webapp", "parts", verbs, [])).toBe("Sign in");
+		expect(nextExample("workflow", "parts", verbs, [])).toBe(
+			"Check the inbox for new requests",
+		);
+
+		for (const lists of Object.values(byHandExamples))
+			for (const { examples } of Object.values(lists))
+				for (const [, ...words] of examples)
+					for (const word of ["show", "order", "store", "book"])
+						expect(words).not.toContain(word);
 	});
 
 	it("starts with the plain examples for answers that match nothing", () => {

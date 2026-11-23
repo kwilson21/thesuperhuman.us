@@ -116,7 +116,8 @@ not by hand while the visitor has skipped the outline, because the screens are t
   keeps the one sentence that says the outline stopped, so the visitor knows why nothing new arrives.
 - A card the visitor wrote shows no "Your note" label in a lane where every card is the visitor's own. Such a note is a
   compact row: its text on the left, Edit and Remove on the right (under the text on a narrow screen), a hairline
-  between rows and no box around each note.
+  between rows and no box around each note. A newly added note gets no accent edge or border colour, only the short
+  fade-in (not with reduced motion); the AI-on boxed cards keep their new-card outline.
 
 | Lane | Website | Web app | Workflow |
 |---|---|---|---|
@@ -126,21 +127,21 @@ not by hand while the visitor has skipped the outline, because the screens are t
 
 **The example in the field.** Each lane and path has an ordered list of examples, and an example may carry keywords.
 The candidates are the examples with no keywords plus those with a keyword that occurs as a whole word in the visitor's
-written answers (case-insensitive, a plain plural allowed). Keyword-matched examples come first, in list order, then the
+written answers (case-insensitive, accents ignored, a plain plural allowed, and -ies for a word ending in y). Everyday verbs such as show, order, store and book are deliberately not keywords. Keyword-matched examples come first, in list order, then the
 plain ones in list order. The placeholder is the first candidate not already in the lane (compared trimmed and
 case-insensitively with every card in that lane, set-aside ones included); when none is left it is the lane's closing
 prompt. It is recomputed after every add, edit, remove and undo, and when the screen is shown. Examples are `text | keywords`.
 
 | Path / lane | Examples, in order | Closing prompt |
 |---|---|---|
-| Website / `audience` | Fans who want show dates \| band, music, fan, show, gig, tour, concert; Venues that book us \| band, venue, gig, booking; New customers; Returning customers; Press and bloggers; Partners and suppliers | Another person or group |
-| Website / `parts` | Shows \| show, gig, tour, concert; Music \| music, band, song, album; Shop \| shop, sell, merch, store, product; Mailing list \| mailing, newsletter, subscriber; Booking \| book, booking, appointment, reserve, reservation; Photos \| photo, gallery, portfolio; Menu \| menu, restaurant, cafe, bakery, food; Home; About; Services; Contact; Prices; Questions and answers | Another page |
-| Website / `questions` | Do we sell tickets on the site? \| ticket, show, gig, concert; Who will add new show dates? \| show, gig, tour; Who will write the text?; Do we have photos to use?; Do we need a mailing list sign-up?; Should people be able to pay on the site? | Another open question |
+| Website / `audience` | Fans who want show dates \| band, music, fan, gig, tour, concert; Venues that book us \| band, venue, gig, booking; New customers; Returning customers; Press and bloggers; Partners and suppliers | Another person or group |
+| Website / `parts` | Shows \| gig, tour, concert; Music \| music, band, song, album; Shop \| shop, sell, merch, product; Mailing list \| mailing, newsletter, subscriber; Booking \| booking, appointment, reserve, reservation; Photos \| photo, gallery, portfolio; Menu \| menu, restaurant, cafe, bakery, food; Home; About; Services; Contact; Prices; Questions and answers | Another page |
+| Website / `questions` | Do we sell tickets on the site? \| ticket, gig, concert; Who will add new show dates? \| gig, tour; Who will write the text?; Do we have photos to use?; Do we need a mailing list sign-up?; Should people be able to pay on the site? | Another open question |
 | Web app / `audience` | Front-desk staff \| desk, reception, clinic, salon, appointment; Customers; Staff; Managers; Admins | Another kind of user |
-| Web app / `parts` | Book an appointment \| book, booking, appointment, schedule; Search past orders \| order, purchase; Sign in; Add a new record; Search and filter; Get a reminder; Export a report | Another thing people can do |
+| Web app / `parts` | Book an appointment \| booking, appointment, schedule; Search past orders \| purchase; Sign in; Add a new record; Search and filter; Get a reminder; Export a report | Another thing people can do |
 | Web app / `questions` | Do people need to sign in?; Who can see what?; Does it need to work on a phone?; Where does the data live today? | Another open question |
 | Workflow / `audience` | Office manager; Sales team; Bookkeeper; The owner | Another person or role |
-| Workflow / `parts` | Copy new orders into the spreadsheet \| order, spreadsheet; Check the inbox for new requests; Enter the details into the system; Send a confirmation email; Tell the team it’s done | Another step |
+| Workflow / `parts` | Copy new orders into the spreadsheet \| spreadsheet; Check the inbox for new requests; Enter the details into the system; Send a confirmation email; Tell the team it’s done | Another step |
 | Workflow / `questions` | Who approves a refund? \| refund, payment, invoice; What happens when something is missing?; Which tools have to stay?; How often does this happen? | Another open question |
 
 The status line while the outline is retrying after a failed update says "The outline couldn’t update just now. Trying
