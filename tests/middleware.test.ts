@@ -240,6 +240,7 @@ describe("middleware.onRequest", () => {
 			{ origin: "null", "sec-fetch-site": "same-site" },
 			{ origin: "null", "sec-fetch-site": "none" },
 			{ origin: "https://evil.example", "sec-fetch-site": "same-origin" },
+			{ "sec-fetch-site": "same-origin" },
 		];
 
 		// The emailed links' Continue forms and every other native form post.
@@ -272,6 +273,18 @@ describe("middleware.onRequest", () => {
 				reached: false,
 			});
 
+		// A form-typed post to the studio's actions passes both its check and the form check.
+		expect(await attempt("/api/studio/session", sameOrigin)).toEqual({
+			status: 200,
+			reached: true,
+		});
+
+		for (const headers of refused)
+			expect(await attempt("/api/studio/session", headers)).toEqual({
+				status: 403,
+				reached: false,
+			});
+
 		// The owner's check, with a verified owner.
 		verifyOwnerAccess.mockResolvedValue({ email: "owner@example.com" });
 
@@ -287,6 +300,18 @@ describe("middleware.onRequest", () => {
 				expect(
 					await attempt("/api/owner/audience", headers, "application/json"),
 				).toEqual({
+					status: 403,
+					reached: false,
+				});
+
+			// A form-typed post to the owner's actions passes both its check and the form check.
+			expect(await attempt("/api/owner/audience", sameOrigin)).toEqual({
+				status: 200,
+				reached: true,
+			});
+
+			for (const headers of refused)
+				expect(await attempt("/api/owner/audience", headers)).toEqual({
 					status: 403,
 					reached: false,
 				});
