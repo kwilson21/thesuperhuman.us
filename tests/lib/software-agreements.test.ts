@@ -48,6 +48,7 @@ import {
 	liveAgreementMail,
 } from "~/server/agreement-services";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
+import { raisedByJsonGuard } from "~/server/guarded-save";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
 import { AudioBucket, liveTurnstile, MusicDb } from "~/server/services";
 import {
@@ -1083,8 +1084,15 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	});
 
 	expect(
-		(await issueAgreementLink(env, req, { turnstileToken: "test" }, token))
-			.status,
+		(
+			await issueAgreementLink(
+				env,
+				req,
+				{ turnstileToken: "test" },
+				token,
+				raisedByJsonGuard,
+			)
+		).status,
 	).toBe(200);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 	expect(payload.to).toEqual(["client@example.com"]);
@@ -1121,13 +1129,26 @@ it("issues a hashed pinned-recipient link, consumes once, expires and limits res
 	expect(opened.headers.get("set-cookie")).toContain("Max-Age=7200");
 	expect((await completeAgreementLink(env, req, key, token)).status).toBe(401);
 	expect(
-		(await issueAgreementLink(env, req, { turnstileToken: "test" }, token))
-			.status,
+		(
+			await issueAgreementLink(
+				env,
+				req,
+				{ turnstileToken: "test" },
+				token,
+				raisedByJsonGuard,
+			)
+		).status,
 	).toBe(429);
 });
 
 it("rejects expired links without creating a session", async () => {
-	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
+	await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "test" },
+		token,
+		raisedByJsonGuard,
+	);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -2235,7 +2256,13 @@ it.each(["resolved", "withdrawn"])(
 );
 
 it("consumes a link atomically under parallel verification", async () => {
-	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
+	await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "test" },
+		token,
+		raisedByJsonGuard,
+	);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -2560,6 +2587,7 @@ it("invalid Turnstile requests count only the address allowance, not the recipie
 			request(),
 			{ turnstileToken: "invalid" },
 			token,
+			raisedByJsonGuard,
 		);
 
 		expect(response.status).toBe(403);
@@ -2578,6 +2606,7 @@ it("invalid Turnstile requests count only the address allowance, not the recipie
 		request(),
 		{ turnstileToken: "valid" },
 		token,
+		raisedByJsonGuard,
 	);
 
 	expect(response.status).toBe(200);
@@ -3464,7 +3493,13 @@ it("resumes the server draft under a fresh two-hour email session without sharin
 	sql
 		.prepare("UPDATE software_agreement_sessions SET expires_at='2000-01-01'")
 		.run();
-	await issueAgreementLink(env, request(), { turnstileToken: "test" }, token);
+	await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "test" },
+		token,
+		raisedByJsonGuard,
+	);
 	const payload = JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body));
 
 	const key = new URL(payload.text.match(/https:\/\/\S+/)[0]).searchParams.get(
@@ -3970,6 +4005,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 			request(),
 			{ turnstileToken: "test" },
 			token,
+			raisedByJsonGuard,
 		);
 
 		expect(response.status).toBe(502);
@@ -4007,6 +4043,7 @@ it("masks link receipts and refunds definite token-scoped email rejection withou
 		request(),
 		{ turnstileToken: "test" },
 		token,
+		raisedByJsonGuard,
 	);
 
 	expect(response.status).toBe(200);
@@ -4980,6 +5017,7 @@ it.each(["agreement", "archive"])(
 						foreign,
 						{ turnstileToken: "valid" },
 						token,
+						raisedByJsonGuard,
 					)
 				).status,
 			).toBe(404);
@@ -5133,6 +5171,7 @@ it.each([503, "timeout"])(
 					request(),
 					{ turnstileToken: "test" },
 					token,
+					raisedByJsonGuard,
 				)
 			).status,
 		).toBe(200);

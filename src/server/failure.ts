@@ -18,6 +18,11 @@
 //       entity type, jurisdiction) under another id, or the earlier client row gone. Any other foreign key failure, or
 //       a failed read of that evidence, rethrows the ORIGINAL error: 500, logged
 //     the draft's primary key is an upsert; offers, templates and the reused MSA are never deleted: no other way
+//   Agreement signing (`POST /api/offer/[token]/sign`: `signAgreements`, whose reads and batch throw `StoreRejected`)
+//     guards (live signing link, session, the draft as read, the reused MSA, each document in review) .. JSON guard, 409
+//     a signature of the same document and party, a notice of the same agreement ......... UNIQUE, 409
+//     a document or its client deleted since the read (another tab's review replaces them) .. FOREIGN KEY, 409 through
+//       `LostRace`: every row the batch refers to was read just before it, so the failure is itself the evidence
 //   Owner agreements (`POST /api/owner/agreements`)
 //     publish: the version guard, UNIQUE (kind, version label) (turned into a sentence) ... 409
 //     config: the version guard, the version primary key ............................... 409
