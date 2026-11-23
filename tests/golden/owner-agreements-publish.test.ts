@@ -39,7 +39,7 @@ import {
 //                       date fallback), a label already used for this kind, a label taken between the check and the insert (reachable
 //                       only through a gap in the versions)
 //   409 "The agreement could not be saved."   a stale expectedCurrentVersion (too low, too high, on an empty table), a version that
-//                       lands before the batch
+//                       lands before the batch, publish twice with the same expected version
 //   500 "The agreement could not be saved."   a failed batch, a failed read of the current version or of the label, logged
 //   events              a template-published event with the owner's email and time on each success
 //   native form         a 303 for a success; a page for each error, the message escaped (a stored label with markup shows escaped)
