@@ -484,13 +484,13 @@ with a `say` sentence, exactly today's.
 | `signing-review.ts` | `reviewDocument` (the GET) | the document id asked for, the offer's agreements (`readOfferAgreements`, plain rows: the rule leaves out the abandoned ones, as `offerAgreements`' filter does today), the session's token hash | `DocumentNotFound` (404 `{ok:false}`) | nothing written: it answers the document's kind and text |
 | `signing-review.ts` | `reviewDocuments`, staged as the offers' send is | the offer's stored terms, details and contractor, the existing agreements, the client row, the reused MSA, the templates, a pending MSA elsewhere, `at` | `SignatureSaved`, `MsaMismatch`, `TemplatesUnavailable`, `PendingMsaElsewhere`, `RenderRefused` (the template code's sentences), `StoredDataRefused`, `AlreadySigned`, `SigningStarted` | the client, the review rows, the stale clients removed, the event |
 | `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `StoredDataRefused` (the stored values: golden "values with no client object", "values with no contractor object", "values whose client misses a field", "... has an extra field", "... names a portfolio but denies it"), `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
-| `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
-| `agreement-abandon.ts` | `abandonSigning` | the offer, the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
+| `agreement-countersign.ts` | `countersign` | the request's offers (the rule picks the sent one, `sentOfferOf`), the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
+| `agreement-abandon.ts` | `abandonSigning` | the request's offers (`sentOfferOf`), the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
 | `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end (with no event, as today), the hold and the copy record, each with its event |
 | `agreement-packet.ts` | `packetClaimable`, `packetRecoverable` | the packet row, `now`, the attempt | `StaleAttemptUnconfirmed` | the claim, the outcome |
 | `agreement-messages.ts` | `messagesToReset`, `copySigned` then `copyClaimable`, `noticeAgreementFound` then `noticeClaimable` | the rows, `now`, the agreement's status and archive, the project | none: a row that cannot move is skipped, as today | the reset, the claims |
 | `agreement-templates.ts` | `previewTemplate`, `publishTemplate`, `saveContractor` | the text, the current version, the label's use, the expected version | `TemplateRefused`, `NothingToPublish`, `LabelInvalid`, `LabelUsed`, `NotConfirmed`, `VersionChanged`, `VersionNotFound` | the version, the config |
-| `agreement-retention.ts` | `accessCleanup`, `retentionEligible`, `manifestFresh`, `objectsToDelete` | the rows each read gives, `now` | `ManifestStale`, `ArchiveChanged`, `ObjectChanged`, `UnattachedChanged`, `OrphanChanged` | the rows to delete or close |
+| `agreement-retention.ts` | `accessCleanup`, `retentionEligible` then `retentionRetiring`, `manifestFresh`, `objectsToDelete` | the rows each read gives, `now` | `ManifestStale`, `ArchiveChanged`, `ObjectChanged`, `UnattachedChanged`, `OrphanChanged` | the rows to delete or close |
 | `agreement-upload.ts` | `acceptAttachment` | the query, the bytes, the page count, the request row | `UploadRefused` (each 400 and 413 above), `PdfUnreadable` (B4), `RequestNotFound`, `RequestClosed` (B4) | the row |
 | `agreement-download.ts` (extended) | `ownerCopy` | the agreement, its copy row, the bytes' digest | `AgreementNotFound`, `CopyNotReady`, `CopyIntegrity` (all reused) | none |
 
@@ -600,7 +600,9 @@ decisions and outside effects.
 
 The owner request route reads the sent offer for every action, before the action, as today (agreement.ts:60-65). Hold,
 end, record-copy and the retries never use it, but its failure answers B2's 500 for them too, so dropping the read
-would change those answers; it is kept.
+would change those answers; it is kept, as `readRequestOffers`, a plain read of the request's versions with their
+statuses, from which the countersign and abandon rules pick the sent one (`sentOfferOf`). Countersign reads the setting
+only when there is a sent offer, as today.
 
 ## 4. The store and the services
 
@@ -622,11 +624,11 @@ in the re-record commit and the `trigger-hit` marker stays the same.
 | The redeem | `readLinkByKey`, `redeemLinkBatch` (A1, A5, used, event, session) | access.ts:349-359, 387-425 |
 | The draft and review | `readDraft`, `saveDraftBatch` (A1 A2 A3), `readOfferAgreements`, `readClientByKey`, `readReusedMsa`, `readTemplate`, `readPendingMsa`, `reviewBatch`, `readClientEvidence` | draft-lib.ts:42-78; software-agreements.ts:98-107, 124-159, 202-300, 306-380 |
 | Signing | `readSavedReceipt`, `signBatch` | software-agreements.ts:418-545 |
-| The owner's actions | `readSentOffer`, `countersignBatch`, `readOfferDeposits`, `abandonBatch`, `readAgreement`, `readMsaUse`, `endBatch`, `holdBatch`, `recordCopyBatch` | agreement.ts:60-65, 122-353; software-agreements.ts:644-733 |
+| The owner's actions | `readRequestOffers`, `countersignBatch`, `readOfferDeposits`, `abandonBatch`, `readAgreement`, `readMsaUse`, `endBatch`, `holdBatch`, `recordCopyBatch` | agreement.ts:60-65, 122-353; software-agreements.ts:644-733 |
 | The packet | `claimPacket`, `readPacketDocuments`, `readDocumentSignatures`, `readTemplateLabel`, `markPacketReady`, `markPacketFailed`, `recoverPacket`; R2 through `AudioBucket` | artifacts.ts:108-346, 449-465 |
 | The emails | `readCopyArtifact`, `readReceiptId`, `claimCopy`, `recordCopyOutcome`, `readNoticeAgreement`, `claimNotice`, `recordNoticeOutcome`, `readMessages`, `resetCopies`, `resetNotices` | artifacts.ts:357-447, 470-523; agreement.ts:211-231 |
 | Templates and settings | `readCurrentTemplate`, `readTemplateVersion`, `readLabelUse`, `publishBatch` (A22), `saveContractorBatch` (A23), `saveSetting`, `readAccessRows`, `cleanupBatch` | templates.ts:266-381; owner-agreements.ts:149-186; access.ts:26-41 |
-| Retention | one function per read and batch of `retention.ts`, the `eligible` condition kept in the guard (A25) | retention.ts:54-598 |
+| Retention | one function per read and batch of `retention.ts`, the eligibility query read in two steps (`readRetentionFacts`, the scan, and `readRetainedAgreements`, the chosen rows; section 9), the `eligible` condition kept in the guard (A25) | retention.ts:54-598 |
 | Upload and downloads | `readUploadRequest`, `insertAttachment` (A24), `readAttachmentSaved`, `readOwnerAttachment`, `readOwnerCopy` | attachments.ts:73-138; agreement-download.ts:22-41 |
 
 Where a decision is in SQL today, the store reads plain rows and the rule decides, and the guard keeps the condition as
@@ -1028,18 +1030,55 @@ today's function beside the rule on the same database. What it found, for the st
   - `offer-sign`: `/FROM software_agreements WHERE offer_id=\? AND status<>'abandoned'/`, both reads of the agreements
     (the first and `nth: 2`).
   - `owner-request-agreement-abandon`: `/SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("outage: the first deposit
-    check", "... only") and `/^SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("... and the recheck after it",
-    with its `nth: 2` entry and the `optionalTriggers` text that names it). `readOfferDeposits` is one plain read of the
-    offer's invoices; left as it is, the unanchored pattern would pick the batch's A12 guard instead.
+    check only") and `/^SELECT 1 FROM software_invoices WHERE offer_id=\?/` ("outage: the first deposit check and the
+    recheck after it", with its `nth: 2` entry and the `optionalTriggers` text that names it). `readOfferDeposits` is
+    one plain read of the offer's invoices; left as it is, the unanchored pattern would pick the batch's A12 guard
+    instead.
   - `owner-request-agreement-end`: `/SELECT 1 FROM software_offers o JOIN owner_requests r/` ("outage: the open-offer
     check of an MSA") and `/^SELECT 1 FROM software_offers o JOIN owner_requests r/` ("outage: the batch of an MSA, and
     the recheck", `nth: 2`, with its `optionalTriggers` text). `readMsaUse` is one plain read of the reusing offers;
-    left as it is, the unanchored pattern would pick the batch's A13 guard instead.
+    left as it is, the unanchored pattern would pick the batch's A13 guard instead. Its text names `software_offers`
+    first, as today's check does (the projects are joined as their distinct offer ids), so the operation and table the
+    `trigger-hit` marker records stay today's.
+  - `owner-request-agreement-abandon`, `-countersign`, `-end`, `-hold`, `-record-copy`, `-retry-artifact` and
+    `-retry-copy`, each "outage: the offer lookup": `/SELECT \* FROM software_offers WHERE request_id=\? AND
+    status='sent'/`, re-pointed to `/SELECT \* FROM software_offers WHERE request_id=\? ORDER BY version DESC/`. Every
+    owner action reads the request's offers first through `readRequestOffers`, the offers store's plain read of every
+    version with its status, and `sentOfferOf` in the countersign and abandon rules picks the sent one. The new pattern
+    picks that read and no statement any of the eight owner request corpora recorded or the converted store runs
+    (`tests/server/agreement-store-owner.test.ts` checks both).
   - `owner-agreements-retention-preview`, "the orphan reference check fails": `/SELECT 1 WHERE\s+EXISTS/`.
     `readOrphanReferences` reads the references as rows for `orphanUnreferenced`.
+  - `owner-agreements-retention-preview`, "the eligibility query fails", and `owner-agreements-retention-apply`, "the
+    fresh scan during apply fails" (`nth: 2`): `/SELECT a\.\* FROM software_agreements a/`, re-pointed to
+    `/^SELECT id,kind,offer_id,msa_id,/`, the first statement of the scan's batch (a SELECT on `software_agreements`, as
+    today's query). Today's eligibility query is two reads (below); the second, the chosen agreements' full rows
+    (`SELECT * FROM software_agreements WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id`), meets no hook, and
+    the new pattern meets the scan and no statement either retention corpus recorded or the store runs
+    (`tests/server/agreement-store-retention.test.ts` checks both).
 
-  `tests/api/signing-owner-outages.test.ts` picks today's deposit check by the same text (`DEPOSIT_CHECK`); it tests
-  today's route, which PR 4 deletes with its tests.
+  `tests/api/signing-owner-outages.test.ts` picks today's deposit check and today's sent-offer read by the same texts
+  (`DEPOSIT_CHECK`, `OFFER_LOOKUP`); it tests today's route, which PR 4 deletes with its tests.
+- **Retention's two reads.** Today's eligibility query (`SELECT a.* ... WHERE eligible ORDER BY a.id LIMIT 20`) returns
+  at most 20 rows. Read as plain rows for the rule, every agreement with every column (`canonical_text` alone may be 256
+  KiB) would outgrow D1's result limit long before today's query does, on every preview and again in the apply's fresh
+  scan. So the store reads in two steps: the scan (`readRetentionFacts`, one batch) reads of every agreement only the
+  columns the `eligible` condition and A25's text check read (`id`, `kind`, `offer_id`, `msa_id`, `status`,
+  `text_sha256`, `ended_at`, `retain_until`, `legal_hold`, `terminated_at`) and the other tables as before;
+  `retentionEligible` chooses at most 20 ids in id order; `readRetainedAgreements` reads those agreements' full rows
+  (every column: the manifest's `row_hash` hashes them all, and the apply's freshness check compares them); and
+  `retentionRetiring` keeps, in the order chosen, each full row still eligible by its own columns as read the second
+  time (with the scan's rows for the others). With no change between the reads the rows are today's query's, so the
+  preview and the apply answer as today, manifest bytes, cursor and marker included
+  (`tests/rules/agreement-retention-sql.test.ts` runs today's preview beside the rules). A race between the reads, which
+  today's single statement could not see, now answers so: a chosen agreement that is gone is skipped; one that is no
+  longer eligible by its full row (put on hold, its retention moved, reopened) is skipped; one that changed and is still
+  eligible (its archive being closed by another apply) is in the manifest as read the second time, its `row_hash` of
+  that row; and the manifest is not refilled past the first 20, so it may hold fewer agreements than today's query would
+  have returned after the same change (the next preview takes the rest). In the apply, the fresh scan makes the same two
+  reads and decisions, so a race in either the preview's scan or the apply's that changes the set or a row answers
+  ArchiveChanged, "Archive changed. Preview again." (409), as a change between the preview and the apply does today, and
+  A25 still re-checks every agreement in the closing batch.
 
 ## Open questions from reading the code
 

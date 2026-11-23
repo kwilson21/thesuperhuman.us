@@ -12,9 +12,11 @@ import {
 	afterRefusedAbandon,
 	type OfferInvoiceRow,
 } from "../../src/server/rules/agreement-abandon";
-import type {
-	OfferAgreementRow,
-	SentOfferRow,
+import {
+	type OfferAgreementRow,
+	type RequestOfferRow,
+	type SentOfferRow,
+	sentOfferOf,
 } from "../../src/server/rules/agreement-countersign";
 import type { Refusal } from "../../src/server/terms";
 import { partial } from "../helpers/doubles";
@@ -48,13 +50,18 @@ const BOTH = [
 
 const SOW_ONLY = [{ id: SOW, hash: SOW_HASH }];
 
-const OFFER: SentOfferRow = {
+/** An offer version of the request: the sent one unless `over` says otherwise. */
+const offer = (over: Partial<RequestOfferRow> = {}): RequestOfferRow => ({
 	id: "o1",
 	request_id: "r1",
+	status: "sent",
 	contractor_snapshot_json: null,
 	recipient_email_snapshot: "client@example.test",
 	reused_msa_id: null,
-};
+	...over,
+});
+
+const OFFERS = [offer()];
 
 const agreement = (
 	kind: "msa" | "sow",
@@ -84,7 +91,7 @@ const request = (over: Partial<AbandonRequest> = {}): AbandonRequest => ({
 });
 
 const facts = (over: Partial<AbandonFacts> = {}): AbandonFacts => ({
-	offer: OFFER,
+	offers: OFFERS,
 	agreements: [agreement("msa"), agreement("sow")],
 	invoices: [],
 	...over,
@@ -108,23 +115,50 @@ const decide = (
 ) => said(abandonSigning.decide(request(over), facts(overFacts)));
 
 describe("the sent offer", () => {
+	const front = (offers: readonly RequestOfferRow[]) =>
+		said(abandonFront.decide(null, { offers }));
+
 	it("goes on with a sent offer", () => {
-		expect(said(abandonFront.decide(null, { offer: OFFER }))).toEqual({
-			wrote: {},
-		});
+		expect(front(OFFERS)).toEqual({ wrote: {} });
+	});
+
+	it("goes on when the sent version is among others", () => {
+		expect(
+			front([
+				offer({ id: "o3", status: "draft" }),
+				offer({ id: "o2" }),
+				offer({ id: "o1", status: "superseded" }),
+			]),
+		).toEqual({ wrote: {} });
 	});
 
 	it("is refused with no sentence when the request has no sent offer", () => {
-		expect(said(abandonFront.decide(null, { offer: null }))).toEqual(
-			NO_SENT_OFFER,
-		);
-		expect(decide({}, { offer: null, agreements: [] })).toEqual(NO_SENT_OFFER);
+		expect(front([])).toEqual(NO_SENT_OFFER);
+		expect(decide({}, { offers: [], agreements: [] })).toEqual(NO_SENT_OFFER);
+	});
+
+	it("is refused when the request's versions are only drafts, superseded or withdrawn", () => {
+		for (const status of ["draft", "superseded", "withdrawn"] as const)
+			expect(front([offer({ status })]), status).toEqual(NO_SENT_OFFER);
+
+		expect(
+			decide(
+				{},
+				{
+					offers: [
+						offer({ id: "o3", status: "draft" }),
+						offer({ id: "o2", status: "withdrawn" }),
+						offer({ id: "o1", status: "superseded" }),
+					],
+				},
+			),
+		).toEqual(NO_SENT_OFFER);
 	});
 });
 
 describe("the pending documents", () => {
 	const pending = (agreements: OfferAgreementRow[], documents = BOTH) =>
-		said(abandonPending.decide({ documents }, { offer: OFFER, agreements }));
+		said(abandonPending.decide({ documents }, { offers: OFFERS, agreements }));
 
 	it("goes on when the client-signed documents are the ones named, in either order", () => {
 		expect(pending([agreement("msa"), agreement("sow")])).toEqual({
@@ -218,7 +252,7 @@ describe("the deposits", () => {
 describe("the order of the refusals, when several hold", () => {
 	it("answers the offer, then the documents, then the deposits", () => {
 		expect(
-			decide({}, { offer: null, agreements: [], invoices: [invoice()] }),
+			decide({}, { offers: [], agreements: [], invoices: [invoice()] }),
 		).toEqual(NO_SENT_OFFER);
 		expect(decide({ documents: SOW_ONLY }, { invoices: [invoice()] })).toEqual(
 			DIFFERS,
@@ -241,6 +275,21 @@ describe("the abandon's values", () => {
 				],
 			},
 		});
+	});
+
+	it("retires the sent version, not another version of the request", () => {
+		expect(
+			decide(
+				{},
+				{
+					offers: [
+						offer({ id: "o3", status: "draft" }),
+						offer({ id: "o2" }),
+						offer({ id: "o1", status: "superseded" }),
+					],
+				},
+			),
+		).toMatchObject({ wrote: { offerId: "o2", requestId: "r1" } });
 	});
 
 	it("abandons the SOW alone when it is the only pending document", () => {
@@ -273,7 +322,8 @@ const TABLES = [
 beforeEach(() => {
 	database.exec(
 		`${TABLES.map((table) => `DROP TABLE IF EXISTS ${table};`).join(" ")}
-		CREATE TABLE software_offers (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, status TEXT NOT NULL, updated_at TEXT);
+		CREATE TABLE software_offers (id TEXT PRIMARY KEY, request_id TEXT NOT NULL, version INTEGER NOT NULL,
+			status TEXT NOT NULL, updated_at TEXT);
 		CREATE TABLE software_agreements (id TEXT PRIMARY KEY, offer_id TEXT, request_id TEXT NOT NULL, kind TEXT NOT NULL,
 			status TEXT NOT NULL, text_sha256 TEXT NOT NULL, abandoned_at TEXT, abandoned_reason TEXT);
 		CREATE TABLE software_invoices (id TEXT PRIMARY KEY, offer_id TEXT NOT NULL, milestone_index INTEGER NOT NULL,
@@ -344,7 +394,10 @@ describe("A11 and the pending documents", () => {
 		).results;
 
 		const rule = said(
-			abandonPending.decide({ documents: named }, { offer: OFFER, agreements }),
+			abandonPending.decide(
+				{ documents: named },
+				{ offers: OFFERS, agreements },
+			),
 		);
 
 		const guards = await Promise.all(
@@ -541,7 +594,9 @@ describe("today's route and the rule, over the same rows", () => {
 				"SELECT id,status,abandoned_at,abandoned_reason FROM software_agreements ORDER BY id",
 			)
 			.all(),
-		offers: database.prepare("SELECT status FROM software_offers").all(),
+		offers: database
+			.prepare("SELECT id,status FROM software_offers ORDER BY version")
+			.all(),
 		links: database
 			.prepare("SELECT revoked_at FROM software_offer_links")
 			.all(),
@@ -550,7 +605,7 @@ describe("today's route and the rule, over the same rows", () => {
 			.get(),
 	});
 
-	it("abandon: the same answer and the same rows, for every offer, document state, naming and deposit", async () => {
+	it("abandon: the same answer and the same rows, for every offer among the request's versions, document state, naming and deposit", async () => {
 		const deposits: OfferInvoiceRow[][] = [
 			[],
 			[invoice()],
@@ -570,11 +625,15 @@ describe("today's route and the rule, over the same rows", () => {
 							database.exec(
 								TABLES.map((table) => `DELETE FROM ${table};`).join(" "),
 							);
-							database
-								.prepare(
-									"INSERT INTO software_offers VALUES ('o1','r1',?,NULL)",
-								)
-								.run(sent ? "sent" : "superseded");
+
+							// The offer the documents belong to, between an older superseded version and a newer draft.
+							const insertOffer = database.prepare(
+								"INSERT INTO software_offers(id,request_id,version,status) VALUES (?,'r1',?,?)",
+							);
+
+							insertOffer.run("o0", 1, "superseded");
+							insertOffer.run("o1", 2, sent ? "sent" : "superseded");
+							insertOffer.run("o2", 3, "draft");
 							database.exec(
 								"INSERT INTO software_offer_links VALUES ('r1',NULL); INSERT INTO software_agreement_drafts VALUES ('o1','client@example.test')",
 							);
@@ -605,13 +664,28 @@ describe("today's route and the rule, over the same rows", () => {
 									);
 							});
 
-							// Read as the store will read them for the rule.
-							const offer = await db
+							// Today's read of the request's sent offer, beside the store's plain read of its versions: the rule's
+							// choice is the row today's SQL answered.
+							const today = await db
 								.prepare(
 									"SELECT * FROM software_offers WHERE request_id=? AND status='sent'",
 								)
 								.bind("r1")
 								.first<SentOfferRow>();
+
+							// Read as the store will read them for the rule.
+							const offers = (
+								await db
+									.prepare(
+										"SELECT * FROM software_offers WHERE request_id=? ORDER BY version DESC",
+									)
+									.bind("r1")
+									.all<RequestOfferRow>()
+							).results;
+
+							const label = JSON.stringify({ sent, msa, sow, named, invoices });
+
+							expect(sentOfferOf(offers), label).toEqual(today);
 
 							const agreements = (
 								await db
@@ -633,14 +707,13 @@ describe("today's route and the rule, over the same rows", () => {
 
 							const rule = said(
 								abandonSigning.decide(request({ documents: named, at: NOW }), {
-									offer,
+									offers,
 									agreements,
 									invoices: read,
 								}),
 							);
 
 							const before = state();
-							const label = JSON.stringify({ sent, msa, sow, named, invoices });
 
 							expect(await route(named), label).toEqual(answerFor(rule));
 
@@ -667,7 +740,11 @@ describe("today's route and the rule, over the same rows", () => {
 											: null,
 									};
 								}),
-								offers: [{ status: "superseded" }],
+								offers: [
+									{ id: "o0", status: "superseded" },
+									{ id: "o1", status: "superseded" },
+									{ id: "o2", status: "draft" },
+								],
 								links: [{ revoked_at: NOW }],
 								drafts: { n: 0 },
 							});

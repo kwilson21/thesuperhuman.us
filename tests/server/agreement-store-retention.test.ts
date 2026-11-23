@@ -15,6 +15,7 @@ import {
 	readOfferReferences,
 	readOrphanReferences,
 	readProjectEvidence,
+	readRetainedAgreements,
 	readRetentionFacts,
 	readSharedReferences,
 	readUnattachedFacts,
@@ -29,6 +30,7 @@ import {
 	orphanUnreferenced,
 	pinnedByOpenOffer,
 	retentionEligible,
+	retentionRetiring,
 	type UnattachedAttachment,
 	unattachedRowKept,
 	unattachedToDelete,
@@ -65,7 +67,8 @@ import * as rows from "../golden/harness/rows";
 //
 // - each read gives the rules (src/server/rules/agreement-retention.ts) the facts on which they answer what today's SQL
 //   answered, on the scenes the corpora's headers list; today's SQL is the text the fixtures recorded, run on the same
-//   database;
+//   database. Today's eligibility query is two reads here: the scan, which reads no text column of the agreements, and
+//   the full rows of the ones the rule chose;
 // - each batch and kept statement replays a recorded case of the apply corpus: the same SQL, statement for statement,
 //   with the same binds, the same outcome, and the same refusal (a raised guard is GuardRefused, an outage
 //   AgreementStoreFailed with its cause);
@@ -617,6 +620,23 @@ describe("the retention facts", () => {
 		],
 	];
 
+	/** The two reads and the two stages of the choice, as the flow will run them; `between` runs between the reads. */
+	async function retiringOf(world: World, between?: () => void) {
+		const facts = await world.ok(readRetentionFacts());
+		const chosen = decided(retentionEligible.decide({ now }, facts));
+
+		between?.();
+
+		const rows = await world.ok(readRetainedAgreements(chosen));
+
+		return {
+			chosen,
+			retiring: decided(
+				retentionRetiring.decide({ now, chosen }, { ...facts, rows }),
+			),
+		};
+	}
+
 	it.each(scenes)(
 		"choose what today's eligibility query chose, every column of each row: %s",
 		async (name, scene) => {
@@ -624,20 +644,118 @@ describe("the retention facts", () => {
 
 			world.seed(...(Array.isArray(scene) ? scene : [scene]));
 
-			const facts = await world.ok(readRetentionFacts());
-			const chosen = decided(retentionEligible.decide({ now }, facts));
+			const { chosen, retiring } = await retiringOf(world);
+			const today = world.today(TODAY.preview, AT).map((row) => ({ ...row }));
 
+			expect(chosen, name).toEqual(today.map((row) => row.id));
 			// The rows the flow hashes into `row_hash` are today's rows, column for column, value for value.
 			expect(
-				chosen.map((row) => ({ ...row })),
+				retiring.map((row) => ({ ...row })),
 				name,
-			).toStrictEqual(
-				world.today(TODAY.preview, AT).map((row) => ({ ...row })),
-			);
+			).toStrictEqual(today);
 		},
 	);
 
-	it("read every column of software_agreements, and every row of the tables the condition looks at", async () => {
+	/** The columns of software_agreements, as the schema has them. */
+	const agreementColumns = (world: World) =>
+		world
+			.today("SELECT name FROM pragma_table_info('software_agreements')")
+			.map((column) => String(column.name));
+
+	/** What the scan reads of each agreement: the condition's columns and the text's digest (`RetentionAgreementRow`). */
+	const SCANNED = [
+		"id",
+		"kind",
+		"offer_id",
+		"msa_id",
+		"status",
+		"text_sha256",
+		"ended_at",
+		"retain_until",
+		"legal_hold",
+		"terminated_at",
+	];
+
+	it("scan no text column of the agreements: not canonical_text, values_json or attachment_manifest_json", async () => {
+		const world = retentionWorld();
+
+		world.seed(sowScene(1));
+		await world.ok(readRetentionFacts());
+
+		const [batch] = world.log;
+		const scan = batch?.kind === "d1-batch" ? batch.statements[0]?.sql : "";
+
+		// What the statement itself returns on the real schema, before any reader drops a column.
+		const [returned] = world.today(scan ?? "");
+
+		expect(Object.keys(returned ?? {})).toEqual(SCANNED);
+
+		const left = agreementColumns(world).filter(
+			(column) => !SCANNED.includes(column),
+		);
+
+		expect(left).toEqual(
+			expect.arrayContaining([
+				"canonical_text",
+				"values_json",
+				"attachment_manifest_json",
+			]),
+		);
+
+		for (const column of [...left, "*"])
+			expect(scan, column).not.toContain(column);
+	});
+
+	it("read the chosen agreements' full rows, every column, in id order, without one that is gone", async () => {
+		const world = retentionWorld();
+
+		world.seed({ software_agreements: [msaAgreement("m1")] }, sowScene(1));
+
+		const full = await world.ok(readRetainedAgreements(["m1", "gone", "a1"]));
+
+		expect(full.map((row) => row.id)).toEqual(["a1", "m1"]);
+
+		for (const row of full)
+			expect(Object.keys(row).sort()).toEqual(agreementColumns(world).sort());
+
+		expect(full).toStrictEqual(
+			world
+				.today("SELECT * FROM software_agreements ORDER BY id")
+				.map((row) => ({ ...row })),
+		);
+		expect(await world.ok(readRetainedAgreements([]))).toEqual([]);
+	});
+
+	it("between the two reads: an agreement put on hold is skipped, one whose archive another apply is closing kept as read", async () => {
+		const world = retentionWorld();
+
+		world.seed(sowScene(1), sowScene(2), sowScene(3));
+
+		const { chosen, retiring } = await retiringOf(world, () =>
+			world.sql.exec(
+				`UPDATE software_agreements SET legal_hold=1 WHERE id='a1';
+				UPDATE software_agreements SET archive_closed_at='${EARLIER}' WHERE id='a2'`,
+			),
+		);
+
+		expect(chosen).toEqual(["a1", "a2", "a3"]);
+		// a2 as read the second time, its archive_closed_at set: its `row_hash` will be of that row.
+		expect(retiring).toStrictEqual(
+			world
+				.today(
+					"SELECT * FROM software_agreements WHERE id IN ('a2','a3') ORDER BY id",
+				)
+				.map((row) => ({ ...row })),
+		);
+		expect(
+			world.found(
+				"SELECT 1 FROM software_agreements WHERE id='a2' AND archive_closed_at=?",
+				EARLIER,
+			),
+		).toBe(true);
+	});
+
+	it("read the columns the condition reads of every agreement, and every row of the tables the condition looks at", async () => {
 		const world = retentionWorld();
 
 		world.seed(
@@ -655,12 +773,8 @@ describe("the retention facts", () => {
 
 		const facts = await world.ok(readRetentionFacts());
 
-		const columns = world
-			.today("SELECT name FROM pragma_table_info('software_agreements')")
-			.map((column) => column.name);
-
 		for (const agreement of facts.agreements)
-			expect(Object.keys(agreement).sort()).toEqual([...columns].sort());
+			expect(Object.keys(agreement)).toEqual(SCANNED);
 
 		expect(facts.agreements.map((row) => row.id).sort()).toEqual(["a1", "m1"]);
 		expect(facts.artifacts).toEqual([{ agreement_id: "a1", status: "ready" }]);
@@ -794,9 +908,7 @@ describe("the references to a retiring agreement's attachments", () => {
 
 			const facts = await world.ok(readRetentionFacts());
 
-			const retiring = decided(retentionEligible.decide({ now }, facts)).map(
-				(row) => row.id,
-			);
+			const retiring = decided(retentionEligible.decide({ now }, facts));
 
 			expect(retiring.length, name).toBeGreaterThan(0);
 
@@ -1342,7 +1454,16 @@ describe("an outage", () => {
 	};
 
 	it.each([
-		["the facts read", /SELECT a\.\* FROM/, () => readRetentionFacts()],
+		[
+			"the scan",
+			/^SELECT id,kind,offer_id,msa_id,/,
+			() => readRetentionFacts(),
+		],
+		[
+			"the chosen agreements' read",
+			/WHERE id IN \(SELECT value FROM json_each/,
+			() => readRetainedAgreements(["a1"]),
+		],
 		[
 			"the shared lookup",
 			/other\.id NOT IN/,
@@ -1429,9 +1550,12 @@ describe("an outage", () => {
 });
 
 describe("the SQL against the golden corpora's hooks", () => {
-	const hookFiles = CORPORA.map(
-		(corpus) => `tests/golden/owner-agreements-retention-${corpus}.test.ts`,
-	);
+	const hookFiles = [
+		...CORPORA.map(
+			(corpus) => `tests/golden/owner-agreements-retention-${corpus}.test.ts`,
+		),
+		"tests/golden/areas/agreement-admin.ts",
+	];
 
 	/** A regular expression literal's text (`/source/flags`) as a RegExp. */
 	const regExpOf = (literal: string) => {
@@ -1467,6 +1591,12 @@ describe("the SQL against the golden corpora's hooks", () => {
 	 */
 	const DIFFERENCES = [
 		{
+			call: "readRetentionFacts",
+			hook: String.raw`/SELECT a\.\* FROM software_agreements a/`,
+			reason:
+				'today\'s eligibility query read `SELECT a.*`; the scan reads only the columns the condition reads, so the pattern of the preview case "the eligibility query fails" and the apply case "the fresh scan during apply fails" (nth: 2) changes in PR 4 to `REPOINTED`\'s, which the scan\'s first statement (the same SELECT on software_agreements) meets',
+		},
+		{
 			call: "readOrphanReferences",
 			hook: String.raw`/SELECT 1 WHERE\s+EXISTS/`,
 			reason:
@@ -1485,6 +1615,12 @@ describe("the SQL against the golden corpora's hooks", () => {
 				"the call still counts as one match, but its statement is now the offers read; the one case with this hook fires on its first match, the open-offer lookup",
 		},
 	] as const;
+
+	/** The pattern PR 4 re-points the eligibility hooks to: the scan's statement, and nothing else either corpus runs. */
+	const REPOINTED = /^SELECT id,kind,offer_id,msa_id,/;
+
+	/** Reads that replace none of today's: each must meet no hook. */
+	const NEW_READS = new Set(["readRetainedAgreements"]);
 
 	it("every hook literal is a pattern of the two corpora", () => {
 		expect(hooks.length).toBeGreaterThan(10);
@@ -1541,6 +1677,7 @@ describe("the SQL against the golden corpora's hooks", () => {
 		};
 
 		await run("readRetentionFacts", readRetentionFacts());
+		await run("readRetainedAgreements", readRetainedAgreements(["a1"]));
 		await run("readSharedReferences", readSharedReferences(["a1"], lost));
 		await run("readOfferReferences", readOfferReferences(lost));
 		await run("readProjectEvidence", readProjectEvidence("o1"));
@@ -1581,6 +1718,7 @@ describe("the SQL against the golden corpora's hooks", () => {
 
 		expect(calls.map((call) => call.name)).toEqual([
 			"readRetentionFacts",
+			"readRetainedAgreements",
 			"readSharedReferences",
 			"readOfferReferences",
 			"readProjectEvidence",
@@ -1597,6 +1735,21 @@ describe("the SQL against the golden corpora's hooks", () => {
 
 		for (const call of calls) {
 			const today = replaces.get(call.name);
+
+			if (NEW_READS.has(call.name)) {
+				// A new read: the same operation and table as the query it completes, and no hook meets it.
+				for (const sql of call.sqls) {
+					expect(statementOf(sql), call.name).toEqual(
+						statementOf(TODAY.preview),
+					);
+					expect(
+						hooks.filter(({ pattern }) => pattern.test(sql)),
+						call.name,
+					).toEqual([]);
+				}
+
+				continue;
+			}
 
 			if (today === undefined) {
 				// Kept: today's text, and today's statements in today's order.
@@ -1626,5 +1779,22 @@ describe("the SQL against the golden corpora's hooks", () => {
 		expect(differences.sort(byName)).toEqual(
 			DIFFERENCES.map(({ call, hook }) => ({ call, hook })).sort(byName),
 		);
+
+		// The eligibility hooks' new pattern meets the scan's first statement, which reads as today's query did (a SELECT
+		// on software_agreements), and no other statement the store runs or either corpus recorded.
+		const scan = calls.find((call) => call.name === "readRetentionFacts");
+
+		expect(statementOf(scan?.sqls[0] ?? ""), "the scan").toEqual(
+			statementOf(TODAY.preview),
+		);
+		expect(
+			calls.flatMap((call) => call.sqls.filter((sql) => REPOINTED.test(sql))),
+		).toEqual([scan?.sqls[0]]);
+		expect(
+			[
+				...recordedSingles,
+				...[...recordedBatches].flatMap((batch): string[] => JSON.parse(batch)),
+			].filter((sql) => REPOINTED.test(sql)),
+		).toEqual([]);
 	});
 });

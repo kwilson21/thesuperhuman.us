@@ -13,6 +13,7 @@ import {
 	type AgreementScan,
 	type AttachmentEntry,
 	accessCleanup,
+	type ChosenAgreementRow,
 	agreementPrefix,
 	eligibleForRetention,
 	listedObject,
@@ -36,6 +37,7 @@ import {
 	type RetentionManifest,
 	retentionEligible,
 	retentionManifest,
+	retentionRetiring,
 	type StoredAccessLink,
 	type StoredAccessSession,
 	type StoredAttachment,
@@ -204,10 +206,18 @@ async function guardsHold(
 	}
 }
 
-// The rows as the store will read them for the rules.
+// The rows as the store will read them for the rules: the scan, which reads the columns the `eligible` condition reads of
+// every agreement, and the full rows of the agreements the rule chose (src/server/agreement-store.ts, `readRetentionFacts`
+// and `readRetainedAgreements`, whose texts these are).
+
+const SCAN =
+	"SELECT id,kind,offer_id,msa_id,status,text_sha256,ended_at,retain_until,legal_hold,terminated_at FROM software_agreements";
+
+const CHOSEN =
+	"SELECT * FROM software_agreements WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id";
 
 const readFacts = (): RetentionFacts => ({
-	agreements: rows("SELECT * FROM software_agreements"),
+	agreements: rows(SCAN),
 	artifacts: rows(
 		"SELECT agreement_id,status FROM software_agreement_artifacts",
 	),
@@ -223,6 +233,27 @@ const readFacts = (): RetentionFacts => ({
 	offers: rows("SELECT id,status,reused_msa_id FROM software_offers"),
 	signatures: rows("SELECT agreement_id FROM software_agreement_signatures"),
 });
+
+/** The chosen agreements' full rows. */
+const readChosen = (ids: readonly string[]): ChosenAgreementRow[] =>
+	rows(CHOSEN, JSON.stringify(ids));
+
+/** The two stages of the choice, as the flow will run them: the scan's ids, then the full rows still eligible. */
+function retiringRows(facts: RetentionFacts, between?: () => void) {
+	const chosen = decide(retentionEligible.decide({ now: NOW }, facts));
+
+	between?.();
+
+	return {
+		chosen,
+		rows: decide(
+			retentionRetiring.decide(
+				{ now: NOW, chosen },
+				{ ...facts, rows: readChosen(chosen) },
+			),
+		),
+	};
+}
 
 const readReferences = (): References => ({
 	agreements: rows(
@@ -397,11 +428,12 @@ async function holdEverything(world: Seed) {
 	const facts = readFacts();
 	const references = readReferences();
 	const attachments = readAttachments();
-	const chosen = decide(retentionEligible.decide({ now: NOW }, facts));
+	const { chosen, rows: retiringFull } = retiringRows(facts);
 	const preview = rows<{ id: string }>(PREVIEW, NOW_ISO);
 
-	expect(chosen.map((row) => row.id)).toEqual(preview.map((row) => row.id));
-	expect(chosen).toEqual(preview);
+	// The scan chooses today's ids, and the full rows the second stage keeps are today's rows, every column.
+	expect(chosen).toEqual(preview.map((row) => row.id));
+	expect(retiringFull).toEqual(preview);
 
 	const eligible = rows<{ id: string }>(
 		`SELECT a.id FROM software_agreements a WHERE ${ELIGIBLE} ORDER BY a.id`,
@@ -477,7 +509,7 @@ async function holdEverything(world: Seed) {
 	}
 
 	// The preview's lookups for a retiring agreement's attachments, and A25 for each object.
-	const retiring = chosen.map((row) => row.id);
+	const retiring = chosen;
 
 	for (const name of [...KEYS, "agreements/a1/signed.pdf"]) {
 		const shared = namedByAgreement(name, references, (id) =>
@@ -577,7 +609,7 @@ async function holdEverything(world: Seed) {
 		);
 	}
 
-	return chosen.map((row) => row.id);
+	return chosen;
 }
 
 describe("the eligibility query and A25, on the golden corpora's shapes", () => {
@@ -1128,12 +1160,16 @@ async function markerOf(object: R2ObjectBody | null): Promise<MarkerRead> {
 /** The items of a stored attachment manifest, parsed as today's preview parses them. */
 const attachmentsOf = (text: string): AttachmentEntry[] => JSON.parse(text);
 
-/** The preview, as the flow will run it: today's reads and bucket calls in today's order, each decision a rule's. */
+/**
+ * The preview, as the flow will run it: today's reads and bucket calls in today's order, each decision a rule's. `between`
+ * runs between the scan and the read of the chosen agreements' full rows.
+ */
 async function previewByRules(
 	bucket: R2Bucket,
 	scan?: { readonly cursor: string | null },
+	between?: () => void,
 ) {
-	const chosen = decide(retentionEligible.decide({ now: NOW }, readFacts()));
+	const { rows: chosen } = retiringRows(readFacts(), between);
 
 	const retiring = chosen.map((row) => ({
 		id: row.id,
@@ -1492,6 +1528,92 @@ describe("today's preview and the rules", () => {
 			await samePreview(world, { cursor: null });
 			await samePreview(world, { cursor: key("a") });
 		});
+
+	it("a race between the scan and the full read: a gone or no longer eligible agreement is skipped, a changed eligible one kept as read", async () => {
+		const world: World = {
+			seed: merge(
+				sow(),
+				...["a2", "a3", "a4"].map((id) => ({
+					software_offers: [offerRow(`o-${id}`)],
+					software_agreements: [agreementRow(id)],
+				})),
+			),
+			objects: Object.assign({}, ...["a1", "a2", "a3", "a4"].map(objectsOf)),
+		};
+
+		store(world.seed);
+
+		const converted = bucketOf(world.objects);
+
+		// A concurrent apply retired a1 and is closing a3's archive; the owner put a2 on hold.
+		const race = () =>
+			database.exec(
+				`DELETE FROM software_agreements WHERE id='a1';
+				UPDATE software_agreements SET legal_hold=1 WHERE id='a2';
+				UPDATE software_agreements SET archive_closed_at='${EARLIER}' WHERE id='a3'`,
+			);
+
+		const manifest: RetentionManifest = JSON.parse(
+			await answerOf(previewByRules(converted.binding, undefined, race)),
+		);
+
+		const [a3] = rows<ChosenAgreementRow>(CHOSEN, JSON.stringify(["a3"]));
+
+		expect(manifest.agreements.map((entry) => entry.id)).toEqual(["a3", "a4"]);
+		expect(manifest.agreements[0]?.row_hash).toBe(
+			await hashOfferToken(canonicalJson(a3 ?? null)),
+		);
+
+		// Today's single query, run after the same change, answers the same manifest: nothing past the first 20 was due.
+		const old = bucketOf(world.objects);
+
+		expect(
+			JSON.stringify(
+				await previewAgreementRetention(db, old.binding, BINDING, NOW),
+			),
+		).toBe(JSON.stringify(manifest));
+		expect(converted.calls).toEqual(old.calls);
+	});
+
+	it("a race that makes one of the first 20 ineligible: the manifest is not refilled from past the first 20", async () => {
+		const ids = Array.from(
+			{ length: 21 },
+			(_, index) => `a${String(index).padStart(3, "0")}`,
+		);
+
+		store(
+			merge(
+				...ids.map((id) => ({
+					software_offers: [offerRow(`o-${id}`)],
+					software_agreements: [agreementRow(id)],
+				})),
+			),
+		);
+
+		const manifest: RetentionManifest = JSON.parse(
+			await answerOf(
+				previewByRules(bucketOf({}).binding, undefined, () =>
+					database.exec(
+						"UPDATE software_agreements SET legal_hold=1 WHERE id='a000'",
+					),
+				),
+			),
+		);
+
+		expect(manifest.agreements.map((entry) => entry.id)).toEqual(
+			ids.slice(1, 20),
+		);
+
+		// Today's query, after the change, takes the 21st; the next preview here does too.
+		const afterwards = rows<{ id: string }>(PREVIEW, NOW_ISO).map(
+			(row) => row.id,
+		);
+
+		expect(afterwards).toEqual(ids.slice(1));
+		expect(retiringRows(readFacts()).rows.map((row) => row.id)).toEqual(
+			ids.slice(1),
+		);
+	});
 
 	it("an object the listing named that is gone when read: the same refusal, after the same calls", async () => {
 		expect(
