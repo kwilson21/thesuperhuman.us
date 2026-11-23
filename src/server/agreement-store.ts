@@ -14,6 +14,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { currentSigningNotification } from "../lib/agreement-artifacts";
 import { agreementEvent } from "../lib/agreement-events";
 import type { AgreementTemplate } from "../lib/agreement-templates";
 import { softwareGuard } from "../lib/software-guard";
@@ -36,8 +37,15 @@ import {
 	agreementMessage,
 	MESSAGE_MOVES,
 	MESSAGE_STATUSES,
+	type MessageEvent,
 } from "./machines/agreement-message";
-import { next } from "./machines/next";
+import {
+	agreementPacket,
+	PACKET_MOVES,
+	PACKET_STATUSES,
+	type PacketEvent,
+} from "./machines/agreement-packet";
+import { type MachineContext, next } from "./machines/next";
 import { OFFER_MOVES, OFFER_STATUSES } from "./machines/offer-version";
 import type { AbandonWrite, OfferInvoiceRow } from "./rules/agreement-abandon";
 import type {
@@ -56,6 +64,23 @@ import type {
 	StudioProject,
 } from "./rules/agreement-download";
 import type { StoredSignature } from "./rules/agreement-link";
+import type {
+	CopyClaimFacts,
+	CopySignatureFacts,
+	MessageAgreement,
+	MessageClaim,
+	MessageReset,
+	MessageSettled,
+	NoticeAgreementRow as NoticeAgreementFacts,
+	NoticeClaimFacts,
+	StoredCopy,
+	StoredNotice,
+} from "./rules/agreement-messages";
+import type {
+	PacketClaim,
+	PacketRecovery,
+	StoredPacket,
+} from "./rules/agreement-packet";
 import type {
 	CopyRecordWrite,
 	EndWrite,
@@ -2064,3 +2089,574 @@ export const recordCopyBatch = (write: CopyRecordWrite, eventId: string) =>
 		],
 		recordRefused,
 	);
+
+// ---- the signed copy and the emails ----
+//
+// The packet (an executed agreement's signed PDF, its certificate and manifest) and the two kinds of email: a copy of the
+// signed agreement to each party, and the two signing notices (docs/plans/2026-11-signing-conversion.md, section 4, "The
+// packet" and "The emails"; the rules in src/server/rules/agreement-packet.ts and agreement-messages.ts). Each function
+// runs one of today's statements with today's SQL text (src/lib/agreement-artifacts.ts, and the retry-copy action of
+// src/pages/api/owner/requests/[id]/agreement.ts), the golden hooks matching it unchanged; the status lists the guards
+// compare and the statuses the moves write are built from the machines (`PACKET_MOVES`, `MESSAGE_MOVES`), which give
+// that same text. The others are the reads the claims' rules decide on, which today's code never made: the packet row
+// with its agreement's closed archive, a copy or a notice with its agreement's status, archive and project, and the
+// owner's retry's copies and notices. They match no golden hook pattern (tests/server/agreement-store-packet.test.ts
+// holds them to that). No statement reads the clock or draws an id: each time, attempt and event id is an input, which
+// the flow draws where today's code draws it. No guard raises and no trigger fires on the tables these statements write,
+// so a rejection of any of them, a batch included, is an `AgreementStoreFailed` with its cause.
+
+/** The status a packet's move writes, as the machine answers it from the first status the move is allowed from. */
+function packetMoveTo(event: PacketEvent, context?: MachineContext) {
+	const [from] = PACKET_MOVES[event];
+
+	const to =
+		from === undefined ? null : next(agreementPacket, from, event, context);
+
+	if (to === null) throw new Error(`The packet machine has no ${event} move.`);
+
+	return statusLiteral(to, PACKET_STATUSES);
+}
+
+/** The status a copy's or a notice's move writes, as the machine answers it from the first status the move is allowed from. */
+function messageMoveTo(event: MessageEvent) {
+	const [from] = MESSAGE_MOVES[event];
+	const to = from === undefined ? null : next(agreementMessage, from, event);
+
+	if (to === null) throw new Error(`The message machine has no ${event} move.`);
+
+	return statusLiteral(to, MESSAGE_STATUSES);
+}
+
+/** The packet statements of `prepareAgreementArtifact` and `recoverAgreementRendering` (artifacts.ts:165-344, 457-463). */
+export const PACKET_SQL = {
+	/** A15: claimed only from pending or failed, while the agreement's archive is open. */
+	claim: `UPDATE software_agreement_artifacts SET status=${packetMoveTo("CLAIM")},attempt_id=?,attempted_at=?,error_code=NULL WHERE agreement_id=? AND ${statusIs(PACKET_MOVES.CLAIM, PACKET_STATUSES)} AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_artifacts.agreement_id AND a.archive_closed_at IS NULL) RETURNING agreement_id`,
+	/** The MSA a countersigned or retried agreement names, whose packet is prepared first (agreement.ts:129-132, 317-322). */
+	msaId: "SELECT msa_id FROM software_agreements WHERE id=?",
+	/** The packet's documents: the agreement, then the MSA it names, each only while executed. */
+	document:
+		"SELECT * FROM software_agreements WHERE id=? AND status='executed'",
+	/** An older document's template's source revision, when its stored values lack one. */
+	sourceRevision:
+		"SELECT source_revision FROM software_agreement_templates WHERE id=?",
+	/** An older document's template's label, when its stored values lack one. */
+	label:
+		"SELECT version_label,published_at FROM software_agreement_templates WHERE id=?",
+	signatures:
+		"SELECT party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent FROM software_agreement_signatures WHERE agreement_id=? ORDER BY party",
+	/** A16: ready only by the attempt that claimed it, while rendering. */
+	ready: `UPDATE software_agreement_artifacts SET status=${packetMoveTo("READY")},pdf_key=?,pdf_sha256=?,certificate_key=?,certificate_sha256=?,manifest_json=?,bytes=?,renderer_version='website-pdf-v2',ready_at=? WHERE agreement_id=? AND attempt_id=? AND ${statusIs(PACKET_MOVES.READY, PACKET_STATUSES)}`,
+	readyEvent: `INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at) SELECT ?,?,'artifact-ready','system',? WHERE EXISTS(SELECT 1 FROM software_agreement_artifacts WHERE agreement_id=? AND attempt_id=? AND status=${packetMoveTo("READY")})`,
+	/** A16: failed, with the step reached, only by the attempt that claimed it, while rendering. */
+	failed: `UPDATE software_agreement_artifacts SET status=${packetMoveTo("FAIL")},error_code=? WHERE agreement_id=? AND attempt_id=? AND ${statusIs(PACKET_MOVES.FAIL, PACKET_STATUSES)}`,
+	/** A17: the attempt the owner saw, rendering since the cutoff or before; `error_code` is `PacketRecovery`'s. */
+	recover: `UPDATE software_agreement_artifacts SET status=${packetMoveTo("RECOVER", { recoverable: true })},error_code='render' WHERE agreement_id=? AND ${statusIs(PACKET_MOVES.RECOVER, PACKET_STATUSES)} AND attempt_id=? AND attempted_at<=? RETURNING agreement_id`,
+	/** New: the packet row and its agreement's closed archive, which `packetClaimable` and `packetRecoverable` decide on. */
+	claimFacts:
+		"SELECT p.status,p.attempt_id,p.attempted_at,a.archive_closed_at FROM software_agreements a JOIN software_agreement_artifacts p ON p.agreement_id=a.id WHERE a.id=?",
+} as const;
+
+/** The copy, notice and reset statements of `deliverAgreementCopies`, `deliverAgreementNotifications` and retry-copy. */
+export const MESSAGE_SQL = {
+	/** The ready packet a copy attaches (artifacts.ts:360-365). */
+	copyArtifact:
+		"SELECT * FROM software_agreement_artifacts WHERE agreement_id=? AND status='ready'",
+	/** The party's receipt id: its signature, read before each copy (382-387). */
+	receiptId:
+		"SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=? AND party=?",
+	/** A18: claimed only while pending, its agreement executed and its archive open (394-399). */
+	claimCopy: `UPDATE software_agreement_deliveries SET status=${messageMoveTo("CLAIM")},attempt_id=?,attempted_at=? WHERE agreement_id=? AND recipient_role=? AND ${statusIs(MESSAGE_MOVES.CLAIM, MESSAGE_STATUSES)} AND EXISTS(SELECT 1 FROM software_agreements a WHERE a.id=software_agreement_deliveries.agreement_id AND a.archive_closed_at IS NULL AND a.status='executed') RETURNING email`,
+	/** A18: the outcome only by the attempt that claimed it, while sending (418-445). */
+	copyOutcome: (move: "SEND" | "FAIL") =>
+		`UPDATE software_agreement_deliveries SET status=?,sent_at=? WHERE agreement_id=? AND recipient_role=? AND attempt_id=? AND ${statusIs(MESSAGE_MOVES[move], MESSAGE_STATUSES)}`,
+	copyEvent:
+		"INSERT INTO software_agreement_events(id,agreement_id,action,actor,occurred_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role=? AND attempt_id=? AND status=?)",
+	/** The agreement's request and the client's receipt id, which both notices print (473-477). */
+	noticeAgreement:
+		"SELECT request_id,(SELECT receipt_id FROM software_agreement_signatures WHERE agreement_id=software_agreements.id AND party='client') AS receipt_id FROM software_agreements WHERE id=?",
+	/** A19: claimed only while pending and current (485-489). */
+	claimNotice: `UPDATE software_agreement_notifications SET status=${messageMoveTo("CLAIM")},attempt_id=?,attempted_at=? WHERE agreement_id=? AND kind=? AND ${statusIs(MESSAGE_MOVES.CLAIM, MESSAGE_STATUSES)} AND ${currentSigningNotification} RETURNING email`,
+	/** A19: the outcome only by the attempt that claimed it, while sending (510-521). */
+	noticeOutcome: (move: "SEND" | "FAIL") =>
+		`UPDATE software_agreement_notifications SET status=?,sent_at=? WHERE agreement_id=? AND kind=? AND attempt_id=? AND ${statusIs(MESSAGE_MOVES[move], MESSAGE_STATUSES)}`,
+	/** A20: from failed, or from sending once the owner confirmed and the attempt is past the cutoff (agreement.ts:263-286). */
+	resetCopies: `UPDATE software_agreement_deliveries SET status=${messageMoveTo("RESET")} WHERE agreement_id=? AND (${statusIs(MESSAGE_MOVES.RESET, MESSAGE_STATUSES)} OR (${statusIs(MESSAGE_MOVES.RESET_RETRYABLE, MESSAGE_STATUSES)} AND ?=1 AND attempted_at<=?))`,
+	resetNotices: `UPDATE software_agreement_notifications SET status=${messageMoveTo("RESET")} WHERE agreement_id=? AND ${currentSigningNotification} AND (${statusIs(MESSAGE_MOVES.RESET, MESSAGE_STATUSES)} OR (${statusIs(MESSAGE_MOVES.RESET_RETRYABLE, MESSAGE_STATUSES)} AND ?=1 AND attempted_at<=?))`,
+	/** New: one party's copy, which `copyClaimable` decides on. */
+	copy: "SELECT recipient_role,status,attempted_at FROM software_agreement_deliveries WHERE agreement_id=? AND recipient_role=?",
+	/** New: one notice, which `noticeClaimable` decides on. */
+	notice:
+		"SELECT kind,status,attempted_at FROM software_agreement_notifications WHERE agreement_id=? AND kind=?",
+	/** New: the agreement a copy or a notice is about, with its request's project. */
+	messageAgreement:
+		"SELECT a.status,a.archive_closed_at,p.request_id AS project_request_id FROM software_agreements a LEFT JOIN software_projects p ON p.request_id=a.request_id WHERE a.id=?",
+	/** New: every copy of the agreement, which `messagesToReset` decides on. */
+	copies:
+		"SELECT recipient_role,status,attempted_at FROM software_agreement_deliveries WHERE agreement_id=? ORDER BY recipient_role",
+	/** New: every notice of the agreement, in the order today's delivery takes them. */
+	notices:
+		"SELECT kind,status,attempted_at FROM software_agreement_notifications WHERE agreement_id=? ORDER BY kind DESC",
+} as const;
+
+const PacketClaimRow = Schema.Struct({
+	status: Schema.Literals(PACKET_STATUSES),
+	attempt_id: maybeText,
+	attempted_at: maybeText,
+	archive_closed_at: maybeText,
+});
+
+/** A software_agreements row as `SELECT *` reads it: every column, as the certificate and the renderer read it today. */
+const PacketDocumentRow = Schema.Struct({
+	id: text,
+	kind: Schema.Literals(["msa", "sow"]),
+	offer_id: maybeText,
+	request_id: text,
+	client_id: text,
+	template_id: text,
+	msa_id: maybeText,
+	sow_number: maybeText,
+	status: Schema.Literals(AGREEMENT_STATUSES),
+	canonical_text: text,
+	text_sha256: text,
+	render_version: Schema.Number,
+	values_json: text,
+	attachment_manifest_json: text,
+	created_at: text,
+	client_signed_at: maybeText,
+	executed_at: maybeText,
+	effective_on: text,
+	ended_at: maybeText,
+	retain_until: maybeText,
+	legal_hold: Schema.Number,
+	terminated_at: maybeText,
+	abandoned_at: maybeText,
+	abandoned_reason: maybeText,
+	review_session_hash: text,
+	archive_closed_at: maybeText,
+});
+
+/** One document of a packet, every column of its row. */
+export type PacketDocument = typeof PacketDocumentRow.Type;
+
+/** A signature as the certificate records it, in the column order of today's read. */
+const PacketSignatureRow = Schema.Struct({
+	party: text,
+	typed_name: text,
+	title: text,
+	consent_text: text,
+	consent_version: text,
+	consent_at: text,
+	signed_at: text,
+	document_sha256: text,
+	owner_subject: maybeText,
+	verified_email: text,
+	verified_at: text,
+	verification_method: text,
+	intent_text: text,
+	document_list_json: text,
+	receipt_id: text,
+	ip_address: text,
+	user_agent: text,
+});
+
+export type PacketSignature = typeof PacketSignatureRow.Type;
+
+const SourceRevisionRow = Schema.Struct({ source_revision: maybeText });
+
+const TemplateLabelRow = Schema.Struct({
+	version_label: maybeText,
+	published_at: text,
+});
+
+const ReceiptIdRow = Schema.Struct({ receipt_id: text });
+
+const ClaimedEmailRow = Schema.Struct({ email: text });
+
+const NoticeAgreementRow = Schema.Struct({
+	request_id: text,
+	receipt_id: maybeText,
+});
+
+const DeliveryRow = Schema.Struct({
+	recipient_role: text,
+	status: Schema.Literals(MESSAGE_STATUSES),
+	attempted_at: maybeText,
+});
+
+const NotificationRow = Schema.Struct({
+	kind: text,
+	status: Schema.Literals(MESSAGE_STATUSES),
+	attempted_at: maybeText,
+});
+
+const MessageAgreementRow = Schema.Struct({
+	status: text,
+	archive_closed_at: maybeText,
+	project_request_id: maybeText,
+});
+
+/** Plain read (new): the packet row with its agreement's closed archive, or null when the agreement has no packet row. */
+export const readPacketClaim = (id: string) =>
+	readAll(PacketClaimRow, (db) =>
+		db.prepare(PACKET_SQL.claimFacts).bind(id),
+	).pipe(Effect.map((rows): StoredPacket | null => rows[0] ?? null));
+
+const MsaIdRow = Schema.Struct({ msa_id: maybeText });
+
+/** Plain read: the MSA the agreement names, or null when it names none or there is no agreement. */
+export const readPacketMsaId = (id: string) =>
+	readAll(MsaIdRow, (db) => db.prepare(PACKET_SQL.msaId).bind(id)).pipe(
+		Effect.map((rows) => rows[0]?.msa_id ?? null),
+	);
+
+/**
+ * Compare-and-set (A15): the packet rendering under the claim's attempt from its time, with no error, only from pending
+ * or failed while the archive is open. Answers whether it was claimed; an unclaimed packet is left as it was.
+ */
+export const claimPacket = (id: string, claim: PacketClaim) =>
+	asked((db) =>
+		db
+			.prepare(PACKET_SQL.claim)
+			.bind(claim.attempt_id, claim.attempted_at, id)
+			.all(),
+	).pipe(Effect.map((answer) => answer.results.length > 0));
+
+const readPacketDocument = (id: string) =>
+	readAll(PacketDocumentRow, (db) =>
+		db.prepare(PACKET_SQL.document).bind(id),
+	).pipe(Effect.map((rows): PacketDocument | null => rows[0] ?? null));
+
+/** The packet's documents, the MSA first; or the failure today's preparation logs, with its message, when one is missing. */
+export type PacketDocuments =
+	| { readonly documents: readonly PacketDocument[] }
+	| { readonly missing: "Not executed." | "Missing MSA." };
+
+/**
+ * Plain reads, in today's order: the executed agreement, then, when it names one, its executed MSA. Nothing more is read
+ * once one is missing.
+ */
+export const readPacketDocuments = (
+	id: string,
+): Effect.Effect<PacketDocuments, AgreementStoreFailed, MusicDb> =>
+	Effect.gen(function* () {
+		const agreement = yield* readPacketDocument(id);
+
+		if (agreement === null) return { missing: "Not executed." };
+
+		if (!agreement.msa_id) return { documents: [agreement] };
+
+		const msa = yield* readPacketDocument(agreement.msa_id);
+
+		return msa === null
+			? { missing: "Missing MSA." }
+			: { documents: [msa, agreement] };
+	});
+
+/**
+ * The certificate reads, which today's code makes inside the certificates' `Promise.all` (artifacts.ts:192-226): the
+ * packet flow makes them through the store for each document of the packet, in the documents' order (its template's
+ * source revision, its template's label, its signatures), and `AgreementPacket` builds the certificates from them,
+ * using a template's revision or label only where the document's stored values lack one, as today.
+ */
+
+/** Plain read: a document's signatures, by party, every column the certificate records. */
+export const readDocumentSignatures = (agreementId: string) =>
+	readAll(PacketSignatureRow, (db) =>
+		db.prepare(PACKET_SQL.signatures).bind(agreementId),
+	);
+
+/** Plain read: a template's source revision (a document whose stored values lack one prints it); null without a template. */
+export const readTemplateSourceRevision = (templateId: string) =>
+	readAll(SourceRevisionRow, (db) =>
+		db.prepare(PACKET_SQL.sourceRevision).bind(templateId),
+	).pipe(Effect.map((rows) => rows[0] ?? null));
+
+/** Plain read: a template's label and publication time (a document whose stored values lack a label prints it), or null. */
+export const readTemplateLabel = (templateId: string) =>
+	readAll(TemplateLabelRow, (db) =>
+		db.prepare(PACKET_SQL.label).bind(templateId),
+	).pipe(Effect.map((rows) => rows[0] ?? null));
+
+/** What a packet's ready write stores, its attempt, the time it reads for `ready_at` and its event's id and time. */
+export type PacketReady = {
+	readonly attempt: string;
+	readonly pdfKey: string;
+	readonly pdfSha256: string;
+	readonly certificateKey: string;
+	readonly certificateSha256: string;
+	readonly manifest: string;
+	readonly bytes: number;
+	readonly readyAt: string;
+	readonly eventId: string;
+	readonly eventAt: string;
+};
+
+/**
+ * Compare-and-set (A16), one batch in today's order: the packet ready, then its `artifact-ready` event, each only for the
+ * attempt that claimed it while rendering; a packet another attempt holds, or the owner recovered, is left as it is and
+ * gets no event.
+ */
+export const markPacketReady = (id: string, ready: PacketReady) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(PACKET_SQL.ready)
+				.bind(
+					ready.pdfKey,
+					ready.pdfSha256,
+					ready.certificateKey,
+					ready.certificateSha256,
+					ready.manifest,
+					ready.bytes,
+					ready.readyAt,
+					id,
+					ready.attempt,
+				),
+			db
+				.prepare(PACKET_SQL.readyEvent)
+				.bind(ready.eventId, id, ready.eventAt, id, ready.attempt),
+		]),
+	).pipe(Effect.asVoid);
+
+/** The step a failed attempt reached, as `software_agreement_artifacts.error_code` holds it. */
+export type PacketFailedAt = "render" | "storage" | "readback";
+
+/** Compare-and-set (A16): the packet failed at the step reached, only by the attempt that claimed it while rendering. */
+export const markPacketFailed = (
+	id: string,
+	attempt: string,
+	reached: PacketFailedAt,
+) =>
+	asked((db) =>
+		db.prepare(PACKET_SQL.failed).bind(reached, id, attempt).run(),
+	).pipe(Effect.asVoid);
+
+/**
+ * Compare-and-set (A17): the owner's recovery of the attempt they saw, failed at render, only while it is rendering since
+ * the cutoff or before. Answers whether it was recovered.
+ */
+export const recoverPacket = (id: string, recovery: PacketRecovery) =>
+	asked((db) =>
+		db
+			.prepare(PACKET_SQL.recover)
+			.bind(id, recovery.attempt_id, recovery.staleBefore)
+			.all(),
+	).pipe(Effect.map((answer) => answer.results.length > 0));
+
+/** Plain read: the agreement's ready packet, which its copies attach, or null when it has none ready. */
+export const readCopyArtifact = (id: string) =>
+	readAll(CopyRow, (db) => db.prepare(MESSAGE_SQL.copyArtifact).bind(id)).pipe(
+		Effect.map((rows): StoredSignedCopy | null => rows[0] ?? null),
+	);
+
+/** Plain read: the party's signature of the agreement (its receipt id), or null when the party has not signed. */
+export const readReceiptId = (id: string, role: string) =>
+	readAll(ReceiptIdRow, (db) =>
+		db.prepare(MESSAGE_SQL.receiptId).bind(id, role),
+	).pipe(
+		Effect.map((rows): CopySignatureFacts["signature"] => rows[0] ?? null),
+	);
+
+/** Plain reads (new), in one batch: the party's copy and the agreement, which `copyClaimable` decides on with the signature. */
+export const readCopyClaim = (id: string, role: string) =>
+	asked((db) =>
+		db.batch([
+			db.prepare(MESSAGE_SQL.copy).bind(id, role),
+			db.prepare(MESSAGE_SQL.messageAgreement).bind(id),
+		]),
+	).pipe(
+		Effect.flatMap(([copy, agreement]) =>
+			Effect.all({
+				copy: rowsOf(DeliveryRow, copy?.results ?? []),
+				agreement: rowsOf(MessageAgreementRow, agreement?.results ?? []),
+			}),
+		),
+		Effect.map(
+			({ copy, agreement }): Omit<CopyClaimFacts, "signature"> => ({
+				copy: (copy[0] ?? null) satisfies StoredCopy | null,
+				agreement: (agreement[0] ?? null) satisfies MessageAgreement | null,
+			}),
+		),
+	);
+
+/** The address a claimed copy or notice goes to, or null when nothing was claimed. */
+const claimedEmail = (statement: (db: D1Database) => D1PreparedStatement) =>
+	readAll(ClaimedEmailRow, statement).pipe(
+		Effect.map((rows) => rows[0]?.email ?? null),
+	);
+
+/**
+ * Compare-and-set (A18): the party's copy sending under the claim's attempt, only while pending, its agreement executed
+ * and its archive open. Answers the address it goes to, or null when it was not claimed.
+ */
+export const claimCopy = (id: string, role: string, claim: MessageClaim) =>
+	claimedEmail((db) =>
+		db
+			.prepare(MESSAGE_SQL.claimCopy)
+			.bind(claim.attempt_id, claim.attempted_at, id, role),
+	);
+
+/** A settled send of one copy: the attempt that claimed it, what the rule wrote, and the event's id and time. */
+export type CopyOutcome = {
+	readonly attempt: string;
+	readonly settled: MessageSettled;
+	readonly eventId: string;
+	/** Read from the clock after `settled.sent_at`, as today's event reads its own time. */
+	readonly occurredAt: string;
+};
+
+/**
+ * Compare-and-set (A18), one batch in today's order: the copy sent or failed, only by its attempt while sending, then
+ * its event, only when that write took. The party is the event's actor.
+ */
+export const recordCopyOutcome = (
+	id: string,
+	role: string,
+	outcome: CopyOutcome,
+) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(
+					MESSAGE_SQL.copyOutcome(
+						outcome.settled.status === "sent" ? "SEND" : "FAIL",
+					),
+				)
+				.bind(
+					outcome.settled.status,
+					outcome.settled.sent_at,
+					id,
+					role,
+					outcome.attempt,
+				),
+			db
+				.prepare(MESSAGE_SQL.copyEvent)
+				.bind(
+					outcome.eventId,
+					id,
+					outcome.settled.action,
+					role,
+					outcome.occurredAt,
+					id,
+					role,
+					outcome.attempt,
+					outcome.settled.status,
+				),
+		]),
+	).pipe(Effect.asVoid);
+
+/** The agreement both notices print: its request, and the client's receipt id (null when the client has not signed). */
+export type NoticeAgreement = typeof NoticeAgreementRow.Type;
+
+/** Plain read: the agreement's request and its client's receipt id, or null when there is no agreement. */
+export const readNoticeAgreement = (id: string) =>
+	readAll(NoticeAgreementRow, (db) =>
+		db.prepare(MESSAGE_SQL.noticeAgreement).bind(id),
+	).pipe(
+		Effect.map(
+			(rows): NoticeAgreement | null =>
+				(rows[0] ?? null) satisfies NoticeAgreementFacts | null,
+		),
+	);
+
+/** Plain reads (new), in one batch: the notice and its agreement, which `noticeClaimable` decides on. */
+export const readNoticeClaim = (id: string, kind: string) =>
+	asked((db) =>
+		db.batch([
+			db.prepare(MESSAGE_SQL.notice).bind(id, kind),
+			db.prepare(MESSAGE_SQL.messageAgreement).bind(id),
+		]),
+	).pipe(
+		Effect.flatMap(([notice, agreement]) =>
+			Effect.all({
+				notice: rowsOf(NotificationRow, notice?.results ?? []),
+				agreement: rowsOf(MessageAgreementRow, agreement?.results ?? []),
+			}),
+		),
+		Effect.map(
+			({ notice, agreement }): NoticeClaimFacts => ({
+				notice: (notice[0] ?? null) satisfies StoredNotice | null,
+				agreement: (agreement[0] ?? null) satisfies MessageAgreement | null,
+			}),
+		),
+	);
+
+/**
+ * Compare-and-set (A19): the notice sending under the claim's attempt, only while pending and current (its agreement
+ * client_signed, its archive open, no project). Answers the address it goes to, or null when it was not claimed.
+ */
+export const claimNotice = (id: string, kind: string, claim: MessageClaim) =>
+	claimedEmail((db) =>
+		db
+			.prepare(MESSAGE_SQL.claimNotice)
+			.bind(claim.attempt_id, claim.attempted_at, id, kind),
+	);
+
+/** Compare-and-set (A19): the notice sent or failed, only by the attempt that claimed it while sending. A notice has no event. */
+export const recordNoticeOutcome = (
+	id: string,
+	kind: string,
+	attempt: string,
+	settled: MessageSettled,
+) =>
+	asked((db) =>
+		db
+			.prepare(
+				MESSAGE_SQL.noticeOutcome(settled.status === "sent" ? "SEND" : "FAIL"),
+			)
+			.bind(settled.status, settled.sent_at, id, kind, attempt)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** What the owner's retry decides on: the agreement's copies, its notices, and the agreement the notices are about. */
+export type MessagesRead = {
+	readonly copies: readonly StoredCopy[];
+	readonly notices: readonly StoredNotice[];
+	readonly agreement: MessageAgreement | null;
+};
+
+/** Plain reads (new), in one batch: every copy and every notice of the agreement, and the agreement, for the retry's rule. */
+export const readMessages = (id: string) =>
+	asked((db) =>
+		db.batch([
+			db.prepare(MESSAGE_SQL.copies).bind(id),
+			db.prepare(MESSAGE_SQL.notices).bind(id),
+			db.prepare(MESSAGE_SQL.messageAgreement).bind(id),
+		]),
+	).pipe(
+		Effect.flatMap(([copies, notices, agreement]) =>
+			Effect.all({
+				copies: rowsOf(DeliveryRow, copies?.results ?? []),
+				notices: rowsOf(NotificationRow, notices?.results ?? []),
+				agreement: rowsOf(MessageAgreementRow, agreement?.results ?? []),
+			}),
+		),
+		Effect.map(
+			({ copies, notices, agreement }): MessagesRead => ({
+				copies,
+				notices,
+				agreement: agreement[0] ?? null,
+			}),
+		),
+	);
+
+/**
+ * The owner's reset (A20) of one table: today's statement as it is, binding the confirmation and the cutoff the rule
+ * computed. It runs even when the rule found no row to move (`reset.keys` empty), as today's statement always runs; its
+ * own condition re-checks each row at write time and moves exactly the rows it allows.
+ */
+const resetMessageTable = (sql: string, id: string, decided: MessageReset) =>
+	asked((db) =>
+		db
+			.prepare(sql)
+			.bind(id, decided.confirmed ? 1 : 0, decided.staleBefore)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** The owner's reset of the agreement's copies (A20). */
+export const resetCopies = (id: string, decided: MessageReset) =>
+	resetMessageTable(MESSAGE_SQL.resetCopies, id, decided);
+
+/** The owner's reset of the agreement's current notices (A20). */
+export const resetNotices = (id: string, decided: MessageReset) =>
+	resetMessageTable(MESSAGE_SQL.resetNotices, id, decided);
