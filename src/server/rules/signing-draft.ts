@@ -182,7 +182,8 @@ type SaveGiven = FrontGiven & {
 	readonly started: boolean;
 	readonly signed: boolean;
 	readonly at: string;
-	readonly route: DraftSaveRequest["route"];
+	/** The draft as it will be stored, or null when the front's read refused the values. */
+	readonly stored: AgreementDraft | null;
 };
 
 /** The draft batch: A1, A2 and A3 with these binds, then the upsert. */
@@ -200,12 +201,13 @@ export type DraftWrite = {
 };
 
 /**
- * Stage 2: the draft is saved. The front checks again, then no project of the offer (the part of A1 that only the guard
- * checked before) and no agreement of the offer client-signed or executed (A3). For the draft route the values are read a
- * second time as they are stored, as `saveAgreementDraft` reads the value the route already read: a value whose NFC form
+ * Stage 2: the draft is saved, asked only once `draftFront` passed. For the draft route the values are read a second time
+ * first, as `saveAgreementDraft` reads the value the route already read before its batch: a value whose NFC form
  * outgrows its field's limit reads once but not twice, and that second read throws `FieldsRefused`, a defect (today the
- * route's logged 500). The review passes the body's values, which `saveAgreementDraft` reads once, so its draft is
- * stored as the front's read answered it.
+ * route's logged 500), before any check below, so it wins over a project or a signed agreement as it does today. The
+ * review passes the body's values, which `saveAgreementDraft` reads once, so its draft is stored as the front's read
+ * answered it. Then the front checks again, no project of the offer (the part of A1 that only the guard checked before)
+ * and no agreement of the offer client-signed or executed (A3).
  */
 export const saveSigningDraft = alwaysWrites({
 	name: "save the signing form's draft",
@@ -222,7 +224,11 @@ export const saveSigningDraft = alwaysWrites({
 					AGREEMENT_SIGNED.some((status) => status === agreement.status),
 			),
 			at: request.at.toISOString(),
-			route: request.route,
+			stored: !front.read.ok
+				? null
+				: request.route === "draft"
+					? parseDraft(front.read.value)
+					: front.read.value,
 		};
 	},
 	refusals: [
@@ -245,7 +251,7 @@ export const saveSigningDraft = alwaysWrites({
 		),
 	],
 	writes: (given): DraftWrite => {
-		const { session, draft } = frontOf(given);
+		const { session } = frontOf(given);
 
 		return {
 			// SAFETY: `sessionHeld` passed, which ruled out a missing offer.
@@ -253,9 +259,8 @@ export const saveSigningDraft = alwaysWrites({
 			recipient: session.recipient_email,
 			linkHash: session.link_hash,
 			sessionHash: session.token_hash,
-			values_json: JSON.stringify(
-				given.route === "draft" ? parseDraft(draft) : draft,
-			),
+			// SAFETY: `draftReads` passed, which ruled out values the front's read refused.
+			values_json: JSON.stringify(given.stored as AgreementDraft),
 			updated_at: given.at,
 		};
 	},
