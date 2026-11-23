@@ -15,28 +15,47 @@ import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { agreementEvent } from "../lib/agreement-events";
+import { softwareGuard } from "../lib/software-guard";
 import {
 	ChangedSinceRead,
 	chainMatches,
 	GuardRefused,
 	raisedByJsonGuard,
 } from "./guarded-save";
-import type {
-	DownloadAgreement,
-	StoredSignedCopy,
-	StudioProject,
-} from "./rules/agreement-download";
+import { AGREEMENT_SIGNED } from "./machines/agreement-document";
+import { OFFER_STATUSES } from "./machines/offer-version";
 import type {
 	AttachmentFacts,
 	StoredAttachment,
 	StoredOffer,
 } from "./rules/agreement-attachment";
+import type {
+	DownloadAgreement,
+	StoredSignedCopy,
+	StudioProject,
+} from "./rules/agreement-download";
 import type { StoredSignature } from "./rules/agreement-link";
 import type {
 	SigningOfferRow,
 	StoredAgreementSession,
 	StoredStudioSession,
 } from "./rules/agreement-session";
+import type {
+	DraftSaveFacts,
+	DraftWrite,
+	StoredAgreementStatus,
+} from "./rules/signing-draft";
+import type {
+	RefundWrite,
+	SigningLinkWrite,
+	SigningSettingRow,
+	StoredSigningLink,
+} from "./rules/signing-link";
+import type { LinkedOfferRow, SigningStateRow } from "./rules/signing-offer";
+import type {
+	RedeemSession,
+	StoredAgreementLink,
+} from "./rules/signing-redeem";
 import { MusicDb } from "./services";
 
 /** A D1 call failed, or a row was not the shape its table has. The cause is for the route's log. */
@@ -469,3 +488,459 @@ export const readAttachmentFacts = (id: string, offerId: string | null) =>
 			}),
 		),
 	);
+
+// ---- the signing link, the redeem and the draft ----
+//
+// What the signing link (POST /api/offer/[token]/link), the verify pages' redeem and the draft (POST
+// /api/offer/[token]/draft, and the review's first step) read and write (docs/plans/2026-11-signing-conversion.md,
+// section 4: "The offer and the session", "The signing link", "The redeem", the draft half of "The draft and review").
+// The rules in src/server/rules/signing-offer.ts, signing-link.ts, signing-redeem.ts and signing-draft.ts decide from
+// these rows. Where today's code filtered in SQL (`getLinkedOffer`'s conditions, the redeem read's `used_at IS NULL AND
+// expires_at>?` and its purpose), the read here returns the plain rows and the rule decides; each batch keeps today's
+// guards as the write-time re-check. A guard statement, a write and a statement a golden hook picks keep today's SQL text,
+// and each batch today's statement order. No statement reads the clock or draws an id: the times, the new ids and the
+// hashes are inputs. The one id drawn here is the event's, by `agreementEvent`, at the point of today's batch (after
+// the flow's own draws, as today).
+//
+// Failures: a rejection is `AgreementStoreFailed` with its cause. The link batch's raised guard (A4 or A1) is
+// `ChangedSinceRead`, so `decideAndSave` reads and decides again (plan section 2); the redeem's and the draft's raised
+// guards are `GuardRefused` (`refusedBatch`), never retried.
+
+/** The signing setting's row. */
+const SettingColumns = Schema.Struct({
+	software_signing_enabled: Schema.Number,
+});
+
+/** Every column of `software_offers` (`o.*`). */
+const OfferColumns = Schema.Struct({
+	id: text,
+	request_id: text,
+	version: Schema.Number,
+	status: Schema.Literals(OFFER_STATUSES),
+	terms_json: text,
+	created_at: text,
+	updated_at: text,
+	sent_at: maybeText,
+	sent_by: maybeText,
+	agreement_details_json: maybeText,
+	msa_template_id: maybeText,
+	sow_template_id: maybeText,
+	contractor_snapshot_json: maybeText,
+	recipient_email_snapshot: maybeText,
+	reused_msa_id: maybeText,
+});
+
+/** The offer link with a token's hash and its brief: what `linkedOffer` reads beside each offer. */
+const LinkedThroughColumns = Schema.Struct({
+	link_revoked_at: maybeText,
+	request_kind: text,
+	request_status: text,
+	request_email: text,
+});
+
+const SigningStateColumns = Schema.Struct({
+	status: text,
+	recipient_email_snapshot: maybeText,
+	request_status: text,
+	link_hash: maybeText,
+	link_revoked_at: maybeText,
+	software_signing_enabled: Schema.NullOr(Schema.Number),
+	project_offer_id: maybeText,
+});
+
+const SigningLinkColumns = Schema.Struct({
+	id: text,
+	issued_at: text,
+	used_at: maybeText,
+});
+
+const BriefNameColumns = Schema.Struct({ name: text });
+
+/** Every column of `software_agreement_links` (`SELECT *`). */
+const StoredLinkColumns = Schema.Struct({
+	id: text,
+	purpose: text,
+	offer_id: maybeText,
+	link_hash: maybeText,
+	recipient_email: text,
+	token_hash: text,
+	issued_at: text,
+	expires_at: text,
+	used_at: maybeText,
+});
+
+const AgreementStatusColumns = Schema.Struct({
+	offer_id: maybeText,
+	status: text,
+});
+
+const ProjectOfferColumns = Schema.Struct({ offer_id: text });
+
+/**
+ * A1, the live signing guard: the offer is sent, through the offer link with this token hash, to this recipient, its
+ * brief is neither resolved nor withdrawn, no project names the offer, and signing is on. Today's `liveSigningGuard`
+ * (src/lib/agreement-access.ts), text for text; `openForSigning` decides the same from `readSigningFacts`.
+ */
+const liveSigningStatement = (
+	db: D1Database,
+	offerId: string | null,
+	linkHash: string | null,
+	recipient: string,
+) =>
+	db
+		.prepare(
+			`SELECT CASE WHEN EXISTS(SELECT 1 FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND o.status='sent' AND l.token_hash=? AND l.revoked_at IS NULL AND o.recipient_email_snapshot=? AND r.status NOT IN ('resolved','withdrawn') AND NOT EXISTS(SELECT 1 FROM software_projects p WHERE p.offer_id=o.id) AND EXISTS(SELECT 1 FROM software_signing_settings WHERE software_signing_enabled=1)) THEN 1 ELSE json_extract('Signing state changed','$') END`,
+		)
+		.bind(offerId, linkHash, recipient);
+
+/**
+ * A2: the signing session is unexpired at `now` and unrevoked. Today's `sessionGuard` (src/lib/software-agreements.ts),
+ * text for text, with its clock reading passed in.
+ */
+const openSessionStatement = (db: D1Database, tokenHash: string, now: string) =>
+	softwareGuard(
+		db,
+		"SELECT 1 FROM software_agreement_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+		[tokenHash, now],
+	);
+
+/** The statuses A3 refuses, from the machine (`AGREEMENT_SIGNED`), in today's order: 'client_signed','executed'. */
+const SIGNED_STATUSES = AGREEMENT_SIGNED.map((status) => `'${status}'`).join(
+	",",
+);
+
+/** A3: no agreement of the offer is client-signed or executed. Today's draft guard (src/lib/agreement-draft.ts). */
+const unsignedStatement = (db: D1Database, offerId: string) =>
+	db
+		.prepare(
+			`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreements WHERE offer_id=? AND status IN (${SIGNED_STATUSES})) THEN 1 ELSE json_extract('Already signed','$') END`,
+		)
+		.bind(offerId);
+
+/**
+ * Plain read: the signing setting's row, or null when it is missing (`signingOn` and `draftFront` read a missing row as
+ * off, as today's `signingEnabled` does). Today's statement, text for text.
+ */
+export const readSigningEnabled = () =>
+	readAll(SettingColumns, (db) =>
+		db.prepare(
+			"SELECT software_signing_enabled FROM software_signing_settings WHERE id=1",
+		),
+	).pipe(Effect.map((rows): SigningSettingRow | null => rows[0] ?? null));
+
+/**
+ * Plain reads, in ONE batch: every offer of the brief whose offer link has this token hash, whatever its status, and that
+ * link with its brief, as `linkedOffer` reads them. Today's `getLinkedOffer` filters these in SQL; the rule decides now.
+ * The first statement keeps the start of today's text (`SELECT o.* FROM software_offers o JOIN software_offer_links l ON
+ * l.request_id=o.request_id` and the `JOIN owner_requests`), so the golden hooks that pick today's offer read pick it,
+ * and the second matches none. The offer link's token hash is unique and its brief is its key, so the second answers one
+ * row at most and every offer shares it. The caller checks the token's shape (43 URL-safe characters) before hashing it,
+ * as `getLinkedOffer` does before it reads.
+ */
+export const readLinkedOffer = (tokenHash: string) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(`SELECT o.* FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id
+    JOIN owner_requests r ON r.id=o.request_id WHERE l.token_hash=?`)
+				.bind(tokenHash),
+			db
+				.prepare(
+					"SELECT l.revoked_at AS link_revoked_at,r.kind AS request_kind,r.status AS request_status,r.email AS request_email FROM software_offer_links l JOIN owner_requests r ON r.id=l.request_id WHERE l.token_hash=?",
+				)
+				.bind(tokenHash),
+		]),
+	).pipe(
+		Effect.flatMap(([offers, through]) =>
+			Effect.all({
+				offers: rowsOf(OfferColumns, offers?.results ?? []),
+				through: rowsOf(LinkedThroughColumns, through?.results ?? []),
+			}),
+		),
+		Effect.map(({ offers, through }): readonly LinkedOfferRow[] =>
+			through.flatMap((link) => offers.map((offer) => ({ ...offer, ...link }))),
+		),
+	);
+
+/**
+ * Plain read: the offer's signing state (`openForSigning`'s facts): the offer by its id with its brief, the offer link
+ * only when it has this token hash, the signing setting and a project of the offer; null when the offer is gone. What A1
+ * re-checks, as rows. Today's read after the link batch's guard raised (`signingRefusal`, src/lib/agreement-access.ts),
+ * text for text; the converted flows read it before the batch as well, and for the redeem's GET in place of A1 run as a
+ * read.
+ */
+export const readSigningFacts = (input: {
+	readonly offerId: string | null;
+	readonly linkHash: string | null;
+}) =>
+	readAll(SigningStateColumns, (db) =>
+		db
+			.prepare(
+				"SELECT o.status,o.recipient_email_snapshot,r.status AS request_status,l.token_hash AS link_hash,l.revoked_at AS link_revoked_at,s.software_signing_enabled,p.offer_id AS project_offer_id FROM software_offers o JOIN owner_requests r ON r.id=o.request_id LEFT JOIN software_offer_links l ON l.request_id=o.request_id AND l.token_hash=? LEFT JOIN software_signing_settings s ON s.id=1 LEFT JOIN software_projects p ON p.offer_id=o.id WHERE o.id=?",
+			)
+			.bind(input.linkHash, input.offerId),
+	).pipe(Effect.map((rows): SigningStateRow | null => rows[0] ?? null));
+
+/**
+ * Plain read: the recipient's signing links of the offer, used or not (A4 counts every one; `consumeOlderLinks` picks the
+ * unused older ones). The archive link's read of its links, text for text, bound to the signing purpose and the offer.
+ */
+export const readSigningLinks = (recipient: string, offerId: string) =>
+	readAll(SigningLinkColumns, (db) =>
+		db
+			.prepare(
+				"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ?",
+			)
+			.bind("agreement", recipient, offerId),
+	).pipe(Effect.map((rows): readonly StoredSigningLink[] => rows));
+
+/** The signing link the flow drew for one try of the link batch, with the rule's times. */
+export type SigningLinkRow = Pick<
+	SigningLinkWrite,
+	"at" | "since" | "expiresAt"
+> & {
+	readonly id: string;
+	/** The emailed key's hash. */
+	readonly hash: string;
+	/** The event's actor: the link id's hash. */
+	readonly actorHash: string;
+	readonly offerId: string;
+	/** The offer link's token hash, which A1 binds and the link keeps. */
+	readonly linkHash: string;
+	/** The recipient, as `linkRecipient` normalised it. */
+	readonly recipient: string;
+};
+
+/**
+ * Stores the signing link: one batch, today's (`storeSigningLink`, src/lib/agreement-access.ts) statement for statement:
+ * A4 (no signing link of the recipient and offer issued after `since`), A1, the `link-issued` event and the link. A
+ * raised guard (either) is `ChangedSinceRead`, so `decideAndSave` reads the offer's signing state and the links again and
+ * the rule decides (Q1); any other failure is `AgreementStoreFailed`.
+ */
+export const storeSigningLink = (link: SigningLinkRow) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(
+							`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
+						)
+						.bind("agreement", link.recipient, link.offerId, link.since),
+					liveSigningStatement(db, link.offerId, link.linkHash, link.recipient),
+					agreementEvent(
+						db,
+						"link-issued",
+						link.actorHash,
+						link.at,
+						null,
+						link.offerId,
+					),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+						)
+						.bind(
+							link.id,
+							"agreement",
+							link.offerId,
+							link.linkHash,
+							link.recipient,
+							link.hash,
+							link.at,
+							link.expiresAt,
+						),
+				]),
+			catch: (cause) =>
+				cause instanceof Error && raisedByJsonGuard(cause)
+					? new ChangedSinceRead()
+					: new AgreementStoreFailed({ failure: cause }),
+		});
+	});
+
+/** Plain read: the brief's name, for the mail's greeting, or null when the brief is gone. Today's statement. */
+export const readBriefName = (requestId: string) =>
+	readAll(BriefNameColumns, (db) =>
+		db.prepare("SELECT name FROM owner_requests WHERE id=?").bind(requestId),
+	).pipe(Effect.map((rows) => rows[0]?.name ?? null));
+
+/**
+ * Takes back a signing link whose mail was refused, in ONE batch, today's statement for statement: the link's sessions
+ * and the link deleted, then for each use the request counted (the address's, then the recipient's) its two refund
+ * statements, whose own filter decides whether the window's row goes (its only use) or loses one use. One batch, so a
+ * failure leaves the link, its sessions and every use as they were (plan section 4, "The allowance").
+ */
+export const removeRefusedLink = (write: RefundWrite) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare("DELETE FROM software_agreement_sessions WHERE link_id=?")
+				.bind(write.linkId),
+			db
+				.prepare("DELETE FROM software_agreement_links WHERE id=?")
+				.bind(write.linkId),
+			...write.uses.flatMap((use) => [
+				db
+					.prepare(
+						"DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1",
+					)
+					.bind(use.key, use.window_start),
+				db
+					.prepare(
+						"UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1",
+					)
+					.bind(use.key, use.window_start),
+			]),
+		]),
+	).pipe(Effect.asVoid);
+
+/**
+ * Plain read: the link with this key hash, whatever its purpose, use and expiry, or null. Today's read filtered the
+ * purpose, `used_at IS NULL` and `expires_at>?` in SQL; `redeemLink` decides them now, and A5 re-checks the last two.
+ */
+export const readLinkByKey = (keyHash: string) =>
+	readAll(StoredLinkColumns, (db) =>
+		db
+			.prepare("SELECT * FROM software_agreement_links WHERE token_hash=?")
+			.bind(keyHash),
+	).pipe(Effect.map((rows): StoredAgreementLink | null => rows[0] ?? null));
+
+/**
+ * Redeems a link: one batch, today's (`completeAgreementLink`, src/lib/agreement-access.ts) statement for statement: A1
+ * for a signing link (`session.live`), A5 (the link still unused and unexpired at `at`), the link used, the `verified`
+ * event (its actor the session's hash) and the session. The flow draws the session token, its hash and the nonce before
+ * it, as today. A raised guard is `GuardRefused` (the expired page, not retried); any other failure is
+ * `AgreementStoreFailed`.
+ */
+export const redeemLinkBatch = (input: {
+	readonly session: RedeemSession;
+	readonly sessionHash: string;
+	readonly csrfNonce: string;
+}) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+		const { session } = input;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					...(session.live === null
+						? []
+						: [
+								liveSigningStatement(
+									db,
+									session.live.offerId,
+									session.live.linkHash,
+									session.live.recipient,
+								),
+							]),
+					db
+						.prepare(
+							`SELECT CASE WHEN EXISTS(SELECT 1 FROM software_agreement_links WHERE token_hash=? AND used_at IS NULL AND expires_at>?) THEN 1 ELSE json_extract('Link already consumed','$') END`,
+						)
+						.bind(session.keyHash, session.at),
+					db
+						.prepare(
+							"UPDATE software_agreement_links SET used_at=? WHERE token_hash=?",
+						)
+						.bind(session.at, session.keyHash),
+					agreementEvent(
+						db,
+						"verified",
+						input.sessionHash,
+						session.at,
+						null,
+						session.offerId,
+					),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_sessions(token_hash,purpose,offer_id,link_hash,recipient_email,link_id,verified_at,expires_at,csrf_nonce) VALUES(?,?,?,?,?,?,?,?,?)",
+						)
+						.bind(
+							input.sessionHash,
+							session.purpose,
+							session.offerId,
+							session.linkHash,
+							session.recipient,
+							session.linkId,
+							session.at,
+							session.expiresAt,
+							input.csrfNonce,
+						),
+				]),
+			catch: refusedBatch,
+		});
+	});
+
+/**
+ * Plain reads, in ONE batch, of what only the draft batch's guards checked before (`saveSigningDraft`'s facts): every
+ * agreement of the offer with its status (A3), and a project of the offer (A1's project), or null. New reads: no golden
+ * hook of the corpora that save a draft (offer-draft, offer-review) picks either.
+ */
+export const readDraftFacts = (offerId: string) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(
+					"SELECT offer_id,status FROM software_agreements WHERE offer_id=?",
+				)
+				.bind(offerId),
+			db
+				.prepare("SELECT offer_id FROM software_projects WHERE offer_id=?")
+				.bind(offerId),
+		]),
+	).pipe(
+		Effect.flatMap(([agreements, project]) =>
+			Effect.all({
+				agreements: rowsOf(AgreementStatusColumns, agreements?.results ?? []),
+				project: rowsOf(ProjectOfferColumns, project?.results ?? []),
+			}),
+		),
+		Effect.map(
+			({
+				agreements,
+				project,
+			}): Pick<DraftSaveFacts, "agreements" | "project"> => ({
+				agreements: agreements satisfies readonly StoredAgreementStatus[],
+				project: project[0] ?? null,
+			}),
+		),
+	);
+
+/**
+ * Saves the draft: one batch, today's (`saveAgreementDraft`, src/lib/agreement-draft.ts) statement for statement: A1
+ * (the session's link and address), A2 (the session open at `sessionNow`), A3 and the upsert. `sessionNow` is A2's own
+ * clock reading, which today's `sessionGuard` takes as the batch is built, before the draft's `updated_at`; the flow
+ * reads both. A raised guard is `GuardRefused` (not retried); any other failure is `AgreementStoreFailed`.
+ */
+export const saveDraftBatch = (write: DraftWrite, sessionNow: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					liveSigningStatement(
+						db,
+						write.offerId,
+						write.linkHash,
+						write.recipient,
+					),
+					openSessionStatement(db, write.sessionHash, sessionNow),
+					unsignedStatement(db, write.offerId),
+					db
+						.prepare(
+							"INSERT INTO software_agreement_drafts(offer_id,recipient_email,values_json,updated_at) VALUES(?,?,?,?) ON CONFLICT(offer_id,recipient_email) DO UPDATE SET values_json=excluded.values_json,updated_at=excluded.updated_at",
+						)
+						.bind(
+							write.offerId,
+							write.recipient,
+							write.values_json,
+							write.updated_at,
+						),
+				]),
+			catch: refusedBatch,
+		});
+	});
