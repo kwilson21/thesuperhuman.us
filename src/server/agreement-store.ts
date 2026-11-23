@@ -10,7 +10,12 @@ import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { agreementEvent } from "../lib/agreement-events";
-import { ChangedSinceRead, raisedByJsonGuard } from "./guarded-save";
+import {
+	ChangedSinceRead,
+	chainMatches,
+	GuardRefused,
+	raisedByJsonGuard,
+} from "./guarded-save";
 import type {
 	DownloadAgreement,
 	StoredSignedCopy,
@@ -44,6 +49,25 @@ const asked = <A>(run: (db: D1Database) => Promise<A>) =>
 			catch: (cause) => new AgreementStoreFailed({ failure: cause }),
 		});
 	});
+
+/**
+ * The raise-only triggers of migrations/music/0023_software_signing.sql: templates, the contractor's details, signatures,
+ * signed agreement texts, clients and notices are immutable, and a closed archive's end, retention, hold and
+ * termination cannot change. They write nothing; a batch one raises in is refused like a guard's.
+ */
+const TRIGGER_RAISED =
+	/Immutable (template|config|signature|signed agreement|identity|notice)|Archive cleanup is reserved/;
+
+/**
+ * What a rejected batch of this area is: a raised JSON guard or a raise-only trigger is `GuardRefused` (another request
+ * changed what was read, or the archive closed), looked for down the cause chain; anything else is
+ * `AgreementStoreFailed` with its cause. A batch that re-decides on a UNIQUE failure (plan section 2) checks that first.
+ */
+export const refusedBatch = (cause: unknown) =>
+	cause instanceof Error &&
+	(raisedByJsonGuard(cause) || chainMatches(cause, TRIGGER_RAISED))
+		? new GuardRefused()
+		: new AgreementStoreFailed({ failure: cause });
 
 const text = Schema.String;
 const maybeText = Schema.NullOr(Schema.String);
