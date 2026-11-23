@@ -344,11 +344,29 @@ export const liveSigningGuard = (
 		)
 		.bind(id, linkHash, email);
 
+/**
+ * How the redeem tells a refusal from a failure on the site's side. The verify pages pass the site's recogniser
+ * (`raisedByJsonGuard`) and log through `logUnexpected`, since src/lib imports no value from src/server.
+ */
+export type RedeemFailures = {
+	/** Whether a failed live check or consume batch was refused by one of its guards: the 401, the expired page. */
+	readonly isGuard: (error: Error) => boolean;
+	/** Logs a failure on the site's side once, before its 500. */
+	readonly unexpected: <Failure>(failure: Failure) => void;
+};
+
+/**
+ * The emailed link of a verify page, completed: 404 for another host, 401 (the expired page) for every refusal, 200 for a
+ * GET, and for a POST the 303 with the session cookie. A failed read, or a live check or consume batch that failed for no
+ * guard, is logged once and answers 500, which the pages render as the failure page (behaviour fixes B1 and B2 of
+ * docs/plans/2026-11-signing-conversion.md).
+ */
 export async function completeAgreementLink(
 	env: Env,
 	request: Request,
 	key: string,
-	token?: string,
+	token: string | undefined,
+	failures: RedeemFailures,
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
@@ -359,22 +377,45 @@ export async function completeAgreementLink(
 	const expired = () =>
 		agreementJson({ ok: false, error: "This link has expired." }, 401);
 
+	const failed = <Failure>(failure: Failure) => {
+		failures.unexpected(failure);
+
+		return agreementJson(
+			{ ok: false, error: "This link could not be opened." },
+			500,
+		);
+	};
+
+	/** A guard that raised is a refusal (the expired page); any other failure is the site's (the 500). */
+	const refusedOrFailed = <Failure>(failure: Failure) =>
+		failure instanceof Error && failures.isGuard(failure)
+			? expired()
+			: failed(failure);
+
 	if (!db || !/^[A-Za-z0-9_-]{43}$/.test(key)) return expired();
 
 	const hash = await hashOfferToken(key),
 		at = new Date().toISOString();
 
-	const link = await db
-		.prepare(
-			"SELECT * FROM software_agreement_links WHERE token_hash=? AND purpose=? AND used_at IS NULL AND expires_at>?",
-		)
-		.bind(hash, purpose, at)
-		.first<{
-			id: string;
-			offer_id: string;
-			link_hash: string;
-			recipient_email: string;
-		}>();
+	type Link = {
+		id: string;
+		offer_id: string;
+		link_hash: string;
+		recipient_email: string;
+	};
+
+	let link: Link | null;
+
+	try {
+		link = await db
+			.prepare(
+				"SELECT * FROM software_agreement_links WHERE token_hash=? AND purpose=? AND used_at IS NULL AND expires_at>?",
+			)
+			.bind(hash, purpose, at)
+			.first<Link>();
+	} catch (error) {
+		return failed(error);
+	}
 
 	if (!link || (token && (await hashOfferToken(token)) !== link.link_hash))
 		return expired();
@@ -388,8 +429,9 @@ export async function completeAgreementLink(
 					link.link_hash,
 					link.recipient_email,
 				).first();
-			} catch {
-				return expired();
+			} catch (error) {
+				// The guard raised: the offer is no longer open for signing (A1).
+				return refusedOrFailed(error);
 			}
 		}
 
@@ -441,8 +483,10 @@ export async function completeAgreementLink(
 					csrf,
 				),
 		]);
-	} catch {
-		return expired();
+	} catch (error) {
+		// A guard raised: another request used the link first (A5) or, for a signing link, the offer is no longer open for
+		// signing (A1). Nothing else in the batch can lose a race: the ids and the session token are new.
+		return refusedOrFailed(error);
 	}
 
 	return new Response(null, {

@@ -7,6 +7,8 @@ import { completeAgreementLink } from "~/lib/agreement-access";
 import { templateFields } from "~/lib/agreement-templates";
 import { hashOfferToken } from "~/lib/software-offers";
 import { isObject, isText } from "~/lib/type-guards";
+import { logUnexpected } from "~/server/failure";
+import { raisedByJsonGuard } from "~/server/guarded-save";
 import type { JsonValue } from "../../helpers/json";
 import { mergeSeeds } from "./studio-access";
 import {
@@ -347,13 +349,24 @@ export function issuedKey(prior: Prior, n = 0): string {
 	return found[1];
 }
 
-/** What src/pages/offer/[token]/verify.astro does: complete the emailed link. */
+/**
+ * What the verify pages do (src/pages/offer/[token]/verify.astro, and src/pages/agreements/verify.astro with no token):
+ * complete the emailed link, with the pages' recogniser and log label, and answer its Response as it is.
+ */
 export const verify: Handler = (context) =>
 	completeAgreementLink(
 		context.locals.runtime.env,
 		context.request,
 		new URL(context.request.url).searchParams.get("key") ?? "",
 		context.params.token,
+		{
+			isGuard: raisedByJsonGuard,
+			unexpected: (error) =>
+				logUnexpected(
+					context.params.token ? "Agreement verify" : "Archive verify",
+					error,
+				),
+		},
 	);
 
 /** A step that follows the emailed link of the n-th email, as GET (preview) or POST (consume). */
