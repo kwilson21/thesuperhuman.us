@@ -41,8 +41,9 @@ import {
 //   200 {ok:true}   whatever was or was not sent (a form gets a 303 to /owner/requests/r1)
 //   400             agreement_id missing or not a uuid; confirmedNotSent, expectedAttempt or confirmedStale of a wrong type
 //   404 {ok:false}  no agreement with this id for this request
-//   409 "The agreement changed or the operation failed. Reload before retrying."   an outage on a statement of the action
-//   rejected        the offer lookup
+//   500 "The agreement changed or the operation failed. Reload before retrying."   a store failure on a statement of the
+//                   action (the offer lookup included) or on the packet's read from R2, logged once as "Owner request
+//                   agreement failed unexpectedly" (behaviour fixes B1 and B2)
 //   delivery rows after: pending (nothing claimed: no Resend key, no sender, no bucket, no ready artifact, object
 //   missing or over 25 MiB or with another hash, a signature missing for the role, the agreement archived or not
 //   executed), sent (accepted), failed (a 4xx: also an event), sending (a 5xx, network down or timeout: kept as

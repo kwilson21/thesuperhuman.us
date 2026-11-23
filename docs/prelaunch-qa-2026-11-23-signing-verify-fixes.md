@@ -2,7 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: to be filled in when it is opened. Merge facts are recorded after the merge, in the next pull request.
+Pull request: [#385](https://github.com/kwilson21/thesuperhuman.us/pull/385), merged at 09:19:27 UTC as `f9c215e3`
+(head `4c30dd43`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The 2026-11-14 decision (an unexpected database or store failure answers 500 with the route's
 fixed sentence and never the error's own text; a lost race or a stale version 409; 503 only for a missing binding or a
@@ -11,8 +12,8 @@ in conversation on 2026-11-23, "Approve all three": this pull request uses the v
 could not be opened.", text "Something went wrong on my side. Try the link again in a few minutes."). Section 8 of the
 plan, PR order item 4, second bullet, makes this the verify pages' fix, made on today's code before the conversion so
 that the conversion changes no behaviour; no `conversion` label. The work was done with Claude Code.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. No migration, no
-binding.
+Rollback revision: `b367302a`, the revision of `main` before the merge; or `git revert -m 1 f9c215e3`. No migration,
+no binding.
 
 ## Scope
 
@@ -134,8 +135,7 @@ page) and the expired page beside it, at 1280 x 800 and 390 x 844, with `design.
   390 x 844 (device scale 2), and looked at; see the pull request. The whole capture pipeline also ran locally
   (`SCREENSHOTS_FULL=1 pnpm run screenshots` against the preview): exit 0, 58 page images and all 20 scenarios, the
   four new failure captures among them, each answering 500 with the failure page.
-- PENDING: reviews of the pull request, CI and the Screenshots workflow on its head, and the deploy and live check after
-  merge.
+- Reviews, CI, the deploy and the live check: see section 7.
 
 ## 1. Content
 
@@ -160,7 +160,19 @@ page) and the expired page beside it, at 1280 x 800 and 390 x 844, with `design.
 ## 7. Release and final QA
 
 - **PASS · Checks, rollback.** See above.
-- **PENDING · Reviews, CI, production revision and live check.**
+- **PASS · Reviews.** Codex's code and security reviews of `0f9042d2` found nothing. An independent Claude Code pass
+  found nothing blocking (the severity bar of CLAUDE.md applied: a large pull request): exactly the 18 cases changed,
+  each only in its answer and one log line; the failure page carries Q2's text and no error's text; a raised guard
+  keeps the 401; the screenshot scenario restores its table. Its notes, not changed: the log line carries the error's
+  redacted message, as every route logs through `logUnexpected`; an interrupted screenshot run leaves the renamed table
+  until the next preview wipes its state; the changed cases keep their old names on purpose. The follow-up commit
+  `4c30dd43` merged `main` (with #386) and carried #386's merge facts and its reviews' wording.
+- **PASS · CI.** On the head `4c30dd43` before merge, all 21 check runs succeeded, the Screenshots workflow and the
+  Workers preview build among them.
+- **PASS · Production revision and live check.** After merge, on `f9c215e3`: `validate` succeeded (09:23:32 UTC) and the
+  Workers build succeeded (09:37:03 UTC). Live check at 09:37:37 UTC: `https://thesuperhuman.us/` answered 200;
+  `/agreements/verify?key=x` answered 401 with the expired page; a POST to `/agreements/verify` with a JSON body from
+  the site's origin answered 401 with the expired page (B5; before, a bare 500).
 - **UNVERIFIED · The 500 answers live.** No database fault can be induced live; the answers are held by the tests, the
   golden corpora and the local screenshots.
 - **N/A · Bindings, migrations.** None.

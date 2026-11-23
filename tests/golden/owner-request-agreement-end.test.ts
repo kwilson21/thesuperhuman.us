@@ -30,8 +30,10 @@ import { asOwner, asVisitor, defineCorpus, rows, type Case } from "./harness";
 //   409 "An open offer uses this agreement. Withdraw that offer first."   an MSA that a draft or sent offer of an open
 //                   request without a project still reuses: before the batch, and after a batch whose guard lost a race
 //   409 "The agreement changed or the operation failed. Reload before retrying."   a date that does not exist
-//                   (2025-02-30), a batch outage, an agreement whose archive was closed (trigger), the lookup failing
-//   rejected        the offer lookup; the lookup of an open offer after a failed batch
+//                   (2025-02-30), an agreement whose archive was closed (the cleanup lock's raise)
+//   500 "The agreement changed or the operation failed. Reload before retrying."   a store failure (the offer lookup,
+//                   the agreement lookup, the open-offer check of an MSA, the batch), at once with no open-offer recheck
+//                   after it, logged once as "Owner request agreement failed unexpectedly" (behaviour fixes B1 and B2)
 
 const END = /UPDATE software_agreements SET ended_at/;
 
@@ -538,6 +540,8 @@ const outages: Case[] = [
 		executed(),
 		MSA_ID,
 	),
+	// Since behaviour fix B2 the batch's failure answers the 500 at once and the recheck is never made; the name is kept so
+	// the case compares as the same one.
 	fail(
 		"outage: the batch of an MSA, and the recheck",
 		END,
@@ -548,6 +552,14 @@ const outages: Case[] = [
 					on: /^SELECT 1 FROM software_offers o JOIN owner_requests r/,
 					nth: 2,
 					message: "d1 unavailable",
+				},
+			],
+			optionalTriggers: [
+				{
+					trigger:
+						"d1 failure on /^SELECT 1 FROM software_offers o JOIN owner_requests r/ (match 2)",
+					reason:
+						"the batch's failure is a store failure, which answers 500 at once (behaviour fix B2), so the recheck of the MSA's use after it is never made",
 				},
 			],
 		},

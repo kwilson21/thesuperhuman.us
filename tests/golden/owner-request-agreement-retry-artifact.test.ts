@@ -44,9 +44,12 @@ import {
 //   404 {ok:false}  no agreement with this id for this request
 //   409 "Check the stale preparation attempt before recovery."   expectedAttempt given and the recovery refused
 //                   (not confirmed, not rendering, another attempt, attempted less than a minute ago)
-//   409 "The agreement changed or the operation failed. Reload before retrying."   any error outside the packet's own
-//                   try: no R2 bucket, an outage on the lookups, the claim or the failure mark
-//   rejected        the offer lookup (outside the try)
+//   503 {ok:false}  no R2 bucket: answered at the packet step, after the recovery write and the MSA id lookup, before
+//                   the claim (behaviour fix B3)
+//   500 "The agreement changed or the operation failed. Reload before retrying."   a store failure outside the packet's
+//                   own try: the offer lookup, the agreement lookup, the recovery update, the MSA id lookup, the claim,
+//                   the failure mark, the copies; logged once as "Owner request agreement failed unexpectedly"
+//                   (behaviour fixes B1 and B2)
 //   artifact outcomes (error_code in the dump): ready; failed render (not executed, no MSA, no signature, a stored
 //   packet with a wrong hash, a character the fonts cannot print, an attachment missing, changed or not a PDF, a bad
 //   manifest, an R2 get that fails, a values record that lacks the contractor); failed storage (R2 put fails);

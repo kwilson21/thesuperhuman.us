@@ -34,6 +34,16 @@
 //   live check on a GET)
 //     guards (the link still unused, A5; for a signing link the offer still open for signing, A1) ... JSON guard, 401 (the
 //       expired page); the ids and the session token are new, so nothing else in the batch can lose a race
+//   Owner request agreement (`POST /api/owner/requests/[id]/agreement`: its reads and batches, countersign's included,
+//   marked with `StoreRejected`)
+//     guards (countersign's offer, reused MSA and documents; abandon's deposit and documents; MSA use) .. JSON guard, 409
+//     countersign's signature, packet and copy rows written first by another request ............ UNIQUE, 409
+//     an agreement deleted since the read (hold, record-copy) ...................................... FOREIGN KEY, 409:
+//       every row a batch here refers to was read just before it, so the failure is itself the evidence
+//     the cleanup lock on a closed archive (end, hold) ................................... raise-only trigger, 409
+//     an offer with no client email snapshot (countersign's copy row) ........ NOT NULL, 409 (bad stored data)
+//   Owner attachment upload (`PUT /api/owner/requests/[id]/agreement-attachments`)
+//     the request unknown, not a software request, withdrawn or resolved .... JSON guard: 404 or 409, read after it
 //   Owner agreements (`POST /api/owner/agreements`)
 //     publish: the version guard, UNIQUE (kind, version label) (turned into a sentence) ... 409
 //     config: the version guard, the version primary key ............................... 409

@@ -31,11 +31,12 @@ import {
 //   404 "Not found"                                        unknown id, empty id, SQL-looking, long and unicode ids; review,
 //                                                          client_signed, abandoned; archive_closed_at set (retention-closed)
 //   409 "Signed by both parties..."                        no artifact, pending, rendering, failed, no pdf_key
-//   503 "Signed copy unavailable..."                       object missing
+//   500 "Signed copy unavailable..."                       object missing (behaviour fix B8, judgment call J1); the agreement
+//                                                          query, the artifact query or the bucket read throws (B2); logged
+//                                                          once as "Owner signed copy failed unexpectedly"
 //   503 "Signed copy failed its integrity check..."        bytes differ, digest null or empty
 //   200 application/pdf, attachment signed-agreement.pdf   the owner with no cookie, with wrong cookies, a terminated agreement,
 //                                                          Range ignored, twice in a row, an agreement of an unknown client email
-//   rejected                                               the agreement query, the artifact query, or the bucket read throws
 
 const get = (extra: Partial<Step> = {}): Step => ({
 	as: asOwner(),

@@ -29,7 +29,9 @@ import {
 // urlencoded form (answered with a 303, or with an HTML page for a refusal); the others send JSON.
 //
 //   403 {ok:false}                      a visitor, a client session, no owner
-//   503 {ok:false}                      no MUSIC_DB, no id parameter, an empty one (the owner check comes first)
+//   503 {ok:false}                      no MUSIC_DB (the owner check comes first)
+//   409 "Signing is off or the offer changed."   no id parameter, an empty one: a countersign answers what an unknown id
+//                                       gets, after the body (behaviour fix B3, as offers F6)
 //   403 Forbidden                       Origin that is not the request's: JSON gets musicRequest's plain answer; a form gets
 //                                       the answer with the agreement headers
 //   415 JSON required                   JSON body with another content type

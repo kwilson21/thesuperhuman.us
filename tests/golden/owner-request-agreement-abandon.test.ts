@@ -36,11 +36,13 @@ import { asOwner, asVisitor, defineCorpus, type Case } from "./harness";
 //   409 "Review the complete pending signing action."   nothing client_signed, or the named documents differ in id,
 //                        hash or number from the client_signed ones
 //   409 "Void the deposit invoice first, or refund..."  a deposit invoice for milestone 0 that is creating, open,
-//                        payment_failed, uncollectible, or paid and not refunded: before the batch, and after a failed
-//                        batch when one appeared meanwhile
-//   409 "The agreement changed or the operation failed. Reload before retrying."   a guard lost to a race, or the batch
-//                        threw with no deposit to blame
-//   rejected             an outage on the offer lookup, or on the deposit recheck after a failed batch
+//                        payment_failed, uncollectible, or paid and not refunded: before the batch, and after a batch
+//                        whose guard raised when one appeared meanwhile
+//   409 "The agreement changed or the operation failed. Reload before retrying."   a guard lost to a race with no
+//                        deposit to blame
+//   500 "The agreement changed or the operation failed. Reload before retrying."   a store failure (the offer lookup, the
+//                        read of the agreements, the deposit check, the batch), at once with no deposit recheck after it,
+//                        logged once as "Owner request agreement failed unexpectedly" (behaviour fixes B1 and B2)
 
 const BATCH = /UPDATE software_agreements SET status='abandoned'/;
 
@@ -468,6 +470,8 @@ const outages: Case[] = [
 		"outage: the first deposit check",
 		/SELECT 1 FROM software_invoices WHERE offer_id=\?/,
 	),
+	// Since behaviour fix B2 the first failure answers the 500 at once and the recheck is never made; the name is kept so
+	// the case compares as the same one.
 	fail(
 		"outage: the first deposit check and the recheck after it",
 		/^SELECT 1 FROM software_invoices WHERE offer_id=\?/,
@@ -481,6 +485,14 @@ const outages: Case[] = [
 					on: /^SELECT 1 FROM software_invoices WHERE offer_id=\?/,
 					nth: 2,
 					message: "d1 unavailable",
+				},
+			],
+			optionalTriggers: [
+				{
+					trigger:
+						"d1 failure on /^SELECT 1 FROM software_invoices WHERE offer_id=\\?/ (match 2)",
+					reason:
+						"the first deposit check's failure is a store failure, which answers 500 at once (behaviour fix B2), so the recheck after it is never made",
 				},
 			],
 		},
