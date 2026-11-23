@@ -606,11 +606,18 @@ describe("the allowance", () => {
 	it("counts each use of a key in its window, and other keys apart", async () => {
 		const world = signinWorld();
 
-		expect(await world.ok(countAllowance("k1", at(NOW)))).toEqual({ uses: 1 });
+		expect(await world.ok(countAllowance("k1", at(NOW)))).toEqual({
+			uses: 1,
+			window_start: NOW,
+		});
+		// A later use in the same window answers the window's start, not its own time.
 		expect(
 			await world.ok(countAllowance("k1", at("2026-11-13T12:01:00.000Z"))),
-		).toEqual({ uses: 2 });
-		expect(await world.ok(countAllowance("k2", at(NOW)))).toEqual({ uses: 1 });
+		).toEqual({ uses: 2, window_start: NOW });
+		expect(await world.ok(countAllowance("k2", at(NOW)))).toEqual({
+			uses: 1,
+			window_start: NOW,
+		});
 		expect(
 			world.all("SELECT key,window_start,uses FROM audio_client_allowances"),
 		).toEqual([
@@ -619,27 +626,46 @@ describe("the allowance", () => {
 		]);
 	});
 
-	it("answers no count when the counted row comes back without one, so the rule refuses it", async () => {
+	/** A database whose counting batch answers `counted` as the upsert's rows, after the prune's empty result. */
+	const counting = (
+		counted: readonly { uses: null; window_start: string }[],
+	) => {
 		const statement = double<D1PreparedStatement>({});
 		statement.bind = () => statement;
 
-		const db = double<D1Database>({
+		return double<D1Database>({
 			prepare: () => statement,
-			// The two results the store reads: the prune's, then the upsert's row with no count.
 			batch: async <T>() => [
 				partial<D1Result<T>>({ results: [] }),
 				partial<D1Result<T>>({
-					// SAFETY: T is the row type the store asks for ({ uses, window_start }); this row is that shape with no count.
-					results: [{ uses: null, window_start: NOW }] as T[],
+					// SAFETY: T is the row type the store asks for ({ uses, window_start }); these rows are that shape with no count.
+					results: [...counted] as T[],
 				}),
 			],
 		});
+	};
 
+	it("answers no count when the counted row comes back without one, so the rule refuses it", async () => {
 		expect(
 			await Effect.runPromise(
-				countAllowance("k1", at(NOW)).pipe(Effect.provideService(MusicDb, db)),
+				countAllowance("k1", at(NOW)).pipe(
+					Effect.provideService(
+						MusicDb,
+						counting([{ uses: null, window_start: NOW }]),
+					),
+				),
 			),
-		).toEqual({ uses: null });
+		).toEqual({ uses: null, window_start: NOW });
+	});
+
+	it("answers no count and no window when no row comes back", async () => {
+		expect(
+			await Effect.runPromise(
+				countAllowance("k1", at(NOW)).pipe(
+					Effect.provideService(MusicDb, counting([])),
+				),
+			),
+		).toEqual({ uses: null, window_start: null });
 	});
 
 	it("prunes a window exactly five minutes old, and keeps one a millisecond younger", async () => {
@@ -649,10 +675,10 @@ describe("the allowance", () => {
 
 		expect(
 			await world.ok(countAllowance("k1", at("2026-11-13T12:04:59.999Z"))),
-		).toEqual({ uses: 2 });
+		).toEqual({ uses: 2, window_start: NOW });
 		expect(
 			await world.ok(countAllowance("k1", at("2026-11-13T12:05:00.000Z"))),
-		).toEqual({ uses: 1 });
+		).toEqual({ uses: 1, window_start: "2026-11-13T12:05:00.000Z" });
 	});
 });
 
