@@ -508,9 +508,12 @@ export function createBriefBoardCore(
 
 			if (stopped) return stopped;
 
-			if (phase === "reading" || waiting()) return READING;
+			// A failed request clears the last-sent key, which makes the board "waiting" through the back-off: name the failure first.
+			if (phase === "reading") return READING;
 
 			if (failures > 0) return FAILING;
+
+			if (waiting()) return READING;
 
 			return laneChangesLine(laneChanges(board(), lane));
 		},

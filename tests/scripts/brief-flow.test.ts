@@ -1783,14 +1783,14 @@ it.each([
 	["workflow", 7],
 	["website", 8],
 ])(
-	"ignores a saved step past the last screen of a %s draft",
+	"opens the first written question for a saved step past the last screen of a %s draft",
 	async (path, step) => {
 		store.set(
 			"software-brief-draft",
 			JSON.stringify({ answers: { path }, step }),
 		);
 		await setup();
-		expect(current()).toBe(0);
+		expect(current()).toBe(1);
 	},
 );
 
@@ -2410,6 +2410,49 @@ it("reads a draft saved by the old page: its step from the old plan, its plain f
 	store.set(BOARD_STORAGE_KEY, board({ paused: false, plain: false }));
 	await boardSetup(undefined);
 	expect(current()).toBe(1);
+});
+
+it("opens the first written question, path kept, when an unlinked visit's saved screen is not in the plan", async () => {
+	const base = {
+		answers: {
+			path: "website",
+			purpose: ANSWER,
+			timing: "flexible",
+			updates: "self",
+		},
+		submissionId: "00000000-0000-4000-8000-000000000001",
+	};
+
+	for (const saved of [{ step: 40 }, { section: 40 }, { section: 9 }]) {
+		store.set("software-brief-draft", JSON.stringify({ ...base, ...saved }));
+		store.set(
+			BOARD_STORAGE_KEY,
+			JSON.stringify({ boards: {}, paused: false, plain: true }),
+		);
+		bodies = [];
+		waiting = [];
+		await setup(undefined, grantedPass, undefined, route);
+		expect(current()).toBe(1);
+		expect(
+			controls.find((c) => c.name === "path" && c.value === "website")?.checked,
+		).toBe(true);
+	}
+});
+
+it("says the outline could not update while it backs off after a failed request, and reading while one is out", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(1);
+	expect(core.statusLine("purpose")).toBe("Reading your answers\u2026");
+	waiting.shift()!({ status: 500, json: null });
+	await vi.advanceTimersByTimeAsync(0);
+	expect(core.statusLine("purpose")).toBe(
+		"The outline couldn\u2019t update just now. Trying again shortly.",
+	);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(bodies).toHaveLength(2);
+	expect(core.statusLine("purpose")).toBe("Reading your answers\u2026");
 });
 
 it("resumes a draft saved by this page on the screen it was left on, lane screens included", async () => {

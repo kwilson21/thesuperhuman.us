@@ -429,7 +429,8 @@ export function setupSoftwareInquiry(
 			)
 				resumeAt = Number.isInteger(saved.section)
 					? saved.section
-					: plans[storedPath][saved.step];
+					: // An index past the old plan opens the first written question (data-step 1), like a section the plan no longer has.
+						(plans[storedPath][saved.step] ?? 1);
 
 			if (
 				isString(saved.submissionId) &&
