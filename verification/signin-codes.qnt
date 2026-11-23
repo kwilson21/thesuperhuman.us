@@ -648,8 +648,9 @@ module signinCodes {
   //    This is what the code guarantees. The earlier statement was "a used or expired code never signs anyone in", with expiry judged
   //    by the clock when the write runs (`expiredAtWriteNeverSignsIn` below). The code binds the time it read before its read batch in
   //    every guard (`expires_at>?`, access.ts:366-383), so an entry that read just before its code expired and writes just after is
-  //    accepted, in the gap of one round trip. A finding for the owner (docs/verification.md, "The sign-in codes model"); the
-  //    alternative is a write that re-checks expiry against a later time.
+  //    accepted, in the gap from that clock reading to the write. Decided on 2026-11-22 to keep the code as it is
+  //    (docs/verification.md, "What the time alignment found"); the alternative was a write that re-checks expiry against a later
+  //    time.
   val deadCodeNeverSignsIn = not(ghost.badSignIn)
 
   // Not a property of the code, so not in allProperties: the earlier statement of property 6, kept to reproduce the finding. The run
