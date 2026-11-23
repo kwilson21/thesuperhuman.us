@@ -11,6 +11,8 @@ import {
 	emptyPricing,
 	marketRange,
 } from "~/lib/pricing-reference";
+import { loadRefreshView } from "~/server/market-refresh-store";
+import { rebaseProposal } from "~/server/rules/market-refresh";
 import { loadPricing } from "~/server/pricing-store";
 
 export const prerender = false;
@@ -43,6 +45,74 @@ const sizeLabels: Record<PricingSize, string> = {
 };
 
 const dollars = (amount: number) => `$${amount.toLocaleString("en-US")}`;
+
+/** "$800 to $1,000", or one figure when both ends are the same. */
+const span = (figures: { lowUsd: number; highUsd: number }) =>
+	figures.lowUsd === figures.highUsd
+		? dollars(figures.lowUsd)
+		: `${dollars(figures.lowUsd)} to ${dollars(figures.highUsd)}`;
+
+const inEastern = (iso: string) =>
+	new Date(iso).toLocaleString("en-US", {
+		dateStyle: "medium",
+		timeStyle: "short",
+		timeZone: "America/New_York",
+	});
+
+// The market refresh (docs/plans/2026-11-market-refresh.md): the waiting proposal, the last search and the ask. A read
+// that fails leaves the section out; the research above it is unaffected.
+const hasSearchKey = Boolean(Astro.locals.runtime.env.TAVILY_API_KEY);
+
+const refresh =
+	kv && !readFailed ? await loadRefreshView(kv).catch(() => null) : null;
+
+const proposal = refresh?.proposal ?? null;
+
+// The proposal laid over the research as it is now, which is what Use saves: "Now" is the current research, and a cell
+// the search found nothing for stays as it is. Null when the research changed so that the proposal no longer fits.
+const shown = proposal && rebaseProposal(proposal, market);
+
+/** Why the last search failed, in words. */
+const failedBecause = (status: number | undefined) => {
+	if (status === 401) return "Tavily refused the key; check TAVILY_API_KEY";
+
+	if (status === 432 || status === 433)
+		return "your Tavily plan's limit was reached";
+
+	if (status === 0) return "Tavily did not answer";
+
+	return `Tavily answered with status ${status ?? "unknown"}`;
+};
+
+/** What the last search did, in a sentence. */
+const lastSearch = (() => {
+	const last = refresh?.last;
+
+	if (!last) return "";
+	const when = `The last search ran ${inEastern(last.at)}`;
+
+	if (last.result === "proposal") return `${when} and found new figures.`;
+
+	if (last.result === "nothing-new")
+		return `${when} and found no new figure it could check against a source; your research stays as it is.`;
+
+	if (last.result === "started")
+		return `${when} and did not finish. It tries again in a week, or the day after you ask.`;
+
+	return `${when} and failed: ${failedBecause(last.status)}. It tries again in a week, or the day after you ask.`;
+})();
+
+/** A proposal row's label: "Website, small", or "Senior day rate". */
+const cellLabel = (cell: string) => {
+	if (cell === "the day rate") return "Senior day rate";
+	const [kind, size] = cell.split(" ");
+	const kindLabel = PRICING_KINDS.find((each) => each === kind);
+	const sizeLabel = PRICING_SIZES.find((each) => each === size);
+
+	return kindLabel && sizeLabel
+		? `${kindLabels[kindLabel]}, ${sizeLabels[sizeLabel].toLowerCase()}`
+		: cell;
+};
 
 const updated = pricing.updatedAt
 	? new Date(pricing.updatedAt).toLocaleString("en-US", {
@@ -80,6 +150,32 @@ const updated = pricing.updatedAt
         {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{(source.published || source.kind) && <span class="pricing-source-meta">{[source.published, source.kind].filter((part): part is string => Boolean(part)).map((part) => part.replace(/(\d)-(\d)/g, '$1\u2011$2')).join('\u00a0· ')}</span>}</li>)}</ol></details>}
       </div> : null}
       <p class="rail-muted" data-pricing-empty hidden={Boolean(market)}>No research saved yet. Paste the research file below.</p>
+      {refresh && <div class="pricing-refresh" data-pricing-refresh data-endpoint="/api/owner/pricing-refresh">
+        <h3 id="pricing-refresh-heading" tabindex="-1">New figures from the web</h3>
+        {hasSearchKey
+          ? <p class="rail-muted">Every three months the site searches the web with your Tavily key and proposes new ranges. Nothing changes until you use them. The search sends only the kind and size of work, never anything about a client.</p>
+          : <p class="rail-muted">To have the site search the web for new figures every three months, add your Tavily key as the secret TAVILY_API_KEY: in Cloudflare, open Workers, then thesuperhuman-us, then Settings, Variables and Secrets.</p>}
+        {lastSearch && <p class="rail-muted">{lastSearch}</p>}
+        {refresh.askedAt && <p class="rail-muted">You asked for a search {inEastern(refresh.askedAt)}. It runs at the next daily check, within a day.</p>}
+        {proposal && !shown && <div data-proposal={proposal.id}>
+          <p>A web search on {proposal.market.researchedOn.replace(/-/g, '\u2011')} found figures, but your research changed after it and they no longer make research on their own. Discard them and ask for a new search.</p>
+          <div class="software-actions"><button class="studio-quiet" type="button" data-refresh-discard>Discard</button></div>
+        </div>}
+        {shown && <div data-proposal={shown.id}>
+          <p>Proposed figures from a web search on {shown.market.researchedOn.replace(/-/g, '\u2011')}. Each new figure appears in the text of a source it cites; read the sources before you use them.</p>
+          <div class="pricing-table-scroll" role="region" aria-labelledby="pricing-proposal-caption" tabindex="0">
+          <table class="pricing-table">
+            <caption id="pricing-proposal-caption" class="visually-hidden">Your current ranges beside the proposed ones</caption>
+            <thead><tr><th scope="col">Kind and size</th><th scope="col">Now</th><th scope="col">Proposed</th><th scope="col">Sources</th></tr></thead>
+            <tbody>{shown.changes.map(change => <tr><th scope="row">{cellLabel(change.cell)}</th><td>{change.before ? span(change.before) : 'None'}</td><td>{change.after ? span(change.after) : 'No new figure; stays as it is'}</td><td>{change.sourceIds.join(', ')}</td></tr>)}</tbody>
+          </table>
+          </div>
+          {shown.market.sources.length > 0 && <details><summary>Sources ({shown.market.sources.length})</summary><ol class="pricing-sources">{shown.market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && <span class="pricing-source-meta">{source.published.replace(/(\d)-(\d)/g, '$1\u2011$2')}</span>}</li>)}</ol></details>}
+          <div class="software-actions"><button class="studio-button" type="button" data-refresh-use>Use these figures</button><button class="studio-quiet" type="button" data-refresh-discard>Discard</button></div>
+        </div>}
+        {hasSearchKey && !proposal && !refresh.askedAt && <button class="studio-quiet" type="button" data-refresh-ask>Search for new figures</button>}
+        <p class="studio-status" data-refresh-status role="status" aria-live="polite"></p>
+      </div>}
       <form data-pricing-form data-part="market" data-version={pricing.version}>
         <div class="software-field"><label>Research file (JSON)<textarea class="studio-textarea pricing-json" name="market" rows="12" spellcheck="false" autocomplete="off" aria-describedby="pricing-market-hint" data-pricing-market>{market ? JSON.stringify(market, null, 2) : ''}</textarea></label><p id="pricing-market-hint" class="rail-muted rail-caption">Paste the file the research produced{market && <span data-pricing-edit-copy>, or edit this copy</span>}. Each range needs a kind (website, webapp or workflow), a size (small, medium or large), lowUsd and highUsd in whole dollars, and a definition. Sources need https links.</p></div>
         <div class="software-actions"><button class="studio-button" type="submit">Save research</button><button class="studio-quiet" type="button" data-pricing-clear hidden={!market}>Clear research</button></div>
@@ -90,13 +186,16 @@ const updated = pricing.updatedAt
   </div>}
   <script>
     import { setupOwnerPricing } from '~/scripts/owner-pricing';
+    import { setupPricingRefresh } from '~/scripts/owner-pricing-refresh';
 
     setupOwnerPricing();
+
+    setupPricingRefresh();
   </script>
 </OwnerLayout>
 <style>
   .pricing-settings { display: grid; gap: 1.5rem; }
-  .pricing-settings > *, [data-pricing-research] { min-width: 0; }
+  .pricing-settings > *, [data-pricing-research], .pricing-refresh { min-width: 0; }
   .pricing-settings h2 { overflow-wrap: break-word; hyphens: auto; }
   /* On a phone the table scrolls sideways in its own box, headers kept, rather than the page. */
   .pricing-table-scroll { overflow-x: auto; margin: .75rem 0 1rem; }
@@ -118,6 +217,13 @@ const updated = pricing.updatedAt
   /* Interface text in Inter (design.md D4.4-B), the lists included. */
   .pricing-settings details { font: .9rem/1.5 var(--font-sans); }
   .pricing-last-saved { font-family: var(--font-sans); }
+  .pricing-refresh { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+  .pricing-refresh, .pricing-refresh [data-proposal] { display: grid; gap: .5rem; }
+  .pricing-refresh > *, .pricing-refresh [data-proposal] > * { min-width: 0; }
+  .pricing-refresh h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0 0 .5rem; }
+  .pricing-refresh .pricing-table { min-width: 0; }
+  .pricing-refresh .pricing-table td:nth-child(2), .pricing-refresh .pricing-table td:nth-child(3) { white-space: normal; font-variant-numeric: tabular-nums; }
+  .pricing-refresh .pricing-table td:last-child { min-width: 0; }
   .pricing-caveats { padding-left: 1.1rem; }
   .pricing-caveats li, .pricing-sources li { overflow-wrap: anywhere; }
   .pricing-caveats li + li { margin-top: .5rem; }

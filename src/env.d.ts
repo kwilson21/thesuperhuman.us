@@ -44,6 +44,9 @@ interface Env {
 	RESEND_API_KEY: string;
 	PUBLIC_TURNSTILE_SITE_KEY?: string;
 	TURNSTILE_SECRET_KEY: string;
+	// The owner's Tavily key (a dashboard-managed secret): the daily market refresh searches with it, and without it never
+	// searches (docs/plans/2026-11-market-refresh.md).
+	TAVILY_API_KEY?: string;
 	CONTACT_TO_EMAIL: string;
 	CONTACT_FROM_EMAIL: string;
 	RATE_LIMIT: KVNamespace;

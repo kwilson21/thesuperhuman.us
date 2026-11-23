@@ -27,6 +27,11 @@
 	"observability": {
 		"enabled": true
 	},
+	// Once a day, the market refresh decides whether to search for new pricing figures (src/worker.ts,
+	// docs/plans/2026-11-market-refresh.md). A day with nothing due reads two KV keys and stops.
+	"triggers": {
+		"crons": ["23 7 * * *"]
+	},
 	// Non-secret config: which mailbox receives inquiries, which envelope
 	// sender Resend uses. The Resend API key + Turnstile secret stay in
 	// dashboard-managed encrypted secrets.
