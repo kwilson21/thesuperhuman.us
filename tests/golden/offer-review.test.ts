@@ -60,12 +60,13 @@ import {
 //                                        character; missing milestone details
 //   409 "The agreement could not be reviewed."  a guard failing (the facts changed), a Zod error or a refused draft
 //   500 "The agreement could not be reviewed."  any other error (a database, parser or JavaScript fault), logged without its message
+//                                        ("Agreement review"), the signing, offer and session lookups before the details included (B2)
 //   303 /offer/<token>/sign?review=1     form success
-//   rejected                             a statement outside the try throwing (the signing lookup, the offer lookup, the session lookup)
 //   GET (download)
 //   401 {ok:false}                       no database, no session, signing off, a bad token
 //   404 {ok:false}                       no document query, an unknown id, another review session's document, an abandoned or another offer's
 //   200 text/plain attachment            msa and sow documents in each agreement state, with markup and unicode in the text
+//   500 "The agreement could not be reviewed."  a lookup throwing (the session, the signing setting, the agreements), logged once (B2)
 
 const PATH = `/api/offer/${TOKEN}/review`;
 

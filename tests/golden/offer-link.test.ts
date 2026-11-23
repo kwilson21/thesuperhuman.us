@@ -53,21 +53,23 @@ import { allowanceRow } from "./areas/studio-access";
 //   400 "Complete the security check."  null, array, no turnstileToken, empty, not text, over 2048 characters (an email in the body is dropped)
 //   issueAgreementLink
 //   404 {ok:false}                      request origin or host is not SITE_ORIGIN
-//   503 unavailable                     no MUSIC_DB, code key, Resend key, from address, Turnstile secret
+//   503 unavailable                     no MUSIC_DB, code key, Resend key, from address, Turnstile secret; a code key under 32
+//                                       characters (after the signing setting and the offer are read, before the first allowance)
 //   404 "Website signing is off."       software_signing_enabled is 0 (checked before the offer is read)
 //   404 "unavailable for signing"       bad token shape, unknown token, revoked offer link, offer draft, superseded or withdrawn, request
 //                                       withdrawn, resolved or without an email, offer with no recipient snapshot or no MSA template
 //   400 "Enter a valid email address."  no token in the params (the route answers it without issuing a link, as there is no recipient)
 //   403 security check again            Turnstile fails (after the address allowance, before the email's)
 //   429 "wait a few minutes"            agreement-link-ip at 20, agreement-link-email at 3
-//   429 "wait at least 30 seconds"      a link issued under 30 seconds ago; liveSigningGuard fails inside the link batch (a started
-//                                       project, a revoked offer link, a withdrawn request, signing switched off); the batch throwing
+//   429 "wait at least 30 seconds"      a guard of the link batch raised: a link issued under 30 seconds ago; liveSigningGuard fails
+//                                       (a started project, a revoked offer link, a withdrawn request, signing switched off)
 //   200 receipt                         the message names the full email when the request carries a live session for this offer, and a
 //                                       masked one (g•••@example.test) otherwise
 //   mail outcomes                       200 and the 5xx/network "uncertain" cases keep the link and consume older ones; a 4xx deletes the
 //                                       link, its sessions and un-charges both allowances, and answers 502 "didn't go through"
-//   503 catch                           every statement outside the link batch throwing, an offer whose terms are not JSON (after the link
-//                                       row is stored and before any mail), the 4xx clean-up batch throwing
+//   500 catch                           "Agreement sign-in is temporarily unavailable.", logged once ("Agreement link"): any statement
+//                                       throwing, the link batch included when no guard raised, an offer whose terms are not JSON
+//                                       (after the link row is stored and before any mail), the 4xx clean-up batch throwing (B1, B5)
 //   303 /offer/<token>/sign?email=sent form success
 //   email content                       greeting from the request name (first word, "there" when empty), outcome from the offer terms,
 //                                       markup and unicode escaped in the html part and raw in the text part

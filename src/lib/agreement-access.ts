@@ -8,7 +8,7 @@ import {
 	newOfferToken,
 } from "./software-offers";
 import { reserveStudioAllowance } from "./audio-client-access";
-import { normalizeClientEmail } from "./client-portal";
+import { codeKeyUsable, normalizeClientEmail } from "./client-portal";
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
@@ -108,12 +108,18 @@ export async function agreementSession(
 	return session;
 }
 
-/** The signing link of an offer: a link to review and sign the agreement is mailed to the offer's recipient. */
+/**
+ * The signing link of an offer: a link to review and sign the agreement is mailed to the offer's recipient. `isGuard`
+ * says whether a failed link batch was refused by one of its guards (the route passes the site's recogniser,
+ * `raisedByJsonGuard`); only that is the 429, and any other failure, like every other failed call here, is thrown for
+ * the route to answer.
+ */
 export async function issueAgreementLink(
 	env: Env,
 	request: Request,
 	input: { turnstileToken: string },
 	token: string,
+	isGuard: (error: Error) => boolean,
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
@@ -176,6 +182,14 @@ export async function issueAgreementLink(
 					429,
 				);
 	};
+
+	// A code key under 32 characters fails the first keyed hash, the address allowance's: the 503 of a missing key, at the
+	// point it failed before (after the signing setting, the offer and the recipient are read), with nothing written.
+	if (!codeKeyUsable(env.AUDIO_CLIENT_CODE_KEY))
+		return agreementJson(
+			{ ok: false, error: "Agreement sign-in is temporarily unavailable." },
+			503,
+		);
 
 	const crowded = await charge("agreement-link-ip", ip, 20);
 
@@ -240,7 +254,11 @@ export async function issueAgreementLink(
 					new Date(at.getTime() + 3600000).toISOString(),
 				),
 		]);
-	} catch {
+	} catch (error) {
+		// Only a guard that raised is the 429: a link issued in the last 30 seconds, or the offer no longer open for
+		// signing. Any other failure of the batch goes to the route, which answers 500 (the archive link's answer).
+		if (!(error instanceof Error && isGuard(error))) throw error;
+
 		return agreementJson(
 			{
 				ok: false,

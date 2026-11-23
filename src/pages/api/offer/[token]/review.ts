@@ -19,35 +19,51 @@ import { reviewAgreements, offerAgreements } from "~/lib/software-agreements";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, locals, params, url }) => {
-	const db = locals.runtime.env.MUSIC_DB,
-		offer = db && params.token ? await getLinkedOffer(db, params.token) : null;
+/** A fault of the site (a read, a batch, a parser or the code failing for no reason a request explains): 500, logged. */
+function reviewFailed<T>(error: T) {
+	logUnexpected("Agreement review", error);
 
-	const session =
-		db && offer
-			? await agreementSession(db, request, "agreement", offer.id)
-			: null;
-
-	if (!db || !offer || !session || !(await signingEnabled(db)))
-		return agreementJson({ ok: false }, 401);
-
-	const document = (await offerAgreements(db, offer.id)).find(
-		(d) =>
-			d.id === url.searchParams.get("document") &&
-			d.review_session_hash === session.token_hash,
+	return agreementJson(
+		{ ok: false, error: "The agreement could not be reviewed." },
+		500,
 	);
+}
 
-	if (!document) return agreementJson({ ok: false }, 404);
+export const GET: APIRoute = async ({ request, locals, params, url }) => {
+	const db = locals.runtime.env.MUSIC_DB;
 
-	return new Response(document.canonical_text, {
-		headers: {
-			"content-type": "text/plain; charset=utf-8",
-			"content-disposition": `attachment; filename="${document.kind}-review.txt"`,
-			"cache-control": "private, no-store",
-			"referrer-policy": "no-referrer",
-			"x-content-type-options": "nosniff",
-		},
-	});
+	try {
+		const offer =
+			db && params.token ? await getLinkedOffer(db, params.token) : null;
+
+		const session =
+			db && offer
+				? await agreementSession(db, request, "agreement", offer.id)
+				: null;
+
+		if (!db || !offer || !session || !(await signingEnabled(db)))
+			return agreementJson({ ok: false }, 401);
+
+		const document = (await offerAgreements(db, offer.id)).find(
+			(d) =>
+				d.id === url.searchParams.get("document") &&
+				d.review_session_hash === session.token_hash,
+		);
+
+		if (!document) return agreementJson({ ok: false }, 404);
+
+		return new Response(document.canonical_text, {
+			headers: {
+				"content-type": "text/plain; charset=utf-8",
+				"content-disposition": `attachment; filename="${document.kind}-review.txt"`,
+				"cache-control": "private, no-store",
+				"referrer-policy": "no-referrer",
+				"x-content-type-options": "nosniff",
+			},
+		});
+	} catch (error) {
+		return reviewFailed(error);
+	}
 };
 
 const post: APIRoute = async ({ request, locals, params }) => {
@@ -62,25 +78,25 @@ const post: APIRoute = async ({ request, locals, params }) => {
 		.object({ csrf_nonce: z.string().min(1), values: z.unknown() })
 		.safeParse(body);
 
-	const offer = params.token ? await getLinkedOffer(db, params.token) : null,
-		session = offer
-			? await agreementSession(db, request, "agreement", offer.id)
-			: null;
-
-	if (!(await signingEnabled(db)) || !session)
-		return agreementJson(
-			{
-				ok: false,
-				error:
-					"Open a fresh email link to keep going. Your saved details will be here.",
-			},
-			401,
-		);
-
-	if (!input.success || input.data.csrf_nonce !== session.csrf_nonce)
-		return agreementJson({ ok: false, error: "Reload and try again." }, 403);
-
 	try {
+		const offer = params.token ? await getLinkedOffer(db, params.token) : null,
+			session = offer
+				? await agreementSession(db, request, "agreement", offer.id)
+				: null;
+
+		if (!(await signingEnabled(db)) || !session)
+			return agreementJson(
+				{
+					ok: false,
+					error:
+						"Open a fresh email link to keep going. Your saved details will be here.",
+				},
+				401,
+			);
+
+		if (!input.success || input.data.csrf_nonce !== session.csrf_nonce)
+			return agreementJson({ ok: false, error: "Reload and try again." }, 403);
+
 		const resolved = resolveClientDetails(
 			input.data.values,
 			session.recipient_email,
@@ -109,14 +125,7 @@ const post: APIRoute = async ({ request, locals, params }) => {
 		const failure = classifyFailure(error),
 			refused = error instanceof FieldsRefused || error instanceof z.ZodError;
 
-		if (failure.kind === "unexpected" && !refused) {
-			logUnexpected("Agreement review", error);
-
-			return agreementJson(
-				{ ok: false, error: "The agreement could not be reviewed." },
-				500,
-			);
-		}
+		if (failure.kind === "unexpected" && !refused) return reviewFailed(error);
 
 		return agreementJson(
 			{

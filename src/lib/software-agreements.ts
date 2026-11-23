@@ -24,7 +24,12 @@ import {
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import casefold from "./agreement-casefold.json";
 import type { RawValue } from "./fields";
-import { LostRace, ReaderMessage } from "./reader-message";
+import {
+	LostRace,
+	ReaderMessage,
+	StoreRejected,
+	stored,
+} from "./reader-message";
 
 export const legalNameKey = (value: string) =>
 	[...value.trim().normalize("NFC")]
@@ -395,6 +400,12 @@ export const signatureIds = (documents: { id: string; hash: string }[]) =>
 			.sort((a, b) => a.id.localeCompare(b.id)),
 	);
 
+/**
+ * The client's signatures on the reviewed documents, in one batch; answers the receipt id. A read or the batch that the
+ * database rejects throws a StoreRejected carrying the rejection (the route answers a guard or a unique index as a
+ * changed agreement, anything else as a fault of the site), except a foreign key failure of the batch, a LostRace (see
+ * signingBatchRejected); every refusal the code makes throws as itself.
+ */
 export async function signAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
@@ -402,7 +413,7 @@ export async function signAgreements(
 	documents: { id: string; hash: string }[],
 	request: Request,
 ) {
-	const agreements = await offerAgreements(db, offer.id),
+	const agreements = await stored(offerAgreements(db, offer.id)),
 		toSign = agreements.filter((a) => a.status !== "executed");
 
 	if (
@@ -415,12 +426,14 @@ export async function signAgreements(
 		);
 
 	if (toSign.every((a) => a.status === "client_signed")) {
-		const saved = await db
-			.prepare(
-				"SELECT receipt_id,session_token_hash FROM software_agreement_signatures WHERE agreement_id=? AND party='client'",
-			)
-			.bind(toSign[0].id)
-			.first<{ receipt_id: string; session_token_hash: string }>();
+		const saved = await stored(
+			db
+				.prepare(
+					"SELECT receipt_id,session_token_hash FROM software_agreement_signatures WHERE agreement_id=? AND party='client'",
+				)
+				.bind(toSign[0].id)
+				.first<{ receipt_id: string; session_token_hash: string }>(),
+		);
 
 		if (saved?.session_token_hash !== session.token_hash)
 			throw new ReaderMessage("A different signing action is already saved.");
@@ -433,12 +446,14 @@ export async function signAgreements(
 		at = new Date().toISOString(),
 		receipt = crypto.randomUUID();
 
-	const draft = await db
-		.prepare(
-			"SELECT values_json FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?",
-		)
-		.bind(offer.id, session.recipient_email)
-		.first<{ values_json: string }>();
+	const draft = await stored(
+		db
+			.prepare(
+				"SELECT values_json FROM software_agreement_drafts WHERE offer_id=? AND recipient_email=?",
+			)
+			.bind(offer.id, session.recipient_email)
+			.first<{ values_json: string }>(),
+	);
 
 	if (draft) {
 		const { resolveClientDetails } = await import("./agreement-draft-fields");
@@ -457,7 +472,9 @@ export async function signAgreements(
 			);
 	}
 
-	await db.batch([
+	// The statements are built first, so a refusal while building one (the evidence, the signer's characters) throws as
+	// itself; only the batch's own rejection is sorted by signingBatchRejected.
+	const statements = [
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),
 		...(draft
@@ -539,9 +556,23 @@ export async function signAgreements(
 				toSign.find((a) => a.kind === "sow")!.id,
 				values.contractor.notice_email,
 			),
-	]);
+	];
+
+	await db.batch(statements).catch(signingBatchRejected);
 
 	return receipt;
+}
+
+/**
+ * Sorts a rejected signing batch. Every row the batch refers to (the documents and their client) was read just before
+ * it, so a foreign key fails only when another request deleted one since (another tab's review replaces the documents
+ * this one reviewed): a lost race. Any other rejection is marked as the store's, for the route to sort.
+ */
+function signingBatchRejected<Failure>(failure: Failure): never {
+	if (failure instanceof Error && /FOREIGN KEY/.test(failure.message))
+		throw new LostRace("The reviewed documents were deleted since the read.");
+
+	throw new StoreRejected(failure);
 }
 
 function reusedMsaGuard(db: D1Database, offer: SoftwareOffer) {
