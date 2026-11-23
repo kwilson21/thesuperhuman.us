@@ -849,8 +849,10 @@ bias the random runs rarely reach the races.
   as today's statement has them. The revoke's
   stage reset is decided from the read and written under a guard with a retry (`RevokeStaleReset` removes both).
 - `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update notice,
-  which have different claim and outcome conditions): the four states and the three statements. 5 properties, 8 mutants
-  (seven of the invitation, one of the update notice; the owner's retry is a read and a guarded write). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
+  which have different claim and outcome conditions, and, since the signing extension below, `projectNoticesCopy` and
+  `projectNoticesSigning` for the agreements area): the four states and the three statements. 7 properties, 10 mutants
+  (seven of the invitation, one of the update notice, one of each agreements kind; the owner's retry is a read and a
+  guarded write). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
   confirmation is the owner's judgment and not a property.
 
 Every property reads stored rows and stamps (one counter standing for the order D1 serializes statements in), never a
@@ -858,6 +860,54 @@ flag set at the write from the condition the guard checks.
 
 None has an Apalache run. Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
 run as `projectMessages` or `projectFiles`.
+
+**The agreements' kinds in the notices model (2026-11-23).** Section 7 of the signing conversion design adds two kinds to
+`audio-project-notices.qnt`, because the conversion turns the owner's reset, one statement that decides in SQL today
+(`src/pages/api/owner/requests/[id]/agreement.ts:211-231`), into a read, a rule and a compare-and-set, the shape this
+model checks for the audio notices. `open` stands for the condition each kind's claim compares, and `closes` for what
+ends it. Each was checked against the code at `585619c1`:
+
+- `copy`, a signed copy (`deliverAgreementCopies`, `src/lib/agreement-artifacts.ts:357-447`). The claim (A18, 394-399)
+  needs the copy pending, its agreement executed and its archive open, and returns the address, so no recipient read
+  follows; the outcome is written by attempt while `sending`, with no other condition (417-445). The copy's row is
+  inserted by the countersign batch that executes the agreement (`src/lib/software-agreements.ts:717-729`) and no
+  statement moves an executed agreement elsewhere, so the executed half of A18 holds whenever a copy exists, and what
+  closes is the archive: retention (`src/lib/agreement-retention.ts:336-339`), whose `eligible` (37-46) refuses while a
+  copy of the agreement is `sending`, which the model's close keeps.
+- `signing`, the client's signature receipt or the owner's countersign notice (`deliverAgreementNotifications`, 470-523,
+  inserted by the sign batch, `software-agreements.ts:529-541`). The claim (A19, 485-489) needs it pending and current
+  (`currentSigningNotification`, 467-468: the agreement client_signed, its archive open, no project of the request) and
+  returns the address; the outcome by attempt while `sending` (510-521). What closes is a countersign or an abandon, and
+  the same batch fails the notice if it is `sending` (A21, `closeObsoleteAgreementNotifications`,
+  `software-agreements.ts:615-642`). While the agreement is client_signed its archive is open (retention closes only an
+  executed or abandoned agreement) and there is no project (a website start needs it executed, and an outside one
+  refuses a client_signed agreement of the offer, `src/pages/api/owner/requests/[id]/project.ts:124-137, 233-237`), so
+  `open` is "client_signed".
+- The reset of both is A20 (`agreement.ts:211-231`): from `failed`, or from `sending` when the owner confirms and the
+  attempt is a minute old (the attempt the read saw stands in for the cutoff, as for the audio kinds); never from
+  `pending`, where the audio queue moves a pending notice too (`queueRead`); a signing notice must also be current, a copy
+  needs nothing more (the audio queue needs the project open). Unlike the audio queue it keeps `attempted_at`.
+
+Two properties, each with its mutant: `copyOnlyWhenExecuted` (a copy is claimed only while its agreement is executed and
+its archive open: no stored attempt after the archive closed) and `noticeOnlyBeforeCountersign` (a signing notice is
+claimed only while its agreement is client_signed: no stored attempt after the countersign or the abandon). Mutant
+`CopyClaimNoState`, the copy's claim without A18's state condition (seed `0x1`, the first run, 12 states): a copy's email
+is refused, the owner resets it, a delivery reads it pending, retention closes the archive, and the claim takes it.
+Mutant `NoticeClaimNoState`, the notice's claim without `currentSigningNotification` (about 9 runs, 6 states): two
+deliveries read the notice pending, the owner countersigns, and one claims it. `oneEmailInTotal` and `sentMeansMailed`
+hold for both kinds. `failedMeansNotMailed` holds for copies as it is; a signing notice made obsolete while its email was
+in flight ends `failed` whether or not the email went out, by design (the comment at `software-agreements.ts:615`), so
+for that kind the property says that a failed notice's email went out only once the agreement left client_signed. The
+witness `neverObsoleteAfterMail` (by hand on `projectNoticesSigning`) is violated in about 7 runs, 7 states: a notice is
+claimed, the owner countersigns, and the email goes out. Each new pass run makes 8,000 runs in about 1.5 seconds.
+
+Left out for these kinds: the outcome write's attempt condition (`attempt_id=?`). With the owner's confirmation
+truthful, no delivery is still working when a `sending` row is reset, and a `failed` row with a delivery still working
+is one that A21 failed, which is never reset, so the condition never refuses here. Resend's idempotency key
+(`agreement-artifacts.ts:405, 495`) is a second protection outside the model. The packet (a copy is claimed only once its
+packet is ready), the two roles of a copy and the two kinds of notice (each is one row here), and the owner's recorded
+alternate delivery. A notice's reset with its own `currentSigningNotification` dropped would keep every property, since
+the claim refuses such a notice anyway; no mutant names it.
 
 ## The brief-copy model
 

@@ -625,7 +625,7 @@ describe("the audio project notices model", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties).toHaveLength(5);
+		expect(properties).toHaveLength(7);
 		expect(
 			propertiesWithoutMutant(properties, audioProjectNoticesMutants),
 		).toEqual([]);
@@ -638,12 +638,26 @@ describe("the audio project notices model", () => {
 			),
 		].map((match) => match[1]);
 
+		expect(models[14].current).toEqual([
+			"projectNotices",
+			"projectNoticesUpdate",
+			"projectNoticesCopy",
+			"projectNoticesSigning",
+		]);
 		expect([...modules].sort()).toEqual(
 			[
 				...Object.keys(audioProjectNoticesMutants),
-				"projectNotices",
-				"projectNoticesUpdate",
+				...models[14].current,
 			].sort(),
+		);
+	});
+
+	it("checks the agreements' kinds: a copy and a signing notice each have their claim's mutant", () => {
+		expect(audioProjectNoticesMutants.projectNoticesCopyClaimNoState).toEqual({
+			property: "copyOnlyWhenExecuted",
+		});
+		expect(audioProjectNoticesMutants.projectNoticesNoticeClaimNoState).toEqual(
+			{ property: "noticeOnlyBeforeCountersign" },
 		);
 	});
 

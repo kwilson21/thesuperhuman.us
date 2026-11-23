@@ -245,8 +245,9 @@ export const audioProjectFilesMutants = {
 };
 
 // verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
-// queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
-// property its change must break.
+// queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6); and a signed copy
+// or a signing notice of the agreements area, reset by A20 (docs/plans/2026-11-signing-conversion.md, section 7). Module
+// name -> the property its change must break.
 export const audioProjectNoticesMutants = {
 	projectNoticesClaimNoStatus: { property: "oneEmailInTotal" },
 	projectNoticesClaimNoOpen: { property: "claimOnlyWhileOpen" },
@@ -256,6 +257,8 @@ export const audioProjectNoticesMutants = {
 	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
 	projectNoticesQueueNoCas: { property: "oneEmailInTotal" },
 	projectNoticesQueueStatusOnly: { property: "oneEmailInTotal" },
+	projectNoticesCopyClaimNoState: { property: "copyOnlyWhenExecuted" },
+	projectNoticesNoticeClaimNoState: { property: "noticeOnlyBeforeCountersign" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
@@ -433,7 +436,13 @@ export const models = [
 	},
 	{
 		file: "verification/audio-project-notices.qnt",
-		current: ["projectNotices", "projectNoticesUpdate"],
+		// The invitation, an update notice, a signed copy and a signing notice: each kind's claim, outcome and reset differ.
+		current: [
+			"projectNotices",
+			"projectNoticesUpdate",
+			"projectNoticesCopy",
+			"projectNoticesSigning",
+		],
 		mutants: audioProjectNoticesMutants,
 		equivalents: [],
 		exhaustive: [],
