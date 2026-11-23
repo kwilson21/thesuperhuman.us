@@ -2,8 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: [#392](https://github.com/kwilson21/thesuperhuman.us/pull/392). Merge facts are recorded after the merge, in
-the next pull request.
+Pull request: [#392](https://github.com/kwilson21/thesuperhuman.us/pull/392), merged at 12:11:49 UTC as `57369bf5`
+(head `0b4c2344`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The step 3 design (`docs/plans/2026-11-signing-conversion.md`, #376), section 8, lists this
 pull request: the golden header comments that still say 409 where the fixtures hold the 500 that `f78896099` brought.
@@ -36,7 +36,14 @@ Also `docs/prelaunch-qa-2026-11-23-signing-decision-fixes.md`: #391's merge fact
 ## 7. Release and final QA
 
 - **PASS · Checks.** `pnpm run lint` and `pnpm run format` clean.
-- **UNVERIFIED · Reviews, CI, production revision.** Recorded after the merge, in the next pull request.
+- **PASS · Reviews.** Codex's code and security reviews of `5ae542d0` found nothing. A first independent Claude Code
+  pass found two omissions (the retention preview's two 400 answers; publish's repeated save on the generic 409 line),
+  added in `8a9f3c21`; a second pass over `8a9f3c21` and `0b4c2344` found nothing (two cosmetic notes, not changed: one
+  doc line of 122 characters and one comment's indentation).
+- **PASS · CI.** On the head `0b4c2344` before merge, all 20 check runs succeeded, the Workers preview build among them.
+- **PASS · Production revision and live check.** After merge, on `57369bf5`: the Workers build succeeded (12:13:13 UTC)
+  and `validate` succeeded (12:15:43 UTC). Live check at 12:16:05 UTC: `https://thesuperhuman.us/` answered 200, and a
+  link request answered 404 "Website signing is off.", as before.
 - **N/A · Bindings, migrations.** None.
 
 ## 8. Private owner center

@@ -103,6 +103,9 @@ const post: APIRoute = async ({ request, locals }) => {
 				// A failed database, allowance, mail or hash call is the route's fixed sentence as a 500, logged without what was sent.
 				AgreementStoreFailed: (failure) => failed(failure.failure),
 				AgreementAllowanceFailed: (failure) => failed(failure.failure),
+				// Never reached: `linkSettings` refuses a code key under 32 characters with this 503 before the program runs.
+				CodeKeyUnusable: () =>
+					Effect.succeed(agreementJson({ ok: false, error: UNAVAILABLE }, 503)),
 				AgreementMailFailed: (failure) => failed(failure.failure),
 				HashFailed: (failure) => failed(failure.failure),
 			}),

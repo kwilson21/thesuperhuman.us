@@ -424,12 +424,25 @@ export const writeEntry = (batch: EntryBatch) => {
 // ---- the allowance (the code, session and agreement link routes) ----
 
 /**
+ * One use counted: the uses its window holds now, this one included, and when that window started (the upsert's
+ * `RETURNING uses,window_start`). The agreement link gives a use back by its key and window start when its mail is
+ * refused; the sign-in routes read only the uses. `window_start` is null when no row came back.
+ */
+export type CountedAllowance = AllowanceCount & {
+	readonly window_start: string | null;
+};
+
+/**
  * One use of an allowance, one batch: the windows that started at or before `staleAt` pruned, then the use counted under
- * `key` (a keyed hash of the scope and subject), a new window starting at `at`. Answers the uses the upsert returned.
+ * `key` (a keyed hash of the scope and subject), a new window starting at `at`. Answers the uses and the window start the
+ * upsert returned.
  */
 export const countAllowance = (key: string, times: AllowanceTimes) =>
-	asked(async (db): Promise<AllowanceCount> => {
-		const [, counted] = await db.batch<{ uses: number | null }>([
+	asked(async (db): Promise<CountedAllowance> => {
+		const [, counted] = await db.batch<{
+			uses: number | null;
+			window_start: string | null;
+		}>([
 			db
 				.prepare("DELETE FROM audio_client_allowances WHERE window_start<=?")
 				.bind(times.staleAt),
@@ -442,8 +455,11 @@ export const countAllowance = (key: string, times: AllowanceTimes) =>
 		const row = counted.results[0];
 
 		// No row, or a row without a count, is no count: the rule refuses it, as today's `Infinity` did. The schema makes
-		// `uses` NOT NULL, so this is only a guard.
-		return { uses: row?.uses == null ? null : Number(row.uses) };
+		// `uses` and `window_start` NOT NULL, so this is only a guard.
+		return {
+			uses: row?.uses == null ? null : Number(row.uses),
+			window_start: row?.window_start ?? null,
+		};
 	});
 
 // ---- sign-out (POST /api/studio/sign-out) ----

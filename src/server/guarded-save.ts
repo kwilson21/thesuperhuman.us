@@ -44,7 +44,7 @@ export class GuardRefused extends Data.TaggedError("GuardRefused") {}
 const MAX_CAUSE_DEPTH = 5;
 
 /** Whether the message of `cause`, or of any cause down its chain (five levels at most, so a loop ends), matches. */
-function chainMatches(cause: Error, pattern: RegExp): boolean {
+export function chainMatches(cause: Error, pattern: RegExp): boolean {
 	let current: unknown = cause;
 
 	for (

@@ -70,11 +70,11 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 		).pipe(Effect.mapError(() => new InvalidEmail()));
 
 		yield* withinAllowance.decide(null, {
-			allowed: yield* allowances.reserve(
+			allowed: (yield* allowances.reserve(
 				ADDRESS_ALLOWANCE.scope,
 				ip,
 				ADDRESS_ALLOWANCE.limit,
-			),
+			)).allowed,
 		});
 
 		const turnstile = yield* Turnstile;
@@ -84,11 +84,11 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 			.pipe(Effect.mapError(() => new SecurityCheckFailed()));
 
 		yield* withinAllowance.decide(null, {
-			allowed: yield* allowances.reserve(
+			allowed: (yield* allowances.reserve(
 				EMAIL_ALLOWANCE.scope,
 				email,
 				EMAIL_ALLOWANCE.limit,
-			),
+			)).allowed,
 		});
 
 		const cooling = request.now();
