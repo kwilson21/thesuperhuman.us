@@ -83,6 +83,6 @@
     "playwright": "^1.65.0",
     "sharp": "^0.35.5",
     "vitest": "^5.1.0",
-    "wrangler": "4.161.0"
+    "wrangler": "4.162.0"
   }
 }
