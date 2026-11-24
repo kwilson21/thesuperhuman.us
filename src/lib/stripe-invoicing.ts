@@ -1,6 +1,25 @@
 import Stripe from "stripe";
 import type { AudioPayment, Installment } from "./audio-payments";
 
+// SDK upgrades must not silently migrate the invoice API contract. This is the
+// version used by Stripe 22.6.2 before the SDK 23 upgrade. RequestOptions supports
+// an explicit version string without suppressing the SDK's types. Our adapters
+// use only the request/response fields shared by these versions; migration to
+// Endive requires separate sandbox and webhook-version verification.
+export const STRIPE_INVOICE_API_VERSION = "2026-08-26.dahlia";
+
+export type StripeInvoiceOptions = {
+	idempotencyKey: string;
+	apiVersion: typeof STRIPE_INVOICE_API_VERSION;
+};
+
+export const stripeInvoiceOptions = (
+	idempotencyKey: string,
+): StripeInvoiceOptions => ({
+	idempotencyKey,
+	apiVersion: STRIPE_INVOICE_API_VERSION,
+});
+
 type InvoiceResult = {
 	id: string;
 	status?: string | null;
@@ -11,29 +30,29 @@ type StripeInvoicingClient = {
 	customers: {
 		create(
 			params: Stripe.CustomerCreateParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<{ id: string }>;
 	};
 	invoices: {
 		create(
 			params: Stripe.InvoiceCreateParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<{ id: string }>;
 		finalizeInvoice(
 			id: string,
 			params: Stripe.InvoiceFinalizeInvoiceParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<InvoiceResult>;
 		sendInvoice(
 			id: string,
 			params: Stripe.InvoiceSendInvoiceParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<InvoiceResult>;
 	};
 	invoiceItems: {
 		create(
 			params: Stripe.InvoiceItemCreateParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<{ id: string }>;
 	};
 };
@@ -105,7 +124,7 @@ export async function createInvoiceWithClient(
 					name: request.name || undefined,
 					metadata: { audio_request_id: payment.requestId },
 				},
-				{ idempotencyKey: `${customerKey}:customer` },
+				stripeInvoiceOptions(`${customerKey}:customer`),
 			)
 		).id;
 
@@ -118,7 +137,7 @@ export async function createInvoiceWithClient(
 			description: `${request.summary} · Audio services by Kazon`,
 			metadata: { audio_request_id: payment.requestId, installment },
 		},
-		{ idempotencyKey: `${rootKey}:invoice` },
+		stripeInvoiceOptions(`${rootKey}:invoice`),
 	);
 
 	const booking = installment === "booking";
@@ -131,18 +150,18 @@ export async function createInvoiceWithClient(
 			description: `Audio services by Kazon · ${payment.approvedService} · ${booking ? "50% booking payment" : "remaining balance"}`,
 			metadata: { audio_request_id: payment.requestId, installment },
 		},
-		{ idempotencyKey: `${rootKey}:item` },
+		stripeInvoiceOptions(`${rootKey}:item`),
 	);
 	await stripe.invoices.finalizeInvoice(
 		invoice.id,
 		{},
-		{ idempotencyKey: `${rootKey}:finalize` },
+		stripeInvoiceOptions(`${rootKey}:finalize`),
 	);
 
 	const sent = await stripe.invoices.sendInvoice(
 		invoice.id,
 		{},
-		{ idempotencyKey: `${rootKey}:send` },
+		stripeInvoiceOptions(`${rootKey}:send`),
 	);
 
 	if (

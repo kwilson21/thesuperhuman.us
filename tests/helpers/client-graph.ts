@@ -574,7 +574,7 @@ function literalText(node: ts.Expression): string | undefined {
 }
 
 /** True for `import.meta.glob` and `import.meta.globEager`, the call's callee. */
-function isImportMetaGlob(node: ts.Expression): boolean {
+export function isImportMetaGlob(node: ts.Expression): boolean {
 	return (
 		ts.isPropertyAccessExpression(node) &&
 		ts.isMetaProperty(node.expression) &&
@@ -685,7 +685,7 @@ function loadsOf(file: string, text: string, includeTypes = false): Load[] {
 }
 
 /** The literal patterns of an `import.meta.glob` first argument (a string, or an array of strings), or undefined. */
-function globPatternsOf(argument: ts.Expression): string[] | undefined {
+export function globPatternsOf(argument: ts.Expression): string[] | undefined {
 	const single = literalText(argument);
 
 	if (single !== undefined) return [single];
@@ -995,6 +995,14 @@ function resolveSpecifier(
 			};
 }
 
+/** Shared canonical local-module resolution for bounded runtime inventories. */
+export function runtimeModuleResolver(root: string) {
+	const aliases = aliasesOf(root);
+
+	return (specifier: string, from: string) =>
+		resolveSpecifier(specifier, resolve(root, from), root, aliases);
+}
+
 /** The files an `import.meta.glob` pattern matches: relative to the file, from the root (`/`), or through an alias. */
 function expandGlob(
 	pattern: string,
@@ -1037,6 +1045,15 @@ function expandGlob(
 						)),
 			),
 	);
+}
+
+/** Resolve a static glob through the same aliases and runtime-file filter as the client graph. */
+export function runtimeGlobFiles(
+	pattern: string,
+	from: string,
+	root: string,
+): string[] {
+	return expandGlob(pattern, resolve(root, from), root, aliasesOf(root));
 }
 
 /** The client entry files under `root`: src/scripts/** and every .astro file under src that has a <script> block. */

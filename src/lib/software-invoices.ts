@@ -11,7 +11,11 @@ import {
 	type SoftwareInvoiceKind,
 } from "./software-invoice-terms";
 import { guardTime } from "./invoice-event-order";
-import { stripeClient } from "./stripe-invoicing";
+import {
+	stripeClient,
+	stripeInvoiceOptions,
+	type StripeInvoiceOptions,
+} from "./stripe-invoicing";
 import type { CreatedStripeInvoice } from "./stripe-invoicing";
 import { ReaderMessage } from "./reader-message";
 
@@ -107,29 +111,29 @@ type SoftwareStripeClient = {
 	customers: {
 		create(
 			params: Stripe.CustomerCreateParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<{ id: string }>;
 	};
 	invoices: {
 		create(
 			params: Stripe.InvoiceCreateParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<{ id: string }>;
 		finalizeInvoice(
 			id: string,
 			params: Stripe.InvoiceFinalizeInvoiceParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<InvoiceResult>;
 		sendInvoice(
 			id: string,
 			params: Stripe.InvoiceSendInvoiceParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<InvoiceResult>;
 	};
 	invoiceItems: {
 		create(
 			params: Stripe.InvoiceItemCreateParams,
-			options: { idempotencyKey: string },
+			options: StripeInvoiceOptions,
 		): Promise<{ id: string }>;
 	};
 };
@@ -178,7 +182,7 @@ export async function createSoftwareInvoiceWithClient(
 					name: request.name || undefined,
 					metadata: { software_request_id: invoice.request_id },
 				},
-				{ idempotencyKey: `${customerKey}:customer` },
+				stripeInvoiceOptions(`${customerKey}:customer`),
 			)
 		).id;
 
@@ -196,7 +200,7 @@ export async function createSoftwareInvoiceWithClient(
 					: ["us_bank_account"],
 			},
 		},
-		{ idempotencyKey: `${rootKey}:invoice` },
+		stripeInvoiceOptions(`${rootKey}:invoice`),
 	);
 
 	const label = {
@@ -214,18 +218,18 @@ export async function createSoftwareInvoiceWithClient(
 			description: `Milestone ${invoice.milestone_index + 1} · ${terms.milestones[invoice.milestone_index].name} · ${label}`,
 			metadata,
 		},
-		{ idempotencyKey: `${rootKey}:item` },
+		stripeInvoiceOptions(`${rootKey}:item`),
 	);
 	await stripe.invoices.finalizeInvoice(
 		created.id,
 		{},
-		{ idempotencyKey: `${rootKey}:finalize` },
+		stripeInvoiceOptions(`${rootKey}:finalize`),
 	);
 
 	const sent = await stripe.invoices.sendInvoice(
 		created.id,
 		{},
-		{ idempotencyKey: `${rootKey}:send` },
+		stripeInvoiceOptions(`${rootKey}:send`),
 	);
 
 	if (
